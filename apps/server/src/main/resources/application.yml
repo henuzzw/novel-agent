@@ -1,0 +1,146 @@
+logging:
+  file:
+    name: ${LOG_FILE:logs/novel-agent-server.log}
+  level:
+    com.novelagent.planning.infrastructure.CodexAppServerClient: ${CODEX_LOG_LEVEL:INFO}
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+spring:
+  application:
+    name: novel-agent-server
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:novel_agent}?currentSchema=${DB_SCHEMA:novel_agent}&sslmode=${DB_SSL_MODE:disable}
+    username: ${DB_USERNAME:novel_app}
+    password: ${DB_PASSWORD:change-me}
+    hikari:
+      pool-name: novel-agent-api
+      maximum-pool-size: 10
+      minimum-idle: 2
+      max-lifetime: 120000
+      keepalive-time: 30000
+      idle-timeout: 60000
+  flyway:
+    enabled: true
+    default-schema: ${DB_SCHEMA:novel_agent}
+    schemas: ${DB_SCHEMA:novel_agent}
+    create-schemas: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: ${DB_SCHEMA:novel_agent}
+        jdbc:
+          time_zone: UTC
+  neo4j:
+    uri: ${NEO4J_URI:bolt://localhost:7687}
+    connection-timeout: ${NEO4J_CONNECTION_TIMEOUT:5s}
+    authentication:
+      username: ${NEO4J_USERNAME:neo4j}
+      password: ${NEO4J_PASSWORD:change-me}
+  data:
+    neo4j:
+      database: ${NEO4J_DATABASE:neo4j}
+      repositories:
+        type: none
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    properties:
+      security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_PLAINTEXT}
+      sasl.mechanism: ${KAFKA_SASL_MECHANISM:PLAIN}
+      sasl.jaas.config: org.apache.kafka.common.security.plain.PlainLoginModule required username="${KAFKA_USERNAME:kafka}" password="${KAFKA_PASSWORD:change-me}";
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-components: always
+      probes:
+        enabled: true
+
+app:
+  role: ${APP_ROLE:all}
+  ai:
+    context:
+      models:
+        LOCAL_CODEX:
+          context-window-tokens: ${CODEX_CONTEXT_WINDOW_TOKENS:128000}
+          safety-margin-tokens: ${CODEX_CONTEXT_SAFETY_MARGIN_TOKENS:4000}
+        DEEPSEEK:
+          context-window-tokens: ${DEEPSEEK_CONTEXT_WINDOW_TOKENS:64000}
+          safety-margin-tokens: ${DEEPSEEK_CONTEXT_SAFETY_MARGIN_TOKENS:4000}
+        LOCAL_TEMPLATE:
+          context-window-tokens: ${LOCAL_TEMPLATE_CONTEXT_WINDOW_TOKENS:32000}
+          safety-margin-tokens: ${LOCAL_TEMPLATE_CONTEXT_SAFETY_MARGIN_TOKENS:2000}
+    codex:
+      command: ${CODEX_CLI_COMMAND:codex.exe}
+      model: ${CODEX_MODEL:gpt-6-sol}
+      timeout-seconds: ${CODEX_CLI_TIMEOUT_SECONDS:600}
+      runtime-directory: ${CODEX_RUNTIME_DIRECTORY:${java.io.tmpdir}/novel-agent-codex}
+      auth-source: ${CODEX_AUTH_SOURCE:${user.home}/.codex/auth.json}
+      proxy-url: ${CODEX_PROXY_URL:}
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
+      model: ${DEEPSEEK_MODEL:deepseek-flash}
+    cost:
+      deepseek-input-per-million: ${DEEPSEEK_INPUT_PRICE_PER_MILLION:0}
+      deepseek-output-per-million: ${DEEPSEEK_OUTPUT_PRICE_PER_MILLION:0}
+      codex-input-per-million: ${CODEX_INPUT_PRICE_PER_MILLION:0}
+      codex-output-per-million: ${CODEX_OUTPUT_PRICE_PER_MILLION:0}
+  security:
+    dev-user-id: ${APP_DEV_USER_ID:00000000-0000-0000-0000-000000000001}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
+  kafka:
+    canon-topic: ${KAFKA_CANON_TOPIC:novel.canon.committed.v1}
+  memory:
+    embedding:
+      provider: ${EMBEDDING_PROVIDER:local}
+      api-key: ${EMBEDDING_API_KEY:}
+      base-url: ${EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      model: ${EMBEDDING_MODEL:text-embedding-v4}
+      dimensions: ${EMBEDDING_DIMENSIONS:1024}
+    budgets:
+      CHAPTER_CONTRACT:
+        desired-tokens: ${MEMORY_CONTRACT_DESIRED_TOKENS:5000}
+        minimum-tokens: ${MEMORY_CONTRACT_MINIMUM_TOKENS:2500}
+        reserved-output-tokens: ${MEMORY_CONTRACT_RESERVED_OUTPUT_TOKENS:3000}
+        max-semantic-memories: ${MEMORY_CONTRACT_MAX_SEMANTIC_MEMORIES:5}
+        max-graph-facts: ${MEMORY_CONTRACT_MAX_GRAPH_FACTS:12}
+      MANUSCRIPT:
+        desired-tokens: ${MEMORY_MANUSCRIPT_DESIRED_TOKENS:8000}
+        minimum-tokens: ${MEMORY_MANUSCRIPT_MINIMUM_TOKENS:4000}
+        reserved-output-tokens: ${MEMORY_MANUSCRIPT_RESERVED_OUTPUT_TOKENS:10000}
+        max-semantic-memories: ${MEMORY_MANUSCRIPT_MAX_SEMANTIC_MEMORIES:8}
+        max-graph-facts: ${MEMORY_MANUSCRIPT_MAX_GRAPH_FACTS:20}
+      CHAPTER_REVIEW:
+        desired-tokens: ${MEMORY_REVIEW_DESIRED_TOKENS:6000}
+        minimum-tokens: ${MEMORY_REVIEW_MINIMUM_TOKENS:3000}
+        reserved-output-tokens: ${MEMORY_REVIEW_RESERVED_OUTPUT_TOKENS:5000}
+        max-semantic-memories: ${MEMORY_REVIEW_MAX_SEMANTIC_MEMORIES:6}
+        max-graph-facts: ${MEMORY_REVIEW_MAX_GRAPH_FACTS:16}
+  import:
+    max-file-bytes: ${IMPORT_MAX_FILE_BYTES:20971520}

@@ -1,0 +1,25 @@
+.env
+.env.local
+.env.*.local
+.env.*
+!.env.example
+
+.idea/
+.vscode/
+*.iml
+
+apps/server/target/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/test-results/
+apps/web/playwright-report/
+
+tmp/
+*.log
+apps/server/logs/
+
+# Local source material is not part of the application.
+/*.docx
+/*.pdf
+/*女生*.md
+~$*
