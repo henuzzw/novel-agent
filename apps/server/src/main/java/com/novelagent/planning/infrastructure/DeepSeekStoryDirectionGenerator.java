@@ -1,7 +1,6 @@
 package com.novelagent.planning.infrastructure;
 
 import com.novelagent.planning.application.GeneratedStoryDirections;
-import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.StoryDirectionGenerator;
 import com.novelagent.planning.domain.CreativeIntentSnapshot;
@@ -14,22 +13,20 @@ import com.fasterxml.jackson.databind.JsonNode;
 @Component
 public class DeepSeekStoryDirectionGenerator implements StoryDirectionGenerator {
 
-    private final DeepSeekStructuredOutputClient client;
+    private final StructuredModelGateway models;
     private final StoryDirectionModelPromptFactory promptFactory;
     private final StoryDirectionModelOutputParser outputParser;
     private final JsonNode outputSchema;
-    private final AgentRunRecorder runs;
 
     public DeepSeekStoryDirectionGenerator(
-            DeepSeekStructuredOutputClient client,
+            StructuredModelGateway models,
             StoryDirectionModelPromptFactory promptFactory,
             StoryDirectionModelOutputParser outputParser,
-            StoryDirectionOutputSchema outputSchema, AgentRunRecorder runs) {
-        this.client = client;
+            StoryDirectionOutputSchema outputSchema) {
+        this.models = models;
         this.promptFactory = promptFactory;
         this.outputParser = outputParser;
         this.outputSchema = outputSchema.value();
-        this.runs = runs;
     }
 
     @Override
@@ -44,9 +41,8 @@ public class DeepSeekStoryDirectionGenerator implements StoryDirectionGenerator 
             List<StoryDirectionCandidate> previousDirections,
             String authorInstruction) {
         String prompt = promptFactory.userPrompt(intent, previousDirections, authorInstruction);
-        String output = runs.record(projectId, "STORY_DIRECTION", provider(),
-                promptFactory.systemPrompt(), prompt,
-                () -> client.request("story_directions", promptFactory.systemPrompt(), prompt, outputSchema, 4_000));
+        String output = models.request(projectId, "STORY_DIRECTION", provider(), promptFactory.systemPrompt(), prompt,
+                outputSchema, "story_directions", 4_000, CodexSessionPolicy.REUSE_THREAD);
         return outputParser.parse(provider(), output);
     }
 }

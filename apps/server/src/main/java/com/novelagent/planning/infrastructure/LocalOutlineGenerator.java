@@ -25,7 +25,8 @@ public class LocalOutlineGenerator implements OutlineGenerator {
             if (instruction != null && !instruction.isBlank()) pacing += " 本版调整：" + instruction.trim() + "。";
             return new GeneratedOutline(provider().name(), new OutlineContent(
                     previousOutline.title(), previousOutline.premise(), previousOutline.structureSummary(), pacing,
-                    previousOutline.suggestedMinWords(), previousOutline.suggestedMaxWords(), previousOutline.arcs()),
+                    previousOutline.suggestedMinWords(), previousOutline.suggestedMaxWords(), previousOutline.arcs(),
+                    previousOutline.readerExperiencePlans()),
                     List.of(instruction == null || instruction.isBlank()
                             ? "未发现需要修改的内容，沿用原版本。"
                             : "根据本次要求调整了全书节奏策略，卷章结构与核心事件保持不变。"));

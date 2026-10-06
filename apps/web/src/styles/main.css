@@ -1352,6 +1352,10 @@ h2 {
   border-bottom: 1px solid #cbd2d9;
 }
 
+.direction-workbench > .planning-tabs {
+  flex-wrap: wrap;
+}
+
 .planning-tabs button {
   display: inline-flex;
   min-height: 38px;
@@ -1973,6 +1977,11 @@ textarea:disabled {
   margin: 6px 0;
 }
 
+.manuscript-base-preview-body .manuscript-base-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .outline-restore-action {
   display: flex;
   align-items: center;
@@ -2062,6 +2071,52 @@ textarea:disabled {
   padding: 18px;
   container-type: inline-size;
 }
+
+.chapter-workflow-top {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  margin: -18px -18px 18px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid #cbd2d9;
+  background: #fff;
+  box-shadow: 0 5px 12px rgb(20 40 48 / 5%);
+}
+
+.chapter-workflow-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.chapter-workflow-heading span { color: #66717d; font-size: 12px; }
+.chapter-flow { display: flex; overflow-x: auto; border: 1px solid #d7dde3; border-radius: 6px; }
+.chapter-flow button {
+  display: grid;
+  flex: 1 0 105px;
+  grid-template-columns: auto 1fr;
+  column-gap: 5px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 0;
+  border-right: 1px solid #d7dde3;
+  background: #f7f9f8;
+  color: #46515d;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.chapter-flow button:last-child { border-right: 0; }
+.chapter-flow button span { color: #829098; font-size: 10px; }
+.chapter-flow button small { grid-column: 2; color: #66717d; font-size: 10px; }
+.chapter-flow button.done { background: #eef8f3; color: #215f3f; }
+.chapter-flow button.active { box-shadow: inset 0 -3px #176b63; font-weight: 700; }
+.chapter-workflow-top .writing-actions { margin-top: 10px; padding-top: 10px; flex-wrap: wrap; }
+.chapter-workflow-top .instruction-field { min-width: min(100%, 280px); }
+.chapter-workflow-top .direction-action-buttons { flex-wrap: wrap; }
 
 .writing-toolbar,
 .editor-status,
@@ -2720,6 +2775,9 @@ textarea:disabled {
     grid-template-columns: 1fr;
   }
 
+  .chapter-workflow-top { position: relative; }
+  .chapter-workflow-heading span { display: none; }
+
   .chapter-rail {
     display: flex;
     max-height: 160px;
@@ -2787,4 +2845,15 @@ textarea:disabled {
   .run-summary > span:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
   .run-row { grid-template-columns: 22px minmax(0, 1fr); }
   .run-metrics { grid-column: 2; text-align: left; min-width: 0; }
+}
+.project-model-settings-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.project-model-settings-note {
+  color: var(--text-muted, #64748b);
+  margin-top: 16px;
 }

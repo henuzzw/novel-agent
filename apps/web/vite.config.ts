@@ -20,11 +20,12 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://localhost:8081',
-        changeOrigin: true,
+        // Keep Host aligned with Origin when Vite falls back to another port.
+        changeOrigin: false,
       },
       '/actuator': {
         target: 'http://localhost:8081',
-        changeOrigin: true,
+        changeOrigin: false,
       },
     },
   },

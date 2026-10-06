@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Locale;
 import java.util.Map;
@@ -26,8 +27,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import com.novelagent.project.application.GlobalModelSettingsService;
+import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
+import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
+import com.novelagent.agent.application.AgentRunRecorder.Usage;
+import com.novelagent.agent.application.AgentRunRecorder.UsageCarrier;
+import com.novelagent.planning.application.ModelProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,7 +66,10 @@ public class CodexAppServerClient {
     private final ObjectMapper objectMapper;
     private final String command;
     private final String model;
+    private final String effort;
+    private final GlobalModelSettingsService modelChoices;
     private final Duration timeout;
+    private final Duration turnTimeout;
     private final Path runtimeRoot;
     private final Path codexHome;
     private final Path stateRoot;
@@ -69,23 +81,32 @@ public class CodexAppServerClient {
     private final Map<Long, CompletableFuture<JsonNode>> pendingRequests = new ConcurrentHashMap<>();
     private final Map<String, ActiveTurn> activeTurns = new ConcurrentHashMap<>();
     private final Set<String> attachedThreads = ConcurrentHashMap.newKeySet();
+    private final Map<String, String> abandonedTurns = new ConcurrentHashMap<>();
     private final Deque<String> recentErrors = new ArrayDeque<>();
 
     private volatile Process process;
     private volatile BufferedWriter writer;
 
+    @Autowired
     public CodexAppServerClient(
             ObjectMapper objectMapper,
             @Value("${app.ai.codex.command}") String command,
             @Value("${app.ai.codex.model}") String model,
+            @Value("${app.ai.codex.effort}") String effort,
             @Value("${app.ai.codex.timeout-seconds}") long timeoutSeconds,
             @Value("${app.ai.codex.runtime-directory}") String runtimeDirectory,
             @Value("${app.ai.codex.auth-source}") String authSource,
-            @Value("${app.ai.codex.proxy-url:}") String proxyUrl) {
+            @Value("${app.ai.codex.proxy-url:}") String proxyUrl,
+            GlobalModelSettingsService modelChoices,
+            @Value("${app.ai.codex.turn-timeout-seconds:1200}") long turnTimeoutSeconds) {
         this.objectMapper = objectMapper;
         this.command = command;
         this.model = model;
+        this.effort = effort;
+        this.modelChoices = modelChoices;
         this.timeout = Duration.ofSeconds(timeoutSeconds);
+        this.turnTimeout = Duration.ofSeconds(turnTimeoutSeconds);
+        if (timeoutSeconds <= 0 || turnTimeoutSeconds <= 0) throw new IllegalArgumentException("Codex 等待上限必须大于零");
         this.runtimeRoot = Path.of(runtimeDirectory).toAbsolutePath().normalize();
         this.codexHome = this.runtimeRoot.resolve("home");
         this.stateRoot = this.codexHome.resolve("state");
@@ -93,10 +114,49 @@ public class CodexAppServerClient {
         this.proxyUrl = proxyUrl == null ? "" : proxyUrl.trim();
     }
 
+    public CodexAppServerClient(ObjectMapper objectMapper, String command, String model, String effort,
+            long timeoutSeconds, String runtimeDirectory, String authSource, String proxyUrl,
+            GlobalModelSettingsService modelChoices) {
+        this(objectMapper, command, model, effort, timeoutSeconds, runtimeDirectory, authSource, proxyUrl,
+                modelChoices, timeoutSeconds);
+    }
+
+    CodexAppServerClient(ObjectMapper objectMapper, String command, String model, String effort,
+            long timeoutSeconds, String runtimeDirectory, String authSource, String proxyUrl) {
+        this(objectMapper, command, model, effort, timeoutSeconds, runtimeDirectory, authSource, proxyUrl, null);
+    }
+
+    EffectiveSettings effectiveSettings() {
+        if (modelChoices == null) return new EffectiveSettings(ModelProvider.LOCAL_CODEX, model, effort, null);
+        var settings = modelChoices.get();
+        return new EffectiveSettings(ModelProvider.LOCAL_CODEX,
+                settings.codexModel(), settings.codexEffort(), settings.version());
+    }
+
+    public JsonNode listModels() {
+        ArrayNode models = objectMapper.createArrayNode();
+        String cursor = null;
+        do {
+            ObjectNode params = objectMapper.createObjectNode();
+            params.put("limit", 100);
+            params.put("includeHidden", false);
+            if (cursor != null) params.put("cursor", cursor);
+            JsonNode result = request("model/list", params);
+            for (JsonNode item : result.path("data")) models.add(item);
+            cursor = result.path("nextCursor").asText(null);
+        } while (cursor != null && !cursor.isBlank());
+        return models;
+    }
+
     public String startThread(UUID projectId, String developerInstructions) {
+        return startThread(projectId, developerInstructions, effectiveSettings());
+    }
+
+    public String startThread(UUID projectId, String developerInstructions, EffectiveSettings choice) {
         Path workspace = prepareWorkspace(projectId);
         ObjectNode params = objectMapper.createObjectNode();
-        params.put("model", model);
+        params.put("model", choice.model());
+        params.putObject("config").put("model_reasoning_effort", choice.effort());
         params.put("cwd", workspace.toString());
         params.put("serviceName", "novel-agent");
         params.put("approvalPolicy", "never");
@@ -109,18 +169,23 @@ public class CodexAppServerClient {
         JsonNode result = request("thread/start", params);
         String threadId = requiredText(result, "/thread/id", "Codex 未返回 thread ID");
         attachedThreads.add(threadId);
-        log.info("Codex thread started projectId={} threadId={} model={}", projectId, threadId, model);
+        log.info("Codex thread started projectId={} threadId={} model={}", projectId, threadId, choice.model());
         return threadId;
     }
 
     public void resumeThread(String threadId, UUID projectId, String developerInstructions) {
+        resumeThread(threadId, projectId, developerInstructions, effectiveSettings());
+    }
+
+    public void resumeThread(String threadId, UUID projectId, String developerInstructions, EffectiveSettings choice) {
         ensureStarted();
         if (attachedThreads.contains(threadId)) {
             return;
         }
         ObjectNode params = objectMapper.createObjectNode();
         params.put("threadId", threadId);
-        params.put("model", model);
+        params.put("model", choice.model());
+        params.putObject("config").put("model_reasoning_effort", choice.effort());
         params.put("cwd", prepareWorkspace(projectId).toString());
         params.put("approvalPolicy", "never");
         params.put("sandbox", "read-only");
@@ -128,44 +193,67 @@ public class CodexAppServerClient {
         params.put("excludeTurns", true);
         request("thread/resume", params);
         attachedThreads.add(threadId);
-        log.info("Codex thread resumed projectId={} threadId={} model={}", projectId, threadId, model);
+        log.info("Codex thread resumed projectId={} threadId={} model={}", projectId, threadId, choice.model());
     }
 
     public TurnResult runStructuredTurn(String threadId, UUID projectId, String prompt, JsonNode outputSchema) {
-        ActiveTurn activeTurn = new ActiveTurn();
+        return runStructuredTurn(threadId, projectId, prompt, outputSchema, effectiveSettings());
+    }
+
+    public TurnResult runStructuredTurn(String threadId, UUID projectId, String prompt,
+            JsonNode outputSchema, EffectiveSettings choice) {
+        return runStructuredTurn(threadId, projectId, prompt, outputSchema, choice, ignored -> { });
+    }
+
+    public TurnResult runStructuredTurn(String threadId, UUID projectId, String prompt,
+            JsonNode outputSchema, EffectiveSettings choice, Consumer<String> progress) {
+        if (abandonedTurns.containsKey(threadId)) {
+            throw new CodexAppServerException("上一轮 Codex 尚未确认停止，不能复用该会话，请稍后重试");
+        }
+        ActiveTurn activeTurn = new ActiveTurn(progress == null ? ignored -> { } : progress);
         if (activeTurns.putIfAbsent(threadId, activeTurn) != null) {
             throw new CodexAppServerException("该小说项目的 Codex 会话正在生成，请稍后再试");
         }
 
         Instant startedAt = Instant.now();
-        log.info("Codex turn starting projectId={} threadId={} model={}", projectId, threadId, model);
+        log.info("Codex turn starting projectId={} threadId={} model={} effort={} timeoutSeconds={}",
+                projectId, threadId, choice.model(), choice.effort(), turnTimeout.toSeconds());
         try {
-            ObjectNode params = objectMapper.createObjectNode();
-            params.put("threadId", threadId);
-            params.put("model", model);
-            params.put("cwd", prepareWorkspace(projectId).toString());
-            params.put("approvalPolicy", "never");
-            params.set("sandboxPolicy", readOnlySandbox());
-            params.set("environments", objectMapper.createArrayNode());
-            params.set("disabledPluginIds", objectMapper.createArrayNode());
-            params.set("outputSchema", outputSchema);
-            ArrayNode input = params.putArray("input");
-            input.addObject().put("type", "text").put("text", prompt);
-
+            ObjectNode params = structuredTurnParams(threadId, projectId, prompt, outputSchema, choice);
             JsonNode result = request("turn/start", params);
             activeTurn.turnId = requiredText(result, "/turn/id", "Codex 未返回 turn ID");
-            String output = await(activeTurn.completion, "等待 Codex 完成生成");
+            synchronized (activeTurn) {
+                for (var event : activeTurn.earlyEvents) handleTurnEvent(event.method(), event.params());
+                activeTurn.earlyEvents.clear();
+            }
+            String output = await(activeTurn.completion, "等待 Codex 完成生成", turnTimeout);
             if (output == null || output.isBlank()) {
                 throw new CodexAppServerException("Codex 已结束生成，但没有返回正文内容");
             }
             log.info("Codex turn completed projectId={} threadId={} turnId={} durationMs={}",
                     projectId, threadId, activeTurn.turnId, Duration.between(startedAt, Instant.now()).toMillis());
-            return new TurnResult(activeTurn.turnId, output);
+            return new TurnResult(activeTurn.turnId, output, activeTurn.currentUsage());
         }
         catch (RuntimeException exception) {
+            if ((exception.getCause() instanceof TimeoutException
+                    || exception.getCause() instanceof InterruptedException) && activeTurn.turnId != null) {
+                boolean needsInterrupt;
+                synchronized (activeTurn) {
+                    needsInterrupt = !activeTurn.completion.isDone();
+                    if (needsInterrupt) abandonedTurns.put(threadId, activeTurn.turnId);
+                }
+                if (needsInterrupt) {
+                    boolean interrupted = Thread.interrupted();
+                    try { interruptTimedOutTurn(threadId, activeTurn.turnId); }
+                    finally { if (interrupted) Thread.currentThread().interrupt(); }
+                }
+            }
             log.warn("Codex turn failed projectId={} threadId={} turnId={} model={} durationMs={} category={}",
-                    projectId, threadId, activeTurn.turnId, model,
+                    projectId, threadId, activeTurn.turnId, choice.model(),
                     Duration.between(startedAt, Instant.now()).toMillis(), failureCategory(exception.getMessage()));
+            if (activeTurn.currentUsage() != null) {
+                throw new TurnFailure(exception, activeTurn.currentUsage());
+            }
             throw exception;
         }
         finally {
@@ -173,7 +261,49 @@ public class CodexAppServerClient {
         }
     }
 
-    private JsonNode request(String method, JsonNode params) {
+    void interruptTimedOutTurn(String threadId, String turnId) {
+        long id = requestSequence.incrementAndGet();
+        var future = new CompletableFuture<JsonNode>();
+        pendingRequests.put(id, future);
+        try {
+            var message = objectMapper.createObjectNode().put("id", id).put("method", "turn/interrupt");
+            message.putObject("params").put("threadId", threadId).put("turnId", turnId);
+            writeMessage(message);
+            JsonNode response = future.get(2, TimeUnit.SECONDS);
+            log.info("Codex timeout interrupt threadId={} turnId={} acknowledged={}", threadId, turnId,
+                    !response.has("error"));
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        } catch (Exception exception) {
+            log.warn("Codex timeout interrupt not confirmed threadId={} turnId={} exceptionType={}",
+                    threadId, turnId, exception.getClass().getSimpleName());
+        } finally {
+            pendingRequests.remove(id);
+        }
+    }
+
+    ObjectNode structuredTurnParams(String threadId, UUID projectId, String prompt, JsonNode outputSchema) {
+        return structuredTurnParams(threadId, projectId, prompt, outputSchema, effectiveSettings());
+    }
+
+    ObjectNode structuredTurnParams(String threadId, UUID projectId, String prompt, JsonNode outputSchema,
+            EffectiveSettings choice) {
+        ObjectNode params = objectMapper.createObjectNode();
+        params.put("threadId", threadId);
+        params.put("model", choice.model());
+        params.put("effort", choice.effort());
+        params.put("cwd", prepareWorkspace(projectId).toString());
+        params.put("approvalPolicy", "never");
+        params.set("sandboxPolicy", readOnlySandbox());
+        params.set("environments", objectMapper.createArrayNode());
+        params.set("disabledPluginIds", objectMapper.createArrayNode());
+        params.set("outputSchema", outputSchema);
+        ArrayNode input = params.putArray("input");
+        input.addObject().put("type", "text").put("text", prompt);
+        return params;
+    }
+
+    JsonNode request(String method, JsonNode params) {
         ensureStarted();
         return requestOnStartedProcess(method, params);
     }
@@ -191,7 +321,7 @@ public class CodexAppServerClient {
         request.set("params", params);
         try {
             writeMessage(request);
-            JsonNode response = await(future, "调用 Codex " + method);
+            JsonNode response = method.equals("turn/start") ? awaitTurnStart(future) : await(future, "调用 Codex " + method);
             JsonNode error = response.get("error");
             if (error != null && !error.isNull()) {
                 Integer code = error.has("code") ? error.get("code").asInt() : null;
@@ -231,8 +361,8 @@ public class CodexAppServerClient {
             ProcessBuilder processBuilder = new ProcessBuilder(launchCommand())
                     .directory(runtimeRoot.toFile());
             configureEnvironment(processBuilder.environment());
-            log.info("Starting Codex App Server model={} proxyConfigured={} runtime={}",
-                    model, !proxyUrl.isBlank(), runtimeRoot);
+            log.info("Starting Codex App Server model={} effort={} proxyConfigured={} runtime={}",
+                    model, effort, !proxyUrl.isBlank(), runtimeRoot);
             Process started = processBuilder.start();
             process = started;
             writer = new BufferedWriter(new OutputStreamWriter(started.getOutputStream(), StandardCharsets.UTF_8));
@@ -375,7 +505,7 @@ public class CodexAppServerClient {
         }
     }
 
-    private void handleMessage(JsonNode message) {
+    void handleMessage(JsonNode message) {
         JsonNode id = message.get("id");
         if (id != null && id.isIntegralNumber() && (message.has("result") || message.has("error"))) {
             CompletableFuture<JsonNode> future = pendingRequests.get(id.asLong());
@@ -391,12 +521,42 @@ public class CodexAppServerClient {
             return;
         }
         switch (method) {
-            case "item/completed" -> handleItemCompleted(message.path("params"));
-            case "turn/completed" -> handleTurnCompleted(message.path("params"));
+            case "thread/tokenUsage/updated" -> handleTokenUsage(message.path("params"));
+            case "item/agentMessage/delta", "item/completed", "turn/completed" ->
+                    handleTurnEvent(method, message.path("params"));
             default -> {
-                // Progress notifications do not need application-level handling yet.
+                // Reasoning and tool content are deliberately not exposed as model responses.
             }
         }
+    }
+
+    private void handleTurnEvent(String method, JsonNode params) {
+        String threadId = params.path("threadId").asText();
+        String turnId = method.equals("turn/completed") ? params.at("/turn/id").asText()
+                : params.path("turnId").asText();
+        if (method.equals("turn/completed")) abandonedTurns.remove(threadId, turnId);
+        ActiveTurn active = activeTurns.get(threadId);
+        if (active == null || turnId.isBlank()) return;
+        synchronized (active) {
+            if (active.turnId == null) {
+                if (active.earlyEvents.size() < 1000) active.earlyEvents.add(new PendingEvent(method, params));
+                return;
+            }
+            if (!active.turnId.equals(turnId)) return;
+            switch (method) {
+                case "item/agentMessage/delta" -> active.append(params.path("itemId").asText(), params.path("delta").asText());
+                case "item/completed" -> handleItemCompleted(params);
+                case "turn/completed" -> handleTurnCompleted(params);
+                default -> { }
+            }
+        }
+    }
+
+    private void handleTokenUsage(JsonNode params) {
+        ActiveTurn activeTurn = activeTurns.get(params.path("threadId").asText());
+        String turnId = params.path("turnId").asText("");
+        if (activeTurn == null || turnId.isBlank()) return;
+        activeTurn.recordUsage(turnId, Usage.from(params.at("/tokenUsage/last"), true));
     }
 
     private void handleItemCompleted(JsonNode params) {
@@ -404,6 +564,7 @@ public class CodexAppServerClient {
         JsonNode item = params.path("item");
         if (activeTurn != null && "agentMessage".equals(item.path("type").asText())) {
             activeTurn.output = item.path("text").asText("");
+            activeTurn.publish(activeTurn.output);
         }
     }
 
@@ -415,6 +576,8 @@ public class CodexAppServerClient {
         JsonNode turn = params.path("turn");
         String status = turn.path("status").asText();
         if (!"completed".equals(status)) {
+            String partialOutput = findLastAgentMessage(turn.path("items"));
+            if (!partialOutput.isBlank()) activeTurn.publish(partialOutput);
             String message = turn.at("/error/message").asText("状态为 " + status);
             log.warn("Codex turn notification failed threadId={} turnId={} status={} category={}",
                     params.path("threadId").asText(""), turn.path("id").asText(""), status,
@@ -424,6 +587,7 @@ public class CodexAppServerClient {
             return;
         }
         String finalOutput = findLastAgentMessage(turn.path("items"));
+        if (!finalOutput.isBlank()) activeTurn.publish(finalOutput);
         activeTurn.completion.complete(finalOutput.isBlank() ? activeTurn.output : finalOutput);
     }
 
@@ -466,11 +630,37 @@ public class CodexAppServerClient {
     }
 
     private <T> T await(CompletableFuture<T> future, String action) {
+        return await(future, action, timeout);
+    }
+
+    // Obtain the turn ID before honoring an interrupt so a just-started remote turn can be stopped.
+    JsonNode awaitTurnStart(CompletableFuture<JsonNode> future) {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        boolean interrupted = false;
         try {
-            return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            while (true) {
+                try {
+                    return future.get(Math.max(1, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+                } catch (InterruptedException exception) {
+                    interrupted = true;
+                } catch (TimeoutException exception) {
+                    throw new CodexAppServerException("调用 Codex turn/start 超时", exception);
+                } catch (ExecutionException exception) {
+                    throw new CodexAppServerException("调用 Codex turn/start 失败", exception.getCause());
+                }
+            }
+        } finally {
+            if (interrupted) Thread.currentThread().interrupt();
+        }
+    }
+
+    private <T> T await(CompletableFuture<T> future, String action, Duration limit) {
+        try {
+            return future.get(limit.toMillis(), TimeUnit.MILLISECONDS);
         }
         catch (TimeoutException exception) {
-            throw new CodexAppServerException(action + "超时，请稍后重试或切换 DeepSeek", exception);
+            throw new CodexAppServerException(action + "超时（等待上限 " + limit.toSeconds()
+                    + " 秒），可降低推理强度或切换模型后手动重试；生成上限配置 CODEX_TURN_TIMEOUT_SECONDS，协议上限 CODEX_CLI_TIMEOUT_SECONDS", exception);
         }
         catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -531,6 +721,7 @@ public class CodexAppServerClient {
         writer = null;
         process = null;
         attachedThreads.clear();
+        abandonedTurns.clear();
     }
 
     private int recentErrorCount() {
@@ -541,10 +732,10 @@ public class CodexAppServerClient {
 
     static String failureCategory(String message) {
         String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("unauthorized") || normalized.contains("authentication")
+                || normalized.contains("401") || normalized.contains("403")) return "AUTHENTICATION";
         if (normalized.contains("workspace routing discovery failed")) return "WORKSPACE_ROUTING";
         if (normalized.contains("no rollout found") || normalized.contains("thread not found")) return "MISSING_THREAD";
-        if (normalized.contains("unauthorized") || normalized.contains("authentication")
-                || normalized.contains("401")) return "AUTHENTICATION";
         if (normalized.contains("proxy") || normalized.contains("connect") || normalized.contains("network"))
             return "NETWORK";
         if (normalized.contains("timeout") || normalized.contains("超时")) return "TIMEOUT";
@@ -591,12 +782,55 @@ public class CodexAppServerClient {
         attachedThreads.clear();
     }
 
-    public record TurnResult(String turnId, String output) {
+    public record TurnResult(String turnId, String output, Usage usage) implements ModelResult {
+        public TurnResult(String turnId, String output) { this(turnId, output, null); }
     }
+
+    private static final class TurnFailure extends CodexAppServerException implements UsageCarrier {
+        private final Usage usage;
+
+        private TurnFailure(RuntimeException cause, Usage usage) {
+            super(cause.getMessage(), cause);
+            this.usage = usage;
+        }
+
+        @Override public Usage usage() { return usage; }
+    }
+
+    private record PendingEvent(String method, JsonNode params) { }
 
     private static final class ActiveTurn {
         private final CompletableFuture<String> completion = new CompletableFuture<>();
+        private final Consumer<String> progress;
+        private final List<PendingEvent> earlyEvents = new ArrayList<>();
+        private String itemId = "";
+        private final StringBuilder partial = new StringBuilder();
         private volatile String turnId;
         private volatile String output = "";
+        private final Map<String, Usage> usages = new ConcurrentHashMap<>();
+
+        private ActiveTurn(Consumer<String> progress) { this.progress = progress; }
+
+        private void append(String id, String delta) {
+            if (!itemId.equals(id)) { itemId = id; partial.setLength(0); }
+            int available = com.novelagent.agent.application.AgentRunOutputBuffer.MAX_CHARACTERS + 1 - partial.length();
+            if (available > 0) partial.append(delta, 0, Math.min(delta.length(), available));
+            publish(partial.toString());
+        }
+
+        private void publish(String text) {
+            try { progress.accept(text); }
+            catch (RuntimeException exception) {
+                log.warn("Codex progress observer failed exceptionType={}", exception.getClass().getSimpleName());
+            }
+        }
+
+        private void recordUsage(String usageTurnId, Usage usage) {
+            if (usage != null && (turnId == null || turnId.equals(usageTurnId))) {
+                usages.put(usageTurnId, usage);
+            }
+        }
+
+        private Usage currentUsage() { return turnId == null ? null : usages.get(turnId); }
     }
 }

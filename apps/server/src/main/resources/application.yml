@@ -1,7 +1,10 @@
 logging:
+  pattern:
+    level: "%5p [requestId=%X{requestId:-} projectId=%X{projectId:-}]"
   file:
     name: ${LOG_FILE:logs/novel-agent-server.log}
   level:
+    com.novelagent.platform.web.HttpRequestLog: ${HTTP_LOG_LEVEL:INFO}
     com.novelagent.planning.infrastructure.CodexAppServerClient: ${CODEX_LOG_LEVEL:INFO}
   logback:
     rollingpolicy:
@@ -96,8 +99,10 @@ app:
           safety-margin-tokens: ${LOCAL_TEMPLATE_CONTEXT_SAFETY_MARGIN_TOKENS:2000}
     codex:
       command: ${CODEX_CLI_COMMAND:codex.exe}
-      model: ${CODEX_MODEL:gpt-6-sol}
+      model: ${CODEX_MODEL:gpt-6.1-sol}
+      effort: ${CODEX_EFFORT:xhigh}
       timeout-seconds: ${CODEX_CLI_TIMEOUT_SECONDS:600}
+      turn-timeout-seconds: ${CODEX_TURN_TIMEOUT_SECONDS:1200}
       runtime-directory: ${CODEX_RUNTIME_DIRECTORY:${java.io.tmpdir}/novel-agent-codex}
       auth-source: ${CODEX_AUTH_SOURCE:${user.home}/.codex/auth.json}
       proxy-url: ${CODEX_PROXY_URL:}

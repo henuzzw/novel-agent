@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
+import PlanningCheckpointPanel from '@/components/PlanningCheckpointPanel.vue'
+import ReaderExperienceSeedEditor from './ReaderExperienceSeedEditor.vue'
+import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Check, ChevronDown, RefreshCw, Save, Sparkles } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
@@ -12,19 +16,22 @@ import {
   publishOutline,
   updateOutline,
   type GenerationMode,
-  type ModelProvider,
   type OutlineContent,
   type OutlineVersion,
 } from '@/api/planning'
 
 const props = defineProps<{ projectId: string }>()
+const emit = defineEmits<{ 'choose-style': [] }>()
 const queryClient = useQueryClient()
-const provider = ref<ModelProvider>('LOCAL_CODEX')
+const { provider: provider } = useGlobalModelSettings()
 const generationMode = ref<GenerationMode>('REVISE')
 const baseOutlineVersionId = ref('')
 const instruction = ref('')
 const actionError = ref('')
 const draft = ref<OutlineContent | null>(null)
+const planningBusy = ref(false)
+const editingBusy = computed(() => generateMutation.isPending.value || saveMutation.isPending.value ||
+  publishMutation.isPending.value || restoreMutation.isPending.value)
 
 const outlineQuery = useQuery({
   queryKey: computed(() => ['outline', props.projectId]),
@@ -58,7 +65,7 @@ function copyContent(value: OutlineContent): OutlineContent {
 watch(() => outlineQuery.data.value, (value) => {
   draft.value = value ? copyContent(value.content) : null
 }, { immediate: true })
-watch(() => props.projectId, () => { baseOutlineVersionId.value = '' })
+watch(() => props.projectId, () => { baseOutlineVersionId.value = ''; planningBusy.value = false })
 
 const chapterCount = computed(() => draft.value?.arcs.reduce((sum, arc) => sum + arc.chapters.length, 0) ?? 0)
 const editable = computed(() => outlineQuery.data.value?.status === 'DRAFT')
@@ -80,6 +87,20 @@ function updateCache(value: OutlineVersion) {
   queryClient.invalidateQueries({ queryKey: ['outline-versions', props.projectId] })
   queryClient.invalidateQueries({ queryKey: ['outline-version', props.projectId, value.id] })
   draft.value = copyContent(value.content)
+}
+
+function selectAssembledOutline(value: OutlineVersion) {
+  if (value.projectId !== props.projectId) return
+  if (draft.value && outlineQuery.data.value &&
+    JSON.stringify(draft.value) !== JSON.stringify(outlineQuery.data.value.content) &&
+    !window.confirm('当前大纲有未保存修改。确认切换到拼装结果？未保存修改将被丢弃。')) return
+  if (outlineQuery.data.value && value.generationNumber < outlineQuery.data.value.generationNumber) {
+    baseOutlineVersionId.value = value.id
+    return
+  }
+  updateCache(value)
+  baseOutlineVersionId.value = ''
+  actionError.value = ''
 }
 
 const generateMutation = useMutation({
@@ -112,6 +133,7 @@ const publishMutation = useMutation({
     updateCache(value)
     queryClient.setQueryData(['current-outline', props.projectId], value)
     queryClient.invalidateQueries({ queryKey: ['chapter-contract', props.projectId] })
+    queryClient.invalidateQueries({ predicate: query => query.queryKey.includes(props.projectId) })
     actionError.value = ''
   },
   onError: (error: Error) => { actionError.value = error.message },
@@ -147,6 +169,8 @@ function formatWords(value: number) {
       <span v-if="outlineQuery.data.value" class="version-label">最新生成：第 {{ outlineQuery.data.value.generationNumber }} 版 · {{ outlineQuery.data.value.status === 'PUBLISHED' ? '已发布' : '草稿' }}</span>
     </div>
 
+    <PlanningCheckpointPanel :key="projectId" :project-id="projectId" :provider="provider" :external-busy="editingBusy" @busy-change="planningBusy = $event" @assembled="selectAssembledOutline" />
+
     <div v-if="outlineQuery.isPending.value" class="direction-loading">正在读取分层大纲…</div>
     <div v-else-if="outlineQuery.isError.value" class="status-panel error-panel"><strong>大纲加载失败</strong><span>{{ outlineQuery.error.value?.message }}</span></div>
 
@@ -171,6 +195,7 @@ function formatWords(value: number) {
         <label class="bible-field"><span>节奏策略</span><textarea v-model="draft.pacingStrategy" :disabled="!editable" rows="4" /></label>
       </div>
 
+      <ReaderExperienceSeedEditor :model-value="draft.readerExperiencePlans ?? []" :disabled="!editable || editingBusy" @update:model-value="draft.readerExperiencePlans = $event" />
       <div class="outline-arcs">
         <section v-for="arc in draft.arcs" :key="arc.ordinal" class="outline-arc">
           <header>
@@ -206,11 +231,11 @@ function formatWords(value: number) {
       <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" maxlength="1000" placeholder="可选，例如：前十章节奏更快，减少解释性章节" /></label>
       <label v-if="outlineQuery.data.value" class="provider-field"><span>生成方式</span><select v-model="generationMode"><option value="REVISE">基于选定版本调整</option><option value="REGENERATE">重新生成</option></select></label>
       <label v-if="outlineQuery.data.value" class="provider-field outline-base-field"><span>选择历史版本</span><select v-model="baseOutlineVersionId"><option value="">{{ currentOutlineQuery.data.value ? `当前写作大纲（第 ${currentOutlineQuery.data.value.generationNumber} 版）` : `最新版本（第 ${outlineQuery.data.value.generationNumber} 版）` }}</option><option v-if="currentIsOlder" :value="outlineQuery.data.value.id">最新生成（第 {{ outlineQuery.data.value.generationNumber }} 版）</option><option v-for="version in historicalVersions" :key="version.id" :value="version.id">第 {{ version.generationNumber }} 版 · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.title }}</option></select></label>
-      <label class="provider-field"><span>生成模型</span><select v-model="provider"><option value="LOCAL_CODEX">服务端 Codex</option><option value="DEEPSEEK">DeepSeek</option><option value="LOCAL_TEMPLATE">本地模板</option></select></label>
+      <GlobalModelBadge />
       <div class="direction-action-buttons">
-        <button class="button secondary" type="button" :disabled="generateMutation.isPending.value" @click="generateMutation.mutate()"><RefreshCw :size="16" />{{ generateMutation.isPending.value ? '正在生成…' : outlineQuery.data.value ? generationMode === 'REVISE' ? '按要求调整' : '重新生成' : '生成分层大纲' }}</button>
-        <button v-if="editable" class="button secondary" type="button" :disabled="saveMutation.isPending.value" @click="saveMutation.mutate()"><Save :size="16" />{{ saveMutation.isPending.value ? '正在保存…' : '保存修改' }}</button>
-        <button v-if="editable" class="button primary" type="button" :disabled="publishMutation.isPending.value" @click="publishMutation.mutate()"><Check :size="16" />{{ publishMutation.isPending.value ? '正在发布…' : '确认并发布' }}</button>
+        <button class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="generateMutation.mutate()"><RefreshCw :size="16" />{{ generateMutation.isPending.value ? '正在生成…' : outlineQuery.data.value ? generationMode === 'REVISE' ? '按要求调整' : '重新生成' : '生成分层大纲' }}</button>
+        <button v-if="editable" class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="saveMutation.mutate()"><Save :size="16" />{{ saveMutation.isPending.value ? '正在保存…' : '保存修改' }}</button>
+        <button v-if="editable" class="button primary" type="button" :disabled="editingBusy || planningBusy" @click="publishMutation.mutate()"><Check :size="16" />{{ publishMutation.isPending.value ? '正在发布…' : '确认并发布' }}</button>
       </div>
     </div>
     <div v-if="versionsQuery.isError.value && outlineQuery.data.value" class="form-error" role="alert">历史版本加载失败：{{ versionsQuery.error.value?.message }}</div>
@@ -220,7 +245,7 @@ function formatWords(value: number) {
       <div v-else-if="basePreviewQuery.isError.value" class="form-error" role="alert">历史大纲加载失败：{{ basePreviewQuery.error.value?.message }}</div>
       <div v-else-if="basePreviewQuery.data.value" class="outline-base-preview-body">
         <h3>{{ basePreviewQuery.data.value.content.title }}</h3>
-        <div class="outline-restore-action"><button v-if="basePreviewQuery.data.value.id !== currentOutlineQuery.data.value?.id" class="button secondary" type="button" :disabled="restoreMutation.isPending.value" @click="restoreMutation.mutate()"><RefreshCw :size="16" />{{ restoreMutation.isPending.value ? '正在恢复…' : '恢复此版为当前大纲' }}</button><span v-else>此版正用于写作</span></div>
+        <div class="outline-restore-action"><button v-if="basePreviewQuery.data.value.id !== currentOutlineQuery.data.value?.id" class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="restoreMutation.mutate()"><RefreshCw :size="16" />{{ restoreMutation.isPending.value ? '正在恢复…' : '恢复此版为当前大纲' }}</button><span v-else>此版正用于写作</span></div>
         <p>{{ basePreviewQuery.data.value.content.premise }}</p>
         <p>{{ basePreviewQuery.data.value.content.structureSummary }}</p>
         <section v-for="arc in basePreviewQuery.data.value.content.arcs" :key="arc.ordinal">
@@ -231,6 +256,7 @@ function formatWords(value: number) {
       </div>
     </details>
     <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
+    <div v-if="outlineQuery.data.value" class="style-actions"><button type="button" class="button secondary" @click="emit('choose-style')"><Sparkles :size="16" />选择风格并试写</button></div>
     <p v-if="outlineQuery.data.value" class="generator-note">本版本由 {{ outlineQuery.data.value.generatorType }} 生成<span v-if="currentBaseNumber"> · 基于第 {{ currentBaseNumber }} 版调整</span></p>
   </div>
 </template>

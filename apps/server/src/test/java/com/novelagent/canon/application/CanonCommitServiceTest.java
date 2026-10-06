@@ -1,6 +1,7 @@
 package com.novelagent.canon.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.api.CommitCanonRequest;
+import com.novelagent.canon.api.ReplaceCanonRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.domain.OutboxEvent;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
@@ -109,6 +111,76 @@ class CanonCommitServiceTest {
         verify(outbox, never()).save(any());
         verify(typedCanon, never()).materialize(any(), any(Integer.class), any(), any(Long.class), any());
         verify(projects, never()).save(any());
+    }
+
+    @Test
+    void rejectsASecondCommitForTheSameChapter() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID reviewId = UUID.randomUUID();
+        NovelProject project = NovelProject.create(projectId, ownerId, "雾港档案", EntryMode.IDEA);
+        when(actor.currentUserId()).thenReturn(ownerId);
+        when(projects.findById(projectId)).thenReturn(Optional.of(project));
+        when(commits.findByReviewVersionId(reviewId)).thenReturn(Optional.empty());
+        when(commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, 1)).thenReturn(true);
+
+        assertThat(service.hasCommittedChapter(projectId, 1)).isTrue();
+        assertThatThrownBy(() -> service.commit(projectId, 1, new CommitCanonRequest(reviewId, 0)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("已提交正史");
+        verify(outbox, never()).save(any());
+        verify(commits, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void replacesActiveCanonAndRetiresOldFacts() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID reviewId = UUID.randomUUID();
+        UUID manuscriptId = UUID.randomUUID();
+        CanonCommit previous = new CanonCommit(UUID.randomUUID(), projectId, 1, UUID.randomUUID(),
+                UUID.randomUUID(), 1, List.of());
+        NovelProject project = NovelProject.create(projectId, ownerId, "雾港档案", EntryMode.IDEA);
+        project.commitCanon(0);
+        ManuscriptVersion manuscript = ManuscriptVersion.create(manuscriptId, projectId, UUID.randomUUID(),
+                1, 2, "LOCAL_TEMPLATE", null, new ManuscriptContent("第一章", "新版正文", "摘要", List.of()));
+        manuscript.accept();
+        ChapterReviewVersion review = ChapterReviewVersion.create(reviewId, projectId, 1, manuscriptId,
+                2, "LOCAL_TEMPLATE", null, new ChapterReviewContent("通过", List.of(), List.of()));
+        review.approve();
+        when(actor.currentUserId()).thenReturn(ownerId);
+        when(projects.findById(projectId)).thenReturn(Optional.of(project));
+        when(commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, 1)).thenReturn(Optional.of(previous));
+        when(reviews.findByIdAndProjectId(reviewId, projectId)).thenReturn(Optional.of(review));
+        when(manuscripts.findByIdAndProjectId(manuscriptId, projectId)).thenReturn(Optional.of(manuscript));
+        when(commits.saveAndFlush(any(CanonCommit.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.replace(projectId, 1, new ReplaceCanonRequest(reviewId, previous.getId(), 1));
+
+        assertThat(result.canonVersion()).isEqualTo(2);
+        assertThat(previous.isActive()).isFalse();
+        assertThat(previous.getSupersededByCommitId()).isEqualTo(result.id());
+        verify(typedCanon).retire(previous.getId(), 2);
+        verify(typedCanon).materialize(projectId, 1, result.id(), 2, List.of());
+        verify(outbox).save(any(OutboxEvent.class));
+    }
+
+    @Test
+    void refusesReplacementWhenLaterCanonDependsOnChapter() {
+        UUID ownerId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        UUID reviewId = UUID.randomUUID();
+        CanonCommit previous = new CanonCommit(UUID.randomUUID(), projectId, 1, UUID.randomUUID(),
+                UUID.randomUUID(), 1, List.of());
+        NovelProject project = NovelProject.create(projectId, ownerId, "雾港档案", EntryMode.IDEA);
+        when(actor.currentUserId()).thenReturn(ownerId);
+        when(projects.findById(projectId)).thenReturn(Optional.of(project));
+        when(commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, 1)).thenReturn(Optional.of(previous));
+        when(commits.existsByProjectIdAndChapterNumberGreaterThanAndActiveTrue(projectId, 1)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.replace(projectId, 1,
+                new ReplaceCanonRequest(reviewId, previous.getId(), 0)))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("后续章节");
+        verify(outbox, never()).save(any());
     }
 
     private FactProposal fact(String id, FactDecision decision) {

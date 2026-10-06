@@ -14,6 +14,7 @@ public class ChapterContractVersion {
     @Id private UUID id;
     @Column(name = "project_id", nullable = false) private UUID projectId;
     @Column(name = "source_outline_version_id", nullable = false) private UUID sourceOutlineVersionId;
+    @Column(name = "base_contract_version_id") private UUID baseContractVersionId;
     @Column(name = "chapter_number", nullable = false) private int chapterNumber;
     @Column(name = "version_number", nullable = false) private int versionNumber;
     @Column(name = "schema_version", nullable = false, length = 50) private String schemaVersion;
@@ -27,8 +28,9 @@ public class ChapterContractVersion {
 
     protected ChapterContractVersion() {}
     private ChapterContractVersion(UUID id, UUID projectId, UUID outlineId, int chapterNumber, int versionNumber,
-            String generatorType, String instruction, ChapterContractContent content) {
+            String generatorType, String instruction, UUID baseContractVersionId, ChapterContractContent content) {
         this.id = id; this.projectId = projectId; this.sourceOutlineVersionId = outlineId;
+        this.baseContractVersionId = baseContractVersionId;
         this.chapterNumber = chapterNumber; this.versionNumber = versionNumber; this.schemaVersion = "chapter-contract/1";
         this.status = ChapterContractStatus.DRAFT; this.generatorType = required(generatorType, "generatorType");
         this.authorInstruction = instruction; this.content = validate(content);
@@ -37,7 +39,14 @@ public class ChapterContractVersion {
             int versionNumber, String generatorType, String instruction, ChapterContractContent content) {
         if (chapterNumber <= 0 || versionNumber <= 0) throw new IllegalArgumentException("章节号和版本号必须为正数");
         return new ChapterContractVersion(id, projectId, outlineId, chapterNumber, versionNumber,
-                generatorType, instruction, content);
+                generatorType, instruction, null, content);
+    }
+    public static ChapterContractVersion create(UUID id, UUID projectId, UUID outlineId, int chapterNumber,
+            int versionNumber, String generatorType, String instruction, UUID baseContractVersionId,
+            ChapterContractContent content) {
+        if (chapterNumber <= 0 || versionNumber <= 0) throw new IllegalArgumentException("章节号和版本号必须为正数");
+        return new ChapterContractVersion(id, projectId, outlineId, chapterNumber, versionNumber,
+                generatorType, instruction, baseContractVersionId, content);
     }
     public void revise(ChapterContractContent value) {
         if (status == ChapterContractStatus.APPROVED) throw new IllegalStateException("已确认的章节合同不能修改，请生成新版本");
@@ -58,6 +67,7 @@ public class ChapterContractVersion {
     }
     public UUID getId() { return id; } public UUID getProjectId() { return projectId; }
     public UUID getSourceOutlineVersionId() { return sourceOutlineVersionId; }
+    public UUID getBaseContractVersionId() { return baseContractVersionId; }
     public int getChapterNumber() { return chapterNumber; } public int getVersionNumber() { return versionNumber; }
     public String getSchemaVersion() { return schemaVersion; } public ChapterContractStatus getStatus() { return status; }
     public String getGeneratorType() { return generatorType; } public String getAuthorInstruction() { return authorInstruction; }

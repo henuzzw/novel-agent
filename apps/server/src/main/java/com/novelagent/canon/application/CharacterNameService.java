@@ -57,20 +57,58 @@ public class CharacterNameService {
         requireOwnedProject(projectId);
         StoryBibleVersion bible = bibles.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("请先生成故事圣经"));
+        return initializeFromStoryBible(projectId, bible);
+    }
+
+    @Transactional
+    public List<CharacterNameResponse> initializeFromStoryBible(UUID projectId, StoryBibleVersion bible) {
+        requireOwnedProject(projectId);
+        if (!projectId.equals(bible.getProjectId())) throw new IllegalArgumentException("故事圣经不属于本项目");
         StoryBibleContent content = bible.getContent();
         Map<String, String> names = new LinkedHashMap<>();
-        putName(names, "PROTAGONIST", extractName(content.protagonist()));
+        for (var blueprint : content.characterBlueprints()) {
+            putName(names, "PROTAGONIST".equals(blueprint.role()) ? "PROTAGONIST"
+                    : "BLUEPRINT_" + UUID.nameUUIDFromBytes(blueprint.name().getBytes(java.nio.charset.StandardCharsets.UTF_8)), blueprint.name());
+        }
+        if (!names.containsKey("PROTAGONIST")) putName(names, "PROTAGONIST", extractName(content.protagonist()));
         for (int index = 0; index < content.supportingCharacters().size(); index++) {
             putName(names, "SUPPORTING_" + (index + 1), extractName(content.supportingCharacters().get(index)));
         }
-        names.forEach((role, name) -> jdbc.update("""
+        registerNames(projectId, names, "STORY_BIBLE:" + bible.getId());
+        return rows(projectId);
+    }
+
+    @Transactional
+    public void initializeFromBlueprints(UUID projectId, UUID taskId, List<com.novelagent.planning.domain.CharacterBlueprint> blueprints) {
+        requireOwnedProject(projectId);
+        Map<String, String> names = new LinkedHashMap<>();
+        for (var blueprint : blueprints) {
+            putName(names, "PROTAGONIST".equals(blueprint.role()) ? "PROTAGONIST"
+                    : "BLUEPRINT_" + UUID.nameUUIDFromBytes(blueprint.name().getBytes(java.nio.charset.StandardCharsets.UTF_8)), blueprint.name());
+        }
+        registerNames(projectId, names, "PREPARATION:" + taskId);
+    }
+
+    private void registerNames(UUID projectId, Map<String, String> names, String evidence) {
+        names.forEach((role, name) -> {
+            Integer existing = jdbc.queryForObject("""
+                    SELECT count(*) FROM story_entity e WHERE e.project_id = ? AND e.entity_type = 'CHARACTER'
+                    AND e.canon_version_to IS NULL AND (e.canonical_name = ? OR e.source_name = ?
+                    OR EXISTS (SELECT 1 FROM entity_alias a WHERE a.entity_id = e.id AND a.alias = ? AND a.canon_version_to IS NULL))
+                    """, Integer.class, projectId, name, name, name);
+            if (existing != null && existing > 0) return;
+            Integer occupied = jdbc.queryForObject("SELECT count(*) FROM story_entity WHERE project_id = ? AND role_key = ? AND canon_version_to IS NULL",
+                    Integer.class, projectId, role);
+            String availableRole = occupied != null && occupied > 0
+                    ? "BLUEPRINT_" + UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)) : role;
+            jdbc.update("""
                 INSERT INTO story_entity(
                     id, project_id, entity_type, canonical_name, status, canon_version_from,
                     source_commit_id, evidence_ref, role_key, source_name)
                 VALUES (?, ?, 'CHARACTER', ?, 'PLANNED', 0, NULL, ?, ?, ?)
                 ON CONFLICT DO NOTHING
-                """, UUID.randomUUID(), projectId, name, "STORY_BIBLE:" + bible.getId(), role, name));
-        return rows(projectId);
+                """, UUID.randomUUID(), projectId, name, evidence, availableRole, name);
+        });
     }
 
     @Transactional

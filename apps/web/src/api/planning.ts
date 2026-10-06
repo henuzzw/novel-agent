@@ -1,4 +1,4 @@
-import { apiRequest } from '@/api/projects'
+import { apiRequest } from '@/api/http'
 
 export type ModelProvider = 'LOCAL_CODEX' | 'DEEPSEEK' | 'LOCAL_TEMPLATE'
 export type GenerationMode = 'REVISE' | 'REGENERATE'
@@ -45,7 +45,34 @@ export interface StoryDirectionSet {
   updatedAt: string
 }
 
+export interface CharacterBlueprint {
+  gender?: string
+  ageDescription?: string
+  name: string
+  role: 'PROTAGONIST' | 'SUPPORTING' | 'MINOR'
+  identity: string
+  appearance: string
+  background: string
+  externalPersonality: string
+  internalPersonality: string
+  coreDesire: string
+  fear: string
+  flaw: string
+  values: string
+  speechStyle: string
+  behaviorHabits: string
+  abilitiesAndLimits: string
+  behaviorBoundaries: string
+  secret: string
+  characterArc: string
+  openingState: string
+  initialRelationships: string[]
+  initialPossessions: string[]
+  knowledgeBoundaries: string[]
+}
+
 export interface StoryBibleContent {
+  readerExperiencePlans?: ReaderExperienceSeed[]
   logline: string
   theme: string
   worldSetting: string
@@ -60,6 +87,7 @@ export interface StoryBibleContent {
   endingDirection: string
   hardConstraints: string[]
   openQuestions: string[]
+  characterBlueprints?: CharacterBlueprint[]
 }
 
 export interface StoryBibleVersion {
@@ -73,11 +101,21 @@ export interface StoryBibleVersion {
   sourceDirectionSetId: string | null
   sourceCandidateId: string | null
   sourceImportId: string | null
+  baseBibleVersionId: string | null
   content: StoryBibleContent
   changeSummary: string[]
   version: number
   createdAt: string
   updatedAt: string
+}
+
+export interface StoryBibleVersionSummary {
+  id: string
+  generationNumber: number
+  status: 'DRAFT' | 'PUBLISHED'
+  logline: string
+  baseBibleVersionId: string | null
+  createdAt: string
 }
 
 export interface ChapterPlan {
@@ -106,6 +144,7 @@ export interface OutlineArc {
 }
 
 export interface OutlineContent {
+  readerExperiencePlans?: ReaderExperienceSeed[]
   title: string
   premise: string
   structureSummary: string
@@ -113,6 +152,11 @@ export interface OutlineContent {
   suggestedMinWords: number
   suggestedMaxWords: number
   arcs: OutlineArc[]
+}
+
+export interface ReaderExperienceSeed {
+  key: string; kind: 'PROMISE' | 'FORESHADOW'; title: string; promise: string
+  setup: string; payoff: string; aftermath: string; plannedChapter: number | null
 }
 
 export interface OutlineVersion {
@@ -177,16 +221,26 @@ export function getLatestStoryBible(projectId: string): Promise<StoryBibleVersio
   return apiRequest<StoryBibleVersion | null>(`/api/v1/projects/${projectId}/story-bibles/latest`)
 }
 
+export function listStoryBibleVersions(projectId: string): Promise<StoryBibleVersionSummary[]> {
+  return apiRequest<StoryBibleVersionSummary[]>(`/api/v1/projects/${projectId}/story-bibles`)
+}
+
+export function getStoryBibleVersion(projectId: string, versionId: string): Promise<StoryBibleVersion> {
+  return apiRequest<StoryBibleVersion>(`/api/v1/projects/${projectId}/story-bibles/${versionId}`)
+}
+
 export function generateStoryBible(
   projectId: string,
   instruction: string,
   provider: ModelProvider,
   mode: GenerationMode,
+  baseBibleVersionId: string | null = null,
 ): Promise<StoryBibleVersion> {
   return apiRequest(`/api/v1/projects/${projectId}/story-bibles/actions/generate`, {
     method: 'POST',
     headers: { 'Idempotency-Key': crypto.randomUUID() },
-    body: JSON.stringify({ instruction: instruction.trim() || null, provider, mode }),
+    body: JSON.stringify({ instruction: instruction.trim() || null, provider, mode,
+      baseBibleVersionId: mode === 'REVISE' ? baseBibleVersionId : null }),
   })
 }
 
@@ -202,6 +256,18 @@ export function updateStoryBible(
   })
 }
 
+export function createStoryBibleRevision(
+  projectId: string,
+  bible: StoryBibleVersion,
+  content: StoryBibleContent,
+): Promise<StoryBibleVersion> {
+  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}/actions/create-revision`, {
+    method: 'POST',
+    headers: { 'If-Match': `"${bible.version}"` },
+    body: JSON.stringify({ content }),
+  })
+}
+
 export function publishStoryBible(
   projectId: string,
   bible: StoryBibleVersion,
@@ -209,6 +275,19 @@ export function publishStoryBible(
   return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}/actions/publish`, {
     method: 'POST',
     headers: { 'If-Match': `"${bible.version}"` },
+  })
+}
+
+export function completeStoryBibleCharacters(
+  projectId: string,
+  bible: StoryBibleVersion,
+  provider: ModelProvider,
+  instruction = '',
+): Promise<StoryBibleVersion> {
+  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}/actions/complete-characters`, {
+    method: 'POST',
+    headers: { 'If-Match': `"${bible.version}"` },
+    body: JSON.stringify({ provider, instruction: instruction.trim() || null }),
   })
 }
 

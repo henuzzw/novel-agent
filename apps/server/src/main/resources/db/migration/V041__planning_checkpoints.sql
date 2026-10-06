@@ -1,0 +1,30 @@
+CREATE TABLE planning_checkpoint (
+    id UUID PRIMARY KEY,
+    project_id UUID NOT NULL REFERENCES novel_project(id) ON DELETE CASCADE,
+    schema_version VARCHAR(50) NOT NULL DEFAULT 'planning-checkpoint/1',
+    chunk_key VARCHAR(128) NOT NULL,
+    chapter_from INTEGER NOT NULL,
+    chapter_to INTEGER NOT NULL,
+    source_bible_version_id UUID NOT NULL REFERENCES story_bible_version(id),
+    source_bible_row_version BIGINT NOT NULL,
+    creative_strategy VARCHAR(32) NOT NULL,
+    policy_version INTEGER NOT NULL,
+    provider VARCHAR(32) NOT NULL,
+    author_instruction TEXT NOT NULL,
+    dependency_hash VARCHAR(64) NOT NULL,
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+    attempt BIGINT NOT NULL DEFAULT 0,
+    result JSONB,
+    failure TEXT,
+    row_version BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_planning_checkpoint_chunk UNIQUE (project_id, chunk_key, dependency_hash),
+    CONSTRAINT ck_planning_checkpoint_range CHECK (chapter_from > 0 AND chapter_to >= chapter_from
+        AND chapter_to - chapter_from < 100),
+    CONSTRAINT ck_planning_checkpoint_status CHECK (status IN ('PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED')),
+    CONSTRAINT ck_planning_checkpoint_attempt CHECK (attempt >= 0 AND row_version >= 0 AND source_bible_row_version >= 0),
+    CONSTRAINT ck_planning_checkpoint_running_attempt CHECK (status NOT IN ('RUNNING', 'SUCCEEDED', 'FAILED') OR attempt > 0),
+    CONSTRAINT ck_planning_checkpoint_result CHECK ((status = 'SUCCEEDED') = (result IS NOT NULL))
+);
+CREATE INDEX idx_planning_checkpoint_project_created ON planning_checkpoint(project_id, created_at DESC);

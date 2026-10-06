@@ -51,6 +51,9 @@ public class StoryBibleVersion {
     @Column(name = "source_import_id")
     private UUID sourceImportId;
 
+    @Column(name = "base_bible_version_id")
+    private UUID baseBibleVersionId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private StoryBibleContent content;
@@ -80,7 +83,7 @@ public class StoryBibleVersion {
         this.id = id;
         this.projectId = projectId;
         this.generationNumber = generationNumber;
-        this.schemaVersion = "story-bible/1";
+        this.schemaVersion = "story-bible/2";
         this.status = StoryBibleStatus.DRAFT;
         this.generatorType = requireText(generatorType, "generatorType");
         this.authorInstruction = authorInstruction;
@@ -100,19 +103,36 @@ public class StoryBibleVersion {
     public static StoryBibleVersion create(UUID id, UUID projectId, int generationNumber,
             String generatorType, String authorInstruction, UUID sourceDirectionSetId,
             UUID sourceCandidateId, StoryBibleContent content, List<String> changeSummary) {
+        return create(id, projectId, generationNumber, generatorType, authorInstruction,
+                sourceDirectionSetId, sourceCandidateId, null, content, changeSummary);
+    }
+
+    public static StoryBibleVersion create(UUID id, UUID projectId, int generationNumber,
+            String generatorType, String authorInstruction, UUID sourceDirectionSetId,
+            UUID sourceCandidateId, UUID baseBibleVersionId, StoryBibleContent content, List<String> changeSummary) {
         if (generationNumber <= 0) {
             throw new IllegalArgumentException("Story bible generation number must be positive");
         }
-        return new StoryBibleVersion(id, projectId, generationNumber, generatorType,
+        StoryBibleVersion version = new StoryBibleVersion(id, projectId, generationNumber, generatorType,
                 authorInstruction, sourceDirectionSetId, sourceCandidateId, content, changeSummary);
+        version.baseBibleVersionId = baseBibleVersionId;
+        return version;
     }
 
     public static StoryBibleVersion createFromImport(UUID id, UUID projectId, int generationNumber,
             String generatorType, String authorInstruction, UUID sourceImportId,
             StoryBibleContent content) {
+        return createFromImport(id, projectId, generationNumber, generatorType, authorInstruction,
+                sourceImportId, null, content);
+    }
+
+    public static StoryBibleVersion createFromImport(UUID id, UUID projectId, int generationNumber,
+            String generatorType, String authorInstruction, UUID sourceImportId,
+            UUID baseBibleVersionId, StoryBibleContent content) {
         StoryBibleVersion version = new StoryBibleVersion(id, projectId, generationNumber,
                 generatorType, authorInstruction, null, null, content, List.of());
         version.sourceImportId = sourceImportId;
+        version.baseBibleVersionId = baseBibleVersionId;
         return version;
     }
 
@@ -121,6 +141,7 @@ public class StoryBibleVersion {
             throw new IllegalStateException("已发布的故事圣经不能直接修改，请生成新版本");
         }
         this.content = validate(content);
+        this.schemaVersion = "story-bible/2";
     }
 
     public void publish() {
@@ -157,6 +178,7 @@ public class StoryBibleVersion {
     public UUID getSourceDirectionSetId() { return sourceDirectionSetId; }
     public UUID getSourceCandidateId() { return sourceCandidateId; }
     public UUID getSourceImportId() { return sourceImportId; }
+    public UUID getBaseBibleVersionId() { return baseBibleVersionId; }
     public StoryBibleContent getContent() { return content; }
     public List<String> getChangeSummary() { return List.copyOf(changeSummary); }
     public long getRowVersion() { return rowVersion; }

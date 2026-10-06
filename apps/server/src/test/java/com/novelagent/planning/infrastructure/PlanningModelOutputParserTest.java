@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.planning.domain.CharacterBlueprintFixtures;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PlanningModelOutputParserTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
-    void parsesStoryBibleWithChangeSummary() {
+    void parsesStoryBibleWithChangeSummary() throws Exception {
         String output = """
                 {"content":{"logline":"故事","theme":"主题","worldSetting":"世界",
                 "worldRules":[],"protagonist":"主角","protagonistArc":"弧光",
@@ -20,7 +23,10 @@ class PlanningModelOutputParserTest {
                 "changeSummary":["补充了主角的行动动机。"]}
                 """;
 
-        var result = new StoryBibleModelOutputParser(mapper).parse(ModelProvider.DEEPSEEK, output);
+        ObjectNode tree = (ObjectNode) mapper.readTree(output);
+        ((ObjectNode) tree.get("content")).set("characterBlueprints",
+                mapper.valueToTree(List.of(CharacterBlueprintFixtures.character("主角"))));
+        var result = new StoryBibleModelOutputParser(mapper).parse(ModelProvider.DEEPSEEK, tree.toString());
 
         assertThat(result.content().logline()).isEqualTo("故事");
         assertThat(result.changeSummary()).containsExactly("补充了主角的行动动机。");

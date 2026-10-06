@@ -26,7 +26,8 @@ public class LocalStoryBibleGenerator implements StoryBibleGenerator {
                     previousBible.worldRules(), previousBible.protagonist(), previousBible.protagonistArc(),
                     previousBible.supportingCharacters(), previousBible.relationshipDynamics(),
                     previousBible.centralConflict(), previousBible.stakes(), previousBible.narrativeStyle(),
-                    previousBible.endingDirection(), previousBible.hardConstraints(), List.copyOf(questions)),
+                    previousBible.endingDirection(), previousBible.hardConstraints(), List.copyOf(questions),
+                    previousBible.characterBlueprints(), previousBible.readerExperiencePlans()),
                     List.of(instruction == null || instruction.isBlank()
                             ? "未发现需要修改的内容，沿用原版本。"
                             : "按照本次要求补充了待作者确认事项，其他故事圣经设定保持不变。"));
@@ -47,7 +48,8 @@ public class LocalStoryBibleGenerator implements StoryBibleGenerator {
                 "失败将同时造成外部目标落空、关键关系破裂和主角自我认同崩塌。",
                 "采用贴近主角的有限视角，以具体行动和关系变化承载信息，保持" + String.join("、", intent.tones()) + "的基调。",
                 direction.endingDirection(), constraints,
-                List.of("核心对手最不愿承认的恐惧是什么？", "高潮前必须兑现哪一项关系承诺？"));
+                List.of("核心对手最不愿承认的恐惧是什么？", "高潮前必须兑现哪一项关系承诺？",
+                        "本地模板未生成人物底稿，请由作者填写或选择真实模型生成。"));
         return new GeneratedStoryBible(provider().name(), content);
     }
 

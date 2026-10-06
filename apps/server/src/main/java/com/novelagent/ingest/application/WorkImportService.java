@@ -160,19 +160,12 @@ public class WorkImportService {
                 rs.getInt("character_count"), rs.getString("content_type"), rs.getBoolean("selected")), importId);
         if (selected.isEmpty()) throw new IllegalArgumentException("没有选中可用于反推规划的章节");
         StringBuilder text = new StringBuilder();
-        boolean truncated = false;
         for (ImportedChapterResponse chapter : selected) {
             String block = "\n\n## 已写第 " + chapter.ordinal() + " 章：" + chapter.title() + "\n" + chapter.content();
-            if (text.length() + block.length() > 80_000) {
-                int remaining = 80_000 - text.length();
-                if (remaining > 200) text.append(block, 0, Math.min(remaining, block.length()));
-                truncated = true;
-                break;
-            }
             text.append(block);
         }
         return new PlanningSource(text.toString().strip(), selected.size(),
-                selected.stream().mapToInt(ImportedChapterResponse::characterCount).sum(), truncated);
+                selected.stream().mapToInt(ImportedChapterResponse::characterCount).sum(), false);
     }
 
     private ParsedText parse(byte[] source, String filename) {

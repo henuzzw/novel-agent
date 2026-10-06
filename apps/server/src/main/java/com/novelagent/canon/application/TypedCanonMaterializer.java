@@ -29,12 +29,14 @@ public class TypedCanonMaterializer {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final EntityResolutionService entityResolution;
+    private final com.novelagent.planning.application.PlanningMaterialSyncService planningMaterials;
 
     public TypedCanonMaterializer(JdbcTemplate jdbc, ObjectMapper mapper,
-            EntityResolutionService entityResolution) {
+            EntityResolutionService entityResolution, com.novelagent.planning.application.PlanningMaterialSyncService planningMaterials) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.entityResolution = entityResolution;
+        this.planningMaterials = planningMaterials;
     }
 
     public void materialize(UUID projectId, int chapterNumber, UUID commitId, long canonVersion,
@@ -59,6 +61,16 @@ public class TypedCanonMaterializer {
                 }
             }
         }
+        planningMaterials.syncCanonForeshadows(projectId);
+    }
+
+    public void retire(UUID commitId, long replacementVersion) {
+        for (String table : List.of("story_fact", "story_event", "entity_state_change",
+                "story_relationship", "character_knowledge", "foreshadow")) {
+            jdbc.update("UPDATE " + table + " SET canon_version_to = ? "
+                    + "WHERE source_commit_id = ? AND canon_version_to IS NULL", replacementVersion, commitId);
+        }
+        // Entity identities can be shared by later facts, so they are not retired here.
     }
 
     private UUID insertFact(UUID projectId, UUID commitId, long canonVersion, UUID subjectId,

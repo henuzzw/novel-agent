@@ -129,6 +129,17 @@ public class NovelProject {
         return rowVersion;
     }
 
+    public Object getSetting(String key) {
+        return settings.get(key);
+    }
+
+    public void setSetting(String key, Map<String, Object> value) {
+        Map<String, Object> updated = new HashMap<>(settings);
+        if (value == null) updated.remove(key);
+        else updated.put(key, new HashMap<>(value));
+        settings = updated;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

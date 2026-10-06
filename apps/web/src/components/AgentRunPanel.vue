@@ -1,17 +1,28 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
-import { Activity, AlertCircle, CheckCircle2, Clock3, Coins, RefreshCw } from 'lucide-vue-next'
+import { Activity, AlertCircle, CheckCircle2, Clock3, Coins, RefreshCw, Square } from 'lucide-vue-next'
 import { computed } from 'vue'
 
 import { getAgentRunSummary, listAgentRuns } from '@/api/agentRuns'
 import AgentRunPrompt from '@/components/AgentRunPrompt.vue'
+import AgentRunSnapshot from '@/components/AgentRunSnapshot.vue'
+import AgentRunOutput from '@/components/AgentRunOutput.vue'
+import AutomationPanel from '@/components/AutomationPanel.vue'
+import type { AutomationChapterTarget } from '@/api/automation'
 
 const props = defineProps<{ projectId: string }>()
-const runsQuery = useQuery({ queryKey: computed(() => ['agent-runs', props.projectId]), queryFn: () => listAgentRuns(props.projectId) })
+const emit = defineEmits<{ 'open-chapter': [target: AutomationChapterTarget] }>()
+const runsQuery = useQuery({ queryKey: computed(() => ['agent-runs', props.projectId]), queryFn: () => listAgentRuns(props.projectId), refetchInterval: 5000 })
 const summaryQuery = useQuery({ queryKey: computed(() => ['agent-run-summary', props.projectId]), queryFn: () => getAgentRunSummary(props.projectId) })
 const stageNames: Record<string, string> = {
   STORY_DIRECTION: '故事方向', STORY_BIBLE: '故事圣经', OUTLINE: '分层大纲',
-  CHAPTER_CONTRACT: '章节合同', MANUSCRIPT: '正文生成', CHAPTER_REVIEW: '章节审稿',
+  CHAPTER_CONTRACT: '章节合同', CHAPTER_CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', CHAPTER_REVIEW: '章节审稿',
+  QUALITY_REVIEW: '正文质量检查', STYLE_ANALYSIS: '写作风格分析',
+  STYLE_PREVIEW: '第一章风格试写', STYLE_RECOMMENDATION: '圣经风格推荐',
+  STYLE_PREVIEW_REVIEW: '试写编辑检查', STYLE_PREVIEW_REVISION: '试写建议修订',
+  FIRST_THREE_CHAPTERS_REVIEW: '前三章完整通读', MANUSCRIPT_LOCAL_EDIT: '正文局部编辑',
+  IMPORT_REVERSE_BIBLE: '导入反推故事圣经', IMPORT_REVERSE_OUTLINE: '导入反推大纲',
+  CHARACTER_BLUEPRINT_COMPLETION: '人物底稿补全', PLANNING_CHECKPOINT: '分块规划',
 }
 const providerNames: Record<string, string> = { LOCAL_CODEX: '服务端 Codex', DEEPSEEK: 'DeepSeek', LOCAL_TEMPLATE: '本地模板' }
 function tokens(value: number) { return new Intl.NumberFormat('zh-CN').format(value) }
@@ -25,7 +36,8 @@ function refresh() { runsQuery.refetch(); summaryQuery.refetch() }
       <div><span class="eyebrow">运行观测</span><h2>Agent 任务与成本</h2></div>
       <button class="icon-button" type="button" title="刷新" aria-label="刷新任务" @click="refresh"><RefreshCw :size="17" /></button>
     </div>
-    <p class="run-notice">Token 与费用当前为估算值；配置模型单价后才会产生费用金额，不代表供应商账单。</p>
+    <p class="run-notice">供应商用量与估算分开记录；费用按配置单价估算，不代表供应商账单。</p>
+    <AutomationPanel :project-id="projectId" @open-chapter="emit('open-chapter', $event)" />
     <div v-if="summaryQuery.data.value" class="run-summary">
       <span><Activity :size="18" /><strong>{{ summaryQuery.data.value.calls }}</strong><small>模型任务</small></span>
       <span><Clock3 :size="18" /><strong>{{ tokens(summaryQuery.data.value.inputTokens + summaryQuery.data.value.outputTokens) }}</strong><small>估算 Token</small></span>
@@ -37,9 +49,9 @@ function refresh() { runsQuery.refetch(); summaryQuery.refetch() }
     <div v-else-if="!runsQuery.data.value?.length" class="import-empty"><Activity :size="30" /><h3>还没有模型任务</h3><p>生成故事方向、故事圣经、大纲或正文后，运行记录会出现在这里。</p></div>
     <div v-else class="run-list">
       <article v-for="run in runsQuery.data.value" :key="run.id" class="run-row">
-        <component :is="run.status === 'SUCCEEDED' ? CheckCircle2 : run.status === 'FAILED' ? AlertCircle : Clock3" :size="19" :class="run.status.toLowerCase()" />
-        <div class="run-main"><strong>{{ stageNames[run.stage] ?? run.stage }}</strong><small>{{ providerNames[run.provider] ?? run.provider }} · {{ time(run.startedAt) }}</small><p v-if="run.errorMessage">{{ run.errorMessage }}</p><AgentRunPrompt :project-id="projectId" :run-id="run.id" /></div>
-        <div class="run-metrics"><strong>{{ tokens(run.inputTokens + run.outputTokens) }} Token</strong><span>输入 {{ tokens(run.inputTokens) }} · 输出 {{ tokens(run.outputTokens) }}</span><span>{{ run.durationMs == null ? '运行中' : `${(run.durationMs / 1000).toFixed(1)} 秒` }} · ¥{{ Number(run.estimatedCost).toFixed(4) }}</span></div>
+        <component :is="run.status === 'SUCCEEDED' ? CheckCircle2 : run.status === 'FAILED' ? AlertCircle : run.status === 'CANCELLED' ? Square : Clock3" :size="19" :class="run.status.toLowerCase()" :title="run.status === 'CANCELLED' ? '已停止' : undefined" />
+        <div class="run-main"><strong>{{ stageNames[run.stage] ?? run.stage }}</strong><small>{{ providerNames[run.provider] ?? run.provider }} · {{ time(run.startedAt) }}</small><p v-if="run.errorMessage">{{ run.errorMessage }}</p><AgentRunOutput :project-id="projectId" :run-id="run.id" :status="run.status" /><AgentRunPrompt :project-id="projectId" :run-id="run.id" /><AgentRunSnapshot :project-id="projectId" :run-id="run.id" /></div>
+        <div class="run-metrics"><strong>{{ tokens(run.inputTokens + run.outputTokens) }} 估算 Token</strong><span>估算输入 {{ tokens(run.inputTokens) }} · 输出 {{ tokens(run.outputTokens) }}</span><span v-if="run.tokenSource === 'ACTUAL' && run.actualInputTokens != null && run.actualOutputTokens != null">供应商输入 {{ tokens(run.actualInputTokens) }} · 输出 {{ tokens(run.actualOutputTokens) }}</span><span v-else>供应商实际用量未知</span><span>{{ run.durationMs == null ? '运行中' : `${(run.durationMs / 1000).toFixed(1)} 秒` }} · 估算 ¥{{ Number(run.estimatedCost).toFixed(4) }}</span></div>
       </article>
     </div>
   </div>

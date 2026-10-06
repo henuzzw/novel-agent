@@ -1,7 +1,6 @@
 package com.novelagent.planning.infrastructure;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.planning.application.GeneratedStoryBible;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.StoryBibleGenerator;
@@ -13,20 +12,18 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class DeepSeekStoryBibleGenerator implements StoryBibleGenerator {
-    private final DeepSeekStructuredOutputClient client;
+    private final StructuredModelGateway models;
     private final StoryBibleModelPromptFactory promptFactory;
     private final StoryBibleModelOutputParser outputParser;
     private final JsonNode outputSchema;
-    private final AgentRunRecorder runs;
 
-    public DeepSeekStoryBibleGenerator(DeepSeekStructuredOutputClient client,
+    public DeepSeekStoryBibleGenerator(StructuredModelGateway models,
             StoryBibleModelPromptFactory promptFactory, StoryBibleModelOutputParser outputParser,
-            StoryBibleOutputSchema outputSchema, AgentRunRecorder runs) {
-        this.client = client;
+            StoryBibleOutputSchema outputSchema) {
+        this.models = models;
         this.promptFactory = promptFactory;
         this.outputParser = outputParser;
         this.outputSchema = outputSchema.value();
-        this.runs = runs;
     }
 
     @Override public ModelProvider provider() { return ModelProvider.DEEPSEEK; }
@@ -35,9 +32,8 @@ public class DeepSeekStoryBibleGenerator implements StoryBibleGenerator {
     public GeneratedStoryBible generate(UUID projectId, CreativeIntentSnapshot intent,
             StoryDirectionCandidate direction, StoryBibleContent previousBible, String authorInstruction) {
         String prompt = promptFactory.userPrompt(intent, direction, previousBible, authorInstruction);
-        String output = runs.record(projectId, "STORY_BIBLE", provider(),
-                promptFactory.systemPrompt(), prompt,
-                () -> client.request("story_bible", promptFactory.systemPrompt(), prompt, outputSchema, 6_000));
+        String output = models.request(projectId, "STORY_BIBLE", provider(), promptFactory.systemPrompt(), prompt,
+                outputSchema, "story_bible", 10_000, CodexSessionPolicy.REUSE_THREAD);
         return outputParser.parse(provider(), output);
     }
 }

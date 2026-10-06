@@ -4,6 +4,7 @@ import com.novelagent.project.api.CreateProjectRequest;
 import com.novelagent.project.api.CreativeIntentRequest;
 import com.novelagent.project.api.ProjectResponse;
 import com.novelagent.project.domain.CreativeIntent;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
@@ -39,6 +40,7 @@ public class ProjectService {
                 actorProvider.currentUserId(),
                 request.name(),
                 request.entryMode());
+        CreativeStrategyPolicy.of(request.creativeStrategy()).applyTo(project);
         projectRepository.saveAndFlush(project);
 
         CreativeIntent intent = null;

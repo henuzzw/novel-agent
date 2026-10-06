@@ -1,4 +1,33 @@
+import { apiRequest } from '@/api/http'
+
+export { ApiError, apiRequest } from '@/api/http'
+
 export type EntryMode = 'IDEA' | 'MANUSCRIPT' | 'MATERIALS'
+export type CreativeStrategy = 'STANDARD' | 'FANQIE_GRIPPING'
+
+export interface CreativeStrategySettings {
+  strategy: CreativeStrategy
+  policyVersion: 1
+  version: number
+}
+
+export interface UpdateCreativeStrategyInput {
+  strategy: CreativeStrategy
+  version: number
+}
+
+export function getCreativeStrategy(projectId: string): Promise<CreativeStrategySettings> {
+  return apiRequest(`/api/v1/projects/${projectId}/settings/creative-strategy`)
+}
+
+export function updateCreativeStrategy(
+  projectId: string,
+  input: UpdateCreativeStrategyInput,
+): Promise<CreativeStrategySettings> {
+  return apiRequest(`/api/v1/projects/${projectId}/settings/creative-strategy`, {
+    method: 'PUT', body: JSON.stringify(input),
+  })
+}
 
 export interface CreativeIntentInput {
   premise?: string
@@ -18,6 +47,7 @@ export interface ProjectSummary {
   id: string
   name: string
   entryMode: EntryMode
+  creativeStrategy?: CreativeStrategy
   status: 'ACTIVE' | 'ARCHIVED' | 'DELETING'
   currentCanonVersion: number
   version: number
@@ -26,43 +56,26 @@ export interface ProjectSummary {
   creativeIntent: (CreativeIntentInput & { version: number }) | null
 }
 
+export interface CodexModelChoice {
+  model: string
+  effort: string
+}
+
+export function getCodexModelChoice(projectId: string): Promise<CodexModelChoice> {
+  return apiRequest(`/api/v1/projects/${projectId}/settings/codex-model`)
+}
+
+export function updateCodexModelChoice(projectId: string, choice: CodexModelChoice): Promise<CodexModelChoice> {
+  return apiRequest(`/api/v1/projects/${projectId}/settings/codex-model`, {
+    method: 'PUT', body: JSON.stringify(choice),
+  })
+}
+
 export interface CreateProjectInput {
   name: string
   entryMode: EntryMode
+  creativeStrategy?: CreativeStrategy
   creativeIntent?: CreativeIntentInput
-}
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly code?: string,
-  ) {
-    super(message)
-  }
-}
-
-export async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    cache: 'no-store',
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
-  })
-
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null)
-    const message = problem?.detail ?? problem?.message ?? `请求失败（HTTP ${response.status}）`
-    throw new ApiError(message, response.status, problem?.code)
-  }
-
-  if (response.status === 204) {
-    return null as T
-  }
-
-  return response.json() as Promise<T>
 }
 
 export function listProjects(): Promise<ProjectSummary[]> {

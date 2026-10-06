@@ -34,7 +34,10 @@ public class OutlineOutputSchema {
             """;
     private final JsonNode value;
     public OutlineOutputSchema(ObjectMapper mapper) {
-        try { value = mapper.readTree(SCHEMA); }
+        try {
+            value = mapper.readTree(SCHEMA);
+            ReaderExperienceSeedSchema.add((com.fasterxml.jackson.databind.node.ObjectNode) value, mapper);
+        }
         catch (JsonProcessingException exception) { throw new IllegalStateException("分层大纲输出 Schema 配置无效", exception); }
     }
     public JsonNode value() { return value.deepCopy(); }

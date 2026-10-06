@@ -2,9 +2,11 @@ package com.novelagent.planning.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.planning.application.CharacterBlueprintGuide;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.project.application.CreativeStrategyGuide;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -19,11 +21,12 @@ public class OutlineModelPromptFactory {
         return """
                 你是长篇小说规划 Agent，负责生成全书、卷/幕、章节三级大纲。
                 已发布故事圣经的世界规则、人物弧光、结局方向和硬约束是最高优先级；作者本次要求不能推翻这些硬约束。
+                调整旧版时，先识别作者本次要求具体影响的卷、章节和字段；未受影响部分沿用选定基准大纲。
                 章节由人物目标驱动，事件有原因和后果，关系与冲突逐步发展。不要为了凑章节数凭空增加重复事件。
                 字数是模糊容量参考：整书建议区间落在给定范围内，卷章字数允许随剧情自然浮动，不要求逐级精确相加。
                 输出对象包含 content 和 changeSummary；content 是完整分层大纲，changeSummary 是中文修改说明数组。
                 只输出符合约定结构的 JSON，不输出 Markdown、解释或思考过程。
-                """;
+                """ + CharacterBlueprintGuide.boundaries();
     }
 
     public String userPrompt(StoryBibleContent bible, OutlineWordBudget budget, OutlineContent previousOutline,
@@ -53,6 +56,10 @@ public class OutlineModelPromptFactory {
                 【任务】
                 生成完整分层大纲。
 
+                【作者本次要求（本轮修改重点）】
+                %s
+                调整模式下先落实与故事圣经硬约束不冲突的本次要求，再检查哪些旧版内容必须改变；不要因此改写无关章节。
+
                 【依据优先级】
                 1. 已发布故事圣经的明确事实、世界规则和硬约束。
                 2. 与上述内容不冲突的作者本次要求。
@@ -67,20 +74,41 @@ public class OutlineModelPromptFactory {
                 从头规划时可参考约 %d 卷、%d 章，单章通常 %d～%d 字。
                 调整模式优先保留基准大纲的卷章数量，不为贴合建议数量扩写或删减。
 
-                【作者本次要求】
                 %s
 
-                %s
+                【场景行动与读者体验设计】
+                按人物底稿的欲望、恐惧、能力限制和行为底线设计行动；在相关章节字段写出触发、选择与代价，不临时改性格来迁就事件。
+                开篇关系和物品随情节演变，不每章重置；秘密与未来弧光只在有依据、允许揭示的章节落实。
+                在现有 objective/coreEvent/reveal/endingHook 文本内表达“承诺 / 铺垫依据 / 本章兑现 / 余波”，不增加输出字段。
+                主要节拍写清起点、意图、阻力或信息差、行动、结束变化与重要依据；引用输入中已有的来源或章号，未知依据待确认，不编造正文证据。
+                大兑现有前文承诺与铺垫，小回报回应本章问题；变化可以发生在关系、认知、处境、资源、行动方向或读者掌握的信息中。
+                按题材选择关系确认、悬疑公平揭示、成长的选择与代价、日常理解或行动突破，不靠围观夸赞、反派降智、临时能力或巧合救场。
+                不新编人物能力、道具权限、信息来源或帮助方向来修补因果；未来揭示不写成人物已知事实。
+                结尾钩子来自本章结果，不能代替当章兑现；伏笔强化应增加信息或影响选择，不连续重复同一铺垫、同型钩子或场景功能。
+                安静章、压抑章和悲剧章不强制正向快感，过渡章可标明主要积累；长期承诺不要求逐章兑现，不设置反转、回报或钩子的硬配额。
+
+                【整份大纲的前三章短弧】
+                以作者本次要求中明确传入的项目 policy 为准；STANDARD 或未明确提供 FANQIE_GRIPPING 时按题材与作者节奏，不强制爽点或前三章强开篇。
+                仅 FANQIE_GRIPPING 下，从头规划或获授权调整前三章时，将整份大纲中的第 1～3 章一起设计为“开场问题 -> 主角行动 -> 阻力与代价 -> 第一轮兑现 -> 更长线目标”。
+                第一章：开头进入主角具体处境与迫切问题，主角可见行动遭遇阻力，章内取得第一次真实回报或不可逆变化；先有进展再留下由行动引出的具体问题。
+                第二章：承接第一章行动的后果与代价，升级阻力或使信息翻面，回应第一章一个具体期待；不重复设定介绍、心理结论或同型冲突。
+                第三章：用前两章已有铺垫完成核心期待的阶段兑现，明确已兑现与长期未兑现的承诺，展示余波并连接全书主线。
+                三章的目标、回报和钩子落到同一份大纲的现有章节字段，新人物与规则应作用于人物选择，不以只抛悬念或长篇背景代替因果推进。
+                该规则只用于本次获授权的新规划或受影响部分，不自动改写旧版未受影响大纲，也不为统一格式改写旧字段；仅切换 policy 不构成重写授权。
+                OCCURRED 章节及已确认事实不得为开篇强度自动改写；既有素材不足时指出限制交作者决定，不虚构补齐，不改变既有 status。
+                作者明确选择慢热文学叙事时保留该选择；以上是创作设计建议，不是平台审核标准或流量保证。
 
                 【输出检查】
                 content 必须包含完整全书大纲，arcs 中每卷包含 chapters，章节编号从 1 连续递增。
-                与故事圣经硬约束逐条核对；调整模式核对未受影响章节及 status 是否保持原样。
+                逐条核对开头的作者本次要求是否落实；与故事圣经硬约束冲突时以圣经为准，不要悄悄改写硬约束。
+                调整模式再对照选定基准大纲：未受影响的卷章、因果顺序和 status 必须保持原样，changeSummary 只列实际改动及原因。
                 返回格式：{"content":{...完整分层大纲...},"changeSummary":[]}。
-                """.formatted(json(bible),
+                """.formatted(instruction == null || instruction.isBlank() ? "无" : instruction.trim(), json(bible),
                 budget.targetWords(), budget.acceptableMinWords(), budget.acceptableMaxWords(),
                 budget.recommendedVolumeCount(), budget.recommendedChapterCount(),
                 budget.recommendedChapterMinWords(), budget.recommendedChapterMaxWords(),
-                instruction == null || instruction.isBlank() ? "无" : instruction.trim(), modeRules);
+                modeRules) + com.novelagent.planning.application.ReaderExperiencePlanningGuide.rules()
+                + CreativeStrategyGuide.outlineRules();
     }
 
     private String json(Object value) {

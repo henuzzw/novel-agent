@@ -1,4 +1,4 @@
-import { apiRequest } from '@/api/projects'
+import { apiRequest } from '@/api/http'
 import type { GenerationMode, ModelProvider } from '@/api/planning'
 
 export interface ChapterContractContent {
@@ -21,6 +21,7 @@ export interface ChapterContractVersion {
   id: string
   projectId: string
   sourceOutlineVersionId: string
+  baseContractVersionId: string | null
   chapterNumber: number
   versionNumber: number
   schemaVersion: string
@@ -31,6 +32,24 @@ export interface ChapterContractVersion {
   version: number
   createdAt: string
   updatedAt: string
+}
+
+export interface ChapterContractVersionSummary {
+  id: string
+  versionNumber: number
+  status: 'DRAFT' | 'APPROVED'
+  sourceOutlineVersionId: string
+  baseContractVersionId: string | null
+  chapterTitle: string
+  createdAt: string
+}
+
+export interface ChapterContractReviewContent { summary: string; issues: ReviewIssue[] }
+export interface ChapterContractReviewVersion {
+  id: string; projectId: string; chapterNumber: number; sourceContractVersionId: string
+  sourceContractRowVersion: number; versionNumber: number; status: 'DRAFT' | 'APPROVED'
+  generatorType: string; authorInstruction: string | null; content: ChapterContractReviewContent
+  version: number; createdAt: string; updatedAt: string
 }
 
 export interface ManuscriptContent {
@@ -44,6 +63,8 @@ export interface ManuscriptVersion {
   id: string
   projectId: string
   sourceContractVersionId: string
+  baseManuscriptVersionId: string | null
+  sourceReviewVersionId: string | null
   chapterNumber: number
   versionNumber: number
   schemaVersion: string
@@ -55,6 +76,17 @@ export interface ManuscriptVersion {
   version: number
   createdAt: string
   updatedAt: string
+}
+
+export interface ManuscriptVersionSummary {
+  id: string
+  versionNumber: number
+  status: 'DRAFT' | 'AUTHOR_ACCEPTED'
+  sourceContractVersionId: string
+  baseManuscriptVersionId: string | null
+  title: string
+  bodyLength: number
+  createdAt: string
 }
 
 export interface ReviewIssue {
@@ -198,14 +230,14 @@ export interface CharacterKnowledge {
 export interface ChapterReviewContent { summary: string; issues: ReviewIssue[]; factProposals: FactProposal[] }
 export interface ChapterReviewVersion {
   id: string; projectId: string; chapterNumber: number; sourceManuscriptVersionId: string
-  versionNumber: number; schemaVersion: string; status: 'DRAFT' | 'APPROVED'; generatorType: string
+  versionNumber: number; schemaVersion: string; status: 'DRAFT' | 'APPROVED' | 'RETURNED'; generatorType: string
   authorInstruction: string | null; content: ChapterReviewContent; version: number; createdAt: string; updatedAt: string
 }
 export interface CanonCommit {
   id: string; projectId: string; chapterNumber: number; manuscriptVersionId: string
   reviewVersionId: string; canonVersion: number; acceptedFacts: FactProposal[]; createdAt: string
 }
-export interface SemanticMemory { chapterNumber: number; canonVersion: number; similarity: number; summary: string; content: string }
+export interface SemanticMemory { chapterNumber: number; canonVersion: number; similarity: number; summary: string; content: string; recentChapter: boolean }
 export interface GraphFact { canonVersion: number; subject: string; predicate: string; object: string; evidence: string }
 export interface MemoryUsage {
   stage: 'CHAPTER_CONTRACT' | 'MANUSCRIPT' | 'CHAPTER_REVIEW'
@@ -269,9 +301,15 @@ export const listCharacterKnowledge = (projectId: string, characterId?: string) 
 
 export const getLatestContract = (projectId: string, chapter: number) =>
   apiRequest<ChapterContractVersion | null>(`${root(projectId, chapter)}/contracts/latest`)
-export const generateContract = (projectId: string, chapter: number, provider: ModelProvider, instruction: string) =>
+export const listContractVersions = (projectId: string, chapter: number) =>
+  apiRequest<ChapterContractVersionSummary[]>(`${root(projectId, chapter)}/contracts`)
+export const getContractVersion = (projectId: string, chapter: number, id: string) =>
+  apiRequest<ChapterContractVersion>(`${root(projectId, chapter)}/contracts/${id}`)
+export const generateContract = (projectId: string, chapter: number, provider: ModelProvider, instruction: string,
+  mode: GenerationMode = 'REGENERATE', baseContractVersionId: string | null = null) =>
   apiRequest<ChapterContractVersion>(`${root(projectId, chapter)}/contracts/actions/generate`, {
-    method: 'POST', body: JSON.stringify({ provider, instruction: instruction.trim() || null }),
+    method: 'POST', body: JSON.stringify({ provider, instruction: instruction.trim() || null,
+      mode, baseContractVersionId: mode === 'REVISE' ? baseContractVersionId : null }),
   })
 export const updateContract = (projectId: string, value: ChapterContractVersion, content: ChapterContractContent) =>
   apiRequest<ChapterContractVersion>(`${root(projectId, value.chapterNumber)}/contracts/${value.id}`, {
@@ -281,16 +319,36 @@ export const approveContract = (projectId: string, value: ChapterContractVersion
   apiRequest<ChapterContractVersion>(`${root(projectId, value.chapterNumber)}/contracts/${value.id}/actions/approve`, {
     method: 'POST', headers: { 'If-Match': `"${value.version}"` },
   })
+export const getLatestContractReview = (projectId: string, chapter: number) =>
+  apiRequest<ChapterContractReviewVersion | null>(`${root(projectId, chapter)}/contract-reviews/latest`)
+export const generateContractReview = (projectId: string, chapter: number, provider: ModelProvider, instruction: string) =>
+  apiRequest<ChapterContractReviewVersion>(`${root(projectId, chapter)}/contract-reviews/actions/generate`, {
+    method: 'POST', body: JSON.stringify({ provider, instruction: instruction.trim() || null }),
+  })
+export const approveContractReview = (projectId: string, value: ChapterContractReviewVersion,
+  content: ChapterContractReviewContent) =>
+  apiRequest<ChapterContractReviewVersion>(`${root(projectId, value.chapterNumber)}/contract-reviews/${value.id}/actions/approve`, {
+    method: 'POST', headers: { 'If-Match': `"${value.version}"` }, body: JSON.stringify({ content }),
+  })
 export const getLatestManuscript = (projectId: string, chapter: number) =>
   apiRequest<ManuscriptVersion | null>(`${root(projectId, chapter)}/manuscripts/latest`)
+export const listManuscriptVersions = (projectId: string, chapter: number) =>
+  apiRequest<ManuscriptVersionSummary[]>(`${root(projectId, chapter)}/manuscripts`)
+export const getManuscriptVersion = (projectId: string, chapter: number, id: string) =>
+  apiRequest<ManuscriptVersion>(`${root(projectId, chapter)}/manuscripts/${id}`)
 export const generateManuscript = (projectId: string, chapter: number, provider: ModelProvider,
-  instruction: string, mode: GenerationMode) =>
+  instruction: string, mode: GenerationMode, baseManuscriptVersionId: string | null = null) =>
   apiRequest<ManuscriptVersion>(`${root(projectId, chapter)}/manuscripts/actions/generate`, {
-    method: 'POST', body: JSON.stringify({ provider, instruction: instruction.trim() || null, mode }),
+    method: 'POST', body: JSON.stringify({ provider, instruction: instruction.trim() || null, mode,
+      baseManuscriptVersionId: mode === 'REVISE' ? baseManuscriptVersionId : null }),
   })
 export const updateManuscript = (projectId: string, value: ManuscriptVersion, content: ManuscriptContent) =>
   apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/manuscripts/${value.id}`, {
     method: 'PUT', headers: { 'If-Match': `"${value.version}"` }, body: JSON.stringify({ content }),
+  })
+export const createManuscriptRevision = (projectId: string, value: ManuscriptVersion) =>
+  apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/manuscripts/${value.id}/actions/create-revision`, {
+    method: 'POST', headers: { 'If-Match': `"${value.version}"` },
   })
 export const acceptManuscript = (projectId: string, value: ManuscriptVersion) =>
   apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/manuscripts/${value.id}/actions/accept`, {
@@ -306,13 +364,27 @@ export const updateReview = (projectId: string, value: ChapterReviewVersion, con
   apiRequest<ChapterReviewVersion>(`${root(projectId, value.chapterNumber)}/reviews/${value.id}`, {
     method: 'PUT', headers: { 'If-Match': `"${value.version}"` }, body: JSON.stringify({ content }),
   })
-export const approveReview = (projectId: string, value: ChapterReviewVersion) =>
+export const approveReview = (projectId: string, value: ChapterReviewVersion, content: ChapterReviewContent) =>
   apiRequest<ChapterReviewVersion>(`${root(projectId, value.chapterNumber)}/reviews/${value.id}/actions/approve`, {
+    method: 'POST', headers: { 'If-Match': `"${value.version}"` }, body: JSON.stringify({ content }),
+  })
+export const returnReviewToWriting = (projectId: string, value: ChapterReviewVersion,
+  provider: ModelProvider, mode: GenerationMode, issueIds: string[], instruction: string) =>
+  apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/reviews/${value.id}/actions/return-to-writing`, {
     method: 'POST', headers: { 'If-Match': `"${value.version}"` },
+    body: JSON.stringify({ provider, mode, issueIds, instruction: instruction.trim() || null }),
   })
 export const commitCanon = (projectId: string, chapter: number, reviewVersionId: string, expectedCanonVersion: number) =>
   apiRequest<CanonCommit>(`${root(projectId, chapter)}/canon-commits`, {
     method: 'POST', body: JSON.stringify({ reviewVersionId, expectedCanonVersion }),
   })
+export const replaceCanon = (projectId: string, chapter: number, reviewVersionId: string,
+  expectedActiveCommitId: string, expectedCanonVersion: number) =>
+  apiRequest<CanonCommit>(`${root(projectId, chapter)}/canon-commits/actions/replace`, {
+    method: 'POST', body: JSON.stringify({ reviewVersionId, expectedActiveCommitId, expectedCanonVersion }),
+  })
+export const getCanonCommitStatus = (projectId: string, chapter: number) =>
+  apiRequest<{ committed: boolean; activeCommitId: string | null; activeManuscriptVersionId: string | null;
+    canonVersion: number }>(`${root(projectId, chapter)}/canon-commits/status`)
 export const getMemoryPreview = (projectId: string, chapter: number, query: string, provider: ModelProvider) =>
   apiRequest<NovelMemoryContext>(`/api/v1/projects/${projectId}/memory/preview?chapterNumber=${chapter}&stage=MANUSCRIPT&provider=${provider}&query=${encodeURIComponent(query)}`)

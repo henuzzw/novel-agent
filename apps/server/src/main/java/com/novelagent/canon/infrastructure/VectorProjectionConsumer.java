@@ -37,6 +37,7 @@ class VectorProjectionConsumer {
     private final TextEmbeddingService embeddings;
     private final ProjectionCheckpointStore checkpoints;
     private final CharacterNameService characterNames;
+    private final CanonCommitRepository commits;
 
     VectorProjectionConsumer(
             ObjectMapper mapper,
@@ -44,13 +45,14 @@ class VectorProjectionConsumer {
             ManuscriptVersionRepository manuscripts,
             TextEmbeddingService embeddings,
             ProjectionCheckpointStore checkpoints,
-            CharacterNameService characterNames) {
+            CharacterNameService characterNames, CanonCommitRepository commits) {
         this.mapper = mapper;
         this.jdbc = jdbc;
         this.manuscripts = manuscripts;
         this.embeddings = embeddings;
         this.checkpoints = checkpoints;
         this.characterNames = characterNames;
+        this.commits = commits;
     }
 
     @KafkaListener(topics = "${app.kafka.canon-topic}", groupId = "novel-pgvector-projector-v2")
@@ -61,6 +63,18 @@ class VectorProjectionConsumer {
             return;
         }
 
+        var commit = commits.findById(event.commitId()).orElseThrow();
+        if (!commit.isActive()) {
+            jdbc.update("DELETE FROM semantic_document WHERE source_type = 'MANUSCRIPT' AND source_id = ?",
+                    event.manuscriptVersionId());
+            checkpoints.markCompleted(event.eventId(), ProjectionCheckpointStore.ProjectionType.PGVECTOR);
+            return;
+        }
+        jdbc.update("""
+                DELETE FROM semantic_document d USING canon_commit c
+                 WHERE d.source_type = 'MANUSCRIPT' AND d.source_id = c.manuscript_version_id
+                   AND c.project_id = ? AND c.chapter_number = ? AND c.active = FALSE
+                """, event.projectId(), commit.getChapterNumber());
         ManuscriptVersion manuscript = manuscripts.findById(event.manuscriptVersionId()).orElseThrow();
         String content = documentContent(manuscript);
         jdbc.update(

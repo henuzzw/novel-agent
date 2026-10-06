@@ -17,6 +17,12 @@ apps/web/playwright-report/
 tmp/
 *.log
 apps/server/logs/
+evaluation/runs/
+
+# External reference checkouts are local research, not application source.
+reference-projects/AI_NovelGenerator/
+reference-projects/fictionforge/
+reference-projects/novel-agent/
 
 # Local source material is not part of the application.
 /*.docx

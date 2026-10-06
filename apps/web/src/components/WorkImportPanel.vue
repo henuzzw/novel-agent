@@ -1,24 +1,33 @@
 <script setup lang="ts">
+import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
+import ImportAnalysisPanel from '@/components/ImportAnalysisPanel.vue'
+import type { AnalysisProof } from '@/api/importAnalyses'
+import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { AlertTriangle, Check, Download, FileText, Sparkles, Upload } from 'lucide-vue-next'
+import { AlertTriangle, Check, Download, FileText, LoaderCircle, Sparkles, Upload } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
-import { confirmWorkImport, listWorkImports, reversePlanFromImport, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
+import { listWorkImports, reversePlanFromImport, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
 
 const props = defineProps<{ projectId: string }>()
 const emit = defineEmits<{ planningGenerated: [] }>()
 const queryClient = useQueryClient()
 const selectedImportId = ref<string | null>(null)
 const actionError = ref('')
-const planningProvider = ref<'LOCAL_CODEX' | 'DEEPSEEK'>('DEEPSEEK')
+const { provider: planningProvider } = useGlobalModelSettings()
 const planningMode = ref<ImportPlanningMode>('ADAPT_SOURCE')
 const planningInstruction = ref('')
+const analysisProof = ref<AnalysisProof | null>(null)
+let generationScope = ''
+watch(() => [props.projectId, selectedImportId.value, planningMode.value], () => { analysisProof.value = null })
 
 const importsQuery = useQuery({
   queryKey: computed(() => ['work-imports', props.projectId]),
   queryFn: () => listWorkImports(props.projectId),
+  refetchInterval: 5000,
 })
 const selectedImport = computed(() => importsQuery.data.value?.find((item) => item.id === selectedImportId.value) ?? null)
+const planningBusy = computed(() => confirmMutation.isPending.value || selectedImport.value?.planningStatus === 'GENERATING')
 watch(() => importsQuery.data.value, (items) => {
   if (!items?.some((item) => item.id === selectedImportId.value)) selectedImportId.value = items?.[0]?.id ?? null
 }, { immediate: true })
@@ -38,19 +47,25 @@ const uploadMutation = useMutation({
 })
 const confirmMutation = useMutation({
   mutationFn: async () => {
+    generationScope = `${props.projectId}:${selectedImportId.value}`
+    if (planningProvider.value === 'LOCAL_TEMPLATE') throw new Error('反推规划需要在全局设置中选择 ChatGPT 或 DeepSeek。')
     if (!selectedImportId.value) throw new Error('没有可确认的导入记录。')
     const importId = selectedImportId.value
-    if (selectedImport.value?.status !== 'CONFIRMED') await confirmWorkImport(props.projectId, importId)
-    return reversePlanFromImport(props.projectId, importId, planningProvider.value, planningMode.value, planningInstruction.value)
+    const projectId = props.projectId
+    const proof = analysisProof.value
+    if (!proof || proof.mode !== planningMode.value) throw new Error('请先完成并确认当前使用方式的原文解析。')
+    const result = await reversePlanFromImport(projectId, importId, planningProvider.value, planningMode.value, planningInstruction.value, proof.id, proof.version)
+    return { projectId, importId, result }
   },
   onSuccess: (value) => {
-    queryClient.setQueryData(['story-bible', props.projectId], value.storyBible)
-    queryClient.setQueryData(['outline', props.projectId], value.outline)
-    queryClient.invalidateQueries({ queryKey: ['work-imports', props.projectId] })
+    queryClient.setQueryData(['story-bible', value.projectId], value.result.storyBible)
+    queryClient.setQueryData(['outline', value.projectId], value.result.outline)
+    queryClient.invalidateQueries({ queryKey: ['work-imports', value.projectId] })
+    if (props.projectId !== value.projectId || selectedImportId.value !== value.importId) return
     actionError.value = ''
     emit('planningGenerated')
   },
-  onError: (reason: Error) => { actionError.value = reason.message },
+  onError: (reason: Error) => { if (generationScope === `${props.projectId}:${selectedImportId.value}`) actionError.value = reason.message },
 })
 
 function selectFile(event: Event) {
@@ -109,6 +124,7 @@ function contentTypeLabel(value: string) {
         </section>
 
         <div class="import-actions">
+          <div v-if="planningBusy" class="acceptance-note" role="status"><LoaderCircle :size="16" />小说规划请求中 · 圣经与大纲完成后保存草稿</div>
           <div v-if="selectedImport.planningStatus === 'GENERATED'" class="acceptance-note"><Check :size="16" />{{ selectedImport.planningMode === 'ADAPT_SOURCE' ? '改编版' : '续写版' }}故事圣经与分层大纲草稿已生成，请到“大纲”中检查。</div>
           <div class="planning-mode-field">
             <span>这份内容怎么使用</span>
@@ -117,9 +133,10 @@ function contentTypeLabel(value: string) {
               <label :class="{ selected: planningMode === 'CONTINUE_MANUSCRIPT' }"><input v-model="planningMode" type="radio" value="CONTINUE_MANUSCRIPT" /><strong>作为已有正文续写</strong><small>保留已经发生的内容，在其后继续写作</small></label>
             </div>
           </div>
-            <label class="provider-field"><span>反推模型</span><select v-model="planningProvider"><option value="LOCAL_CODEX">服务端 Codex</option><option value="DEEPSEEK">DeepSeek</option></select></label>
+            <ImportAnalysisPanel :key="`${projectId}:${selectedImport.id}`" :project-id="projectId" :import-id="selectedImport.id" :mode="planningMode" :chapters="selectedImport.chapters" :disabled="confirmMutation.isPending.value" @ready="analysisProof = $event" @confirmed="importsQuery.refetch()" />
+            <GlobalModelBadge />
             <label class="instruction-field"><span>改编或续写要求</span><textarea v-model="planningInstruction" rows="2" maxlength="1000" placeholder="可选，例如：扩写为青春校园成长小说，增强人物弧光" /></label>
-            <button class="button primary" type="button" :disabled="confirmMutation.isPending.value" @click="confirmMutation.mutate()"><Sparkles :size="16" />{{ confirmMutation.isPending.value ? '正在生成小说规划…' : selectedImport.planningStatus === 'GENERATED' ? '重新生成小说规划' : selectedImport.status === 'CONFIRMED' ? '生成小说规划' : '确认并生成小说规划' }}</button>
+            <button class="button primary" type="button" :disabled="planningBusy || !analysisProof" @click="confirmMutation.mutate()"><Sparkles :size="16" />{{ planningBusy ? '正在生成小说规划…' : selectedImport.planningStatus === 'GENERATED' ? '重新生成小说规划' : '生成小说规划' }}</button>
             <p v-if="selectedImport.planningError" class="form-error">上次反推失败：{{ selectedImport.planningError }}</p>
         </div>
       </main>

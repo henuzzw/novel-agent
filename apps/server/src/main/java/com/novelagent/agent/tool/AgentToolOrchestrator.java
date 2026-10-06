@@ -49,7 +49,7 @@ public class AgentToolOrchestrator {
             }
         }
 
-        return allocator.allocate(deduplicateSemantic(semantic), List.copyOf(facts), budget, usedTools);
+        return allocator.allocate(deduplicateSemantic(semantic), deduplicateFacts(facts), budget, usedTools);
     }
 
     private NovelReadTool require(NovelToolName name) {
@@ -85,10 +85,22 @@ public class AgentToolOrchestrator {
             NovelMemoryContext.SemanticMemory second) {
         String content = first.content() == null || first.content().isBlank() ? second.content() : first.content();
         double similarity = Math.min(first.similarity(), second.similarity());
-        if (first.similarity() == 1.0) {
+        if (first.similarity() == 1.0 && !first.recentChapter()) {
             similarity = second.similarity();
         }
         return new NovelMemoryContext.SemanticMemory(first.chapterNumber(), first.canonVersion(), similarity,
-                first.summary(), content);
+                first.summary(), content, first.recentChapter() || second.recentChapter(),
+                first.chapterContract() != null ? first.chapterContract() : second.chapterContract(),
+                first.chapterBody() != null ? first.chapterBody() : second.chapterBody());
+    }
+
+    private static List<NovelMemoryContext.GraphFact> deduplicateFacts(List<NovelMemoryContext.GraphFact> candidates) {
+        Map<String, NovelMemoryContext.GraphFact> unique = new LinkedHashMap<>();
+        for (NovelMemoryContext.GraphFact fact : candidates) {
+            String key = fact.canonVersion() + "\u0000" + fact.subject() + "\u0000"
+                    + fact.predicate() + "\u0000" + fact.object();
+            unique.putIfAbsent(key, fact);
+        }
+        return List.copyOf(unique.values());
     }
 }

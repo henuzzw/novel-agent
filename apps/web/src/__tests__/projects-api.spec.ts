@@ -27,9 +27,9 @@ describe('apiRequest', () => {
       tones: ['真实'], targetWords: 120000, mustHave: [], avoid: [], stylePreferences: [],
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/projects/project-1/creative-intent', expect.objectContaining({
-      method: 'PUT',
-      headers: expect.objectContaining({ 'If-Match': '"0"' }),
-    }))
+    const [url, init] = fetchMock.mock.calls[0]! as [string, RequestInit]
+    expect(url).toBe('/api/v1/projects/project-1/creative-intent')
+    expect(init.method).toBe('PUT')
+    expect(new Headers(init.headers).get('If-Match')).toBe('"0"')
   })
 })

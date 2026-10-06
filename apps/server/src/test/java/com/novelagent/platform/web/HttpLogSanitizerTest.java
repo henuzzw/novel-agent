@@ -1,0 +1,38 @@
+package com.novelagent.platform.web;
+
+import static org.assertj.core.api.Assertions.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class HttpLogSanitizerTest {
+    private final HttpLogSanitizer sanitizer = new HttpLogSanitizer(new ObjectMapper());
+    @Test void keepsUsefulParametersAndMasksNestedSecretsAndManuscripts() {
+        String log = sanitizer.summarize(Map.of("provider", "LOCAL_CODEX", "analysisVersion", 2,
+                "body", "private manuscript", "content", Map.of("chapterId", "chapter", "text", "private source"),
+                "api_key", "private key", "nested", List.of(Map.of("password", "private password")),
+                "headers", Map.of("Authorization", "Bearer private")));
+        assertThat(log).contains("LOCAL_CODEX", "analysisVersion", "chapterId", "REDACTED", "TEXT chars=")
+                .doesNotContain("private manuscript", "private source", "private key", "private password", "Bearer private");
+    }
+    @Test void masksQueryArraysAndCredentialsEmbeddedInMessages() {
+        String log = sanitizer.summarize(Map.of("access_token", new String[] {"credential"},
+                "note", "Bearer value sk-testkey password=pass api_key=abc"));
+        assertThat(log).doesNotContain("credential", "Bearer value", "sk-testkey", "pass ", "=abc");
+    }
+    @Test void limitsTextArraysDepthAndOverallSize() {
+        String log = sanitizer.summarize(Map.of("notes", java.util.stream.IntStream.range(0, 100)
+                .mapToObj(i -> "public".repeat(80)).toList(), "longText", "private".repeat(1000)));
+        assertThat(log.length()).isLessThan(4050);
+        assertThat(log).contains("TRUNCATED").doesNotContain("private");
+        assertThat(sanitizer.summarize("private raw JSON")).contains("TEXT").doesNotContain("private");
+        assertThat(sanitizer.summarize(new byte[100])).isEqualTo("[BINARY bytes=100]");
+    }
+    @Test void doesNotMutateInputAndPreventsNewlineInjection() {
+        var mapper = new ObjectMapper();
+        var original = mapper.createObjectNode().put("apiKey", "secret").put("name", "a\nb\rc");
+        assertThat(sanitizer.summarize(original)).contains("a b c").doesNotContain("\n", "\r", "secret");
+        assertThat(original.path("apiKey").asText()).isEqualTo("secret");
+    }
+}

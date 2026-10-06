@@ -7,6 +7,7 @@ import com.novelagent.planning.application.OutlineVersionNotFoundException;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
+import com.novelagent.planning.application.PlanningCheckpointException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.Map;
@@ -18,6 +19,23 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(com.novelagent.agent.application.GenerationStoppedException.class)
+    ProblemDetail handleGenerationStopped(RuntimeException exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "GENERATION_CANCELLED", "生成已停止", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(com.novelagent.agent.application.GenerationStopConflictException.class)
+    ProblemDetail handleStopConflict(RuntimeException exception, HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "GENERATION_STOP_CONFLICT", "当前任务不能停止", exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(PlanningCheckpointException.class)
+    ProblemDetail handlePlanningCheckpoint(PlanningCheckpointException exception, HttpServletRequest request) {
+        return problem(exception.isMissing() ? HttpStatus.NOT_FOUND : HttpStatus.CONFLICT,
+                exception.isMissing() ? "RESOURCE_NOT_FOUND" : "PLANNING_CHECKPOINT_CONFLICT",
+                "规划分块不可用", exception.getMessage(), request);
+    }
 
     @ExceptionHandler({ProjectNotFoundException.class, StoryDirectionSetNotFoundException.class,
             StoryBibleVersionNotFoundException.class, OutlineVersionNotFoundException.class,

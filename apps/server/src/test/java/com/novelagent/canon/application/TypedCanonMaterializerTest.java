@@ -28,7 +28,8 @@ class TypedCanonMaterializerTest {
                 anyString(), any(), anyString()))
                 .thenReturn(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
-        TypedCanonMaterializer materializer = new TypedCanonMaterializer(jdbc, new ObjectMapper(), resolver);
+        TypedCanonMaterializer materializer = new TypedCanonMaterializer(jdbc, new ObjectMapper(), resolver,
+                mock(com.novelagent.planning.application.PlanningMaterialSyncService.class));
 
         materializer.materialize(UUID.randomUUID(), 3, UUID.randomUUID(), 7, List.of(
                 fact("F1", "EVENT", "顾弦", "发现", "旧笔记"),
@@ -51,7 +52,8 @@ class TypedCanonMaterializerTest {
         EntityResolutionService resolver = mock(EntityResolutionService.class);
         when(resolver.resolve(any(), any(), any(Long.class), anyString(), anyString(), anyString(),
                 anyString(), any(), anyString())).thenReturn(UUID.randomUUID());
-        TypedCanonMaterializer materializer = new TypedCanonMaterializer(jdbc, new ObjectMapper(), resolver);
+        TypedCanonMaterializer materializer = new TypedCanonMaterializer(jdbc, new ObjectMapper(), resolver,
+                mock(com.novelagent.planning.application.PlanningMaterialSyncService.class));
 
         materializer.materialize(UUID.randomUUID(), 1, UUID.randomUUID(), 1,
                 List.of(fact("F1", "STATE", "顾弦", "章节退出状态", "沉默离场")));

@@ -16,6 +16,10 @@ public class StoryBibleModelOutputParser {
     public GeneratedStoryBible parse(ModelProvider provider, String rawOutput) {
         try {
             ModelOutput output = objectMapper.readValue(stripCodeFence(rawOutput), ModelOutput.class);
+            if (output.content() == null || output.content().characterBlueprints().isEmpty()
+                    || output.content().characterBlueprints().stream().noneMatch(value -> "PROTAGONIST".equals(value.role()))) {
+                throw new IllegalArgumentException("模型输出缺少主角人物底稿");
+            }
             return new GeneratedStoryBible(provider.name(), normalized(output.content()), safe(output.changeSummary()));
         }
         catch (Exception exception) {
@@ -30,7 +34,7 @@ public class StoryBibleModelOutputParser {
                 safe(value.supportingCharacters()), safe(value.relationshipDynamics()),
                 required(value.centralConflict(), "centralConflict"), required(value.stakes(), "stakes"),
                 required(value.narrativeStyle(), "narrativeStyle"), required(value.endingDirection(), "endingDirection"),
-                safe(value.hardConstraints()), safe(value.openQuestions()));
+                safe(value.hardConstraints()), safe(value.openQuestions()), value.characterBlueprints(), value.readerExperiencePlans());
     }
 
     private static String required(String value, String field) {

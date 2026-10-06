@@ -33,6 +33,12 @@ public class CanonCommit {
     @Column(name = "canon_version", nullable = false)
     private long canonVersion;
 
+    @Column(nullable = false)
+    private boolean active = true;
+
+    @Column(name = "superseded_by_commit_id")
+    private UUID supersededByCommitId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "accepted_facts", nullable = false, columnDefinition = "jsonb")
     private List<FactProposal> acceptedFacts;
@@ -85,5 +91,19 @@ public class CanonCommit {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public UUID getSupersededByCommitId() {
+        return supersededByCommitId;
+    }
+
+    public void supersede(UUID replacementId) {
+        if (!active) throw new IllegalStateException("这条正史已被替换");
+        active = false;
+        supersededByCommitId = replacementId;
     }
 }

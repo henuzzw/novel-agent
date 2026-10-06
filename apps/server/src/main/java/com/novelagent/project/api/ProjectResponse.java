@@ -1,6 +1,8 @@
 package com.novelagent.project.api;
 
 import com.novelagent.project.domain.CreativeIntent;
+import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.domain.ProjectStatus;
@@ -17,7 +19,8 @@ public record ProjectResponse(
         long version,
         Instant createdAt,
         Instant updatedAt,
-        CreativeIntentResponse creativeIntent) {
+        CreativeIntentResponse creativeIntent,
+        CreativeStrategy creativeStrategy) {
 
     public static ProjectResponse from(NovelProject project, CreativeIntent intent) {
         return new ProjectResponse(
@@ -29,7 +32,8 @@ public record ProjectResponse(
                 project.getRowVersion(),
                 project.getCreatedAt(),
                 project.getUpdatedAt(),
-                CreativeIntentResponse.from(intent));
+                CreativeIntentResponse.from(intent),
+                CreativeStrategyPolicy.from(project).strategy());
     }
 
     public record CreativeIntentResponse(
@@ -66,4 +70,3 @@ public record ProjectResponse(
         }
     }
 }
-

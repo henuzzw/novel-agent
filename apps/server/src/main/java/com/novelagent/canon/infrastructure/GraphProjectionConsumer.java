@@ -41,6 +41,14 @@ class GraphProjectionConsumer {
         CanonProjectionEvent event = CanonProjectionEvent.parse(message, mapper);
         if (checkpoints.isCompleted(event.eventId(), ProjectionCheckpointStore.ProjectionType.NEO4J)) return;
         CanonCommit commit = commits.findById(event.commitId()).orElseThrow();
+        if (!commit.isActive()) {
+            checkpoints.markCompleted(event.eventId(), ProjectionCheckpointStore.ProjectionType.NEO4J);
+            return;
+        }
+        for (CanonCommit retired : commits.findByProjectIdAndChapterNumberAndActiveFalse(
+                event.projectId(), commit.getChapterNumber())) {
+            retireGraphVersion(event.projectId(), retired.getCanonVersion());
+        }
         for (FactProposal fact : commit.getAcceptedFacts()) upsertFact(event, fact);
         projectTypedCanon(event);
         updateWatermark(event);
@@ -50,9 +58,29 @@ class GraphProjectionConsumer {
     private void upsertFact(CanonProjectionEvent event, FactProposal fact) {
         neo4j.query(UPSERT_FACT_CYPHER).bindAll(Map.of(
                 "projectId", event.projectId().toString(), "subject", fact.subject(),
-                "factId", fact.id(), "type", fact.factType(), "predicate", fact.predicate(),
+                "factId", event.commitId() + ":" + fact.id(), "type", fact.factType(), "predicate", fact.predicate(),
                 "object", fact.object(), "evidence", fact.evidence(),
                 "canonVersion", event.canonVersion())).run();
+    }
+
+    private void retireGraphVersion(UUID projectId, long version) {
+        neo4j.query("""
+                MATCH (source {projectId: $projectId})-[relation:RELATED_TO|KNOWS]->()
+                WHERE relation.canonVersion = $canonVersion
+                DELETE relation
+                """).bindAll(Map.of("projectId", projectId.toString(), "canonVersion", version)).run();
+        neo4j.query("""
+                MATCH (node)
+                WHERE node.projectId = $projectId AND node.canonVersion = $canonVersion
+                  AND (node:StoryFact OR node:StoryEvent OR node:StateChange OR node:Foreshadow)
+                DETACH DELETE node
+                """).bindAll(Map.of("projectId", projectId.toString(), "canonVersion", version)).run();
+        neo4j.query("""
+                MATCH (entity:StoryEntity {projectId: $projectId})
+                WHERE entity.canonVersion = $canonVersion
+                  AND NOT EXISTS { MATCH (entity)--() }
+                DELETE entity
+                """).bindAll(Map.of("projectId", projectId.toString(), "canonVersion", version)).run();
     }
 
     private void projectTypedCanon(CanonProjectionEvent event) {
@@ -120,7 +148,8 @@ class GraphProjectionConsumer {
                 MERGE (character:StoryEntity {projectId: $projectId, entityId: $characterId})
                 SET character.name = $canonicalName, character.entityType = 'CHARACTER'
                 MERGE (fact:StoryFact {projectId: $projectId, stableFactId: $factId})
-                SET fact.subject = $subjectText, fact.predicate = $predicate, fact.object = $objectText
+                SET fact.subject = $subjectText, fact.predicate = $predicate, fact.object = $objectText,
+                    fact.canonVersion = $canonVersionFrom
                 MERGE (character)-[knowledge:KNOWS {knowledgeId: $id}]->(fact)
                 SET knowledge.type = $knowledgeType, knowledge.truth = $beliefTruth,
                     knowledge.confidence = $confidence, knowledge.chapter = $narrativeChapter,
@@ -150,7 +179,10 @@ class GraphProjectionConsumer {
     private void updateWatermark(CanonProjectionEvent event) {
         neo4j.query("""
                 MERGE (project:NovelProject {projectId: $projectId})
-                SET project.projectionVersion = $canonVersion, project.projectedAt = datetime()
+                SET project.projectionVersion = CASE WHEN project.projectionVersion IS NULL
+                    OR project.projectionVersion < $canonVersion THEN $canonVersion
+                    ELSE project.projectionVersion END,
+                    project.projectedAt = datetime()
                 """).bindAll(Map.of("projectId", event.projectId().toString(),
                         "canonVersion", event.canonVersion())).run();
     }

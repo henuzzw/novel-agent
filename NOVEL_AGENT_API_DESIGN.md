@@ -509,8 +509,13 @@ MVP 中手工修改正史对象时也先创建 `FactProposal`，再通过统一�
 | `POST` | `/projects/{projectId}/story-bibles/actions/generate` | 根据最近一次已确认方向生成草稿 |
 | `PUT` | `/projects/{projectId}/story-bibles/{versionId}` | 完整保存草稿内容，要求 `If-Match` |
 | `POST` | `/projects/{projectId}/story-bibles/{versionId}/actions/publish` | 发布并设为项目当前版本，要求 `If-Match` |
+| `POST` | `/projects/{projectId}/story-bibles/{versionId}/actions/complete-characters` | 真实模型补全人物底稿，创建新草稿，要求 `If-Match` |
 
-每个故事圣经版本保存来源方向集、来源候选、生成器、作者调整要求和结构化内容。重新生成创建新草稿；已发布版本不可直接修改。版本历史查询将在分层大纲阶段一并补齐。
+每个故事圣经版本保存来源方向集、来源候选或导入、生成器、作者调整要求和结构化内容。重新生成创建新草稿；已发布版本不可直接修改，可保存为修订草稿。已实现 GET 集合版本历史、GET 指定版本及 GET current 发布指针查询。
+
+人物底稿第一批：新建或修订版本使用 `story-bible/2`，原 JSONB content 新增 `characterBlueprints`，无 SQL 迁移；旧记录缺失该字段兼容读取为空数组。最多 12 人，姓名不可重复；name、identity、coreDesire 必填，role 为 PROTAGONIST / SUPPORTING / MINOR，其他文本可空。name 最多 100 字符，其他文本最多 3000 字符；initialRelationships、initialPossessions、knowledgeBoundaries 各最多 20 项，每项最多 1000 字符。开篇状态和未来弧线不属于动态正史。
+
+补全请求 body 为 `{"provider":"DEEPSEEK","instruction":"补全主角背景与行为边界"}`，provider 仅 LOCAL_CODEX / DEEPSEEK，instruction 可空、最多 1000 字符。允许同项目草稿、已发布版或旧导入圣经，不要求已有确认方向；返回 201、Location 和新版本 ETag。模型调用位于事务外，经公共网关审计，一次新会话；保存短事务重新校验权限、源行版本、内容和渲染姓名，仅填空白字段及缺失人物。非空字段和其他圣经内容由程序保留，不自动发布、不更新项目指针、不写 character_profile 或正史。无变化返回 400 不创建版本。跨项目不可访问为 404，源行版本过期为 409，源内容或姓名变化为 400；无请求级幂等键、无自动付费重试。
 
 ### 8.3 大纲
 
@@ -1177,3 +1182,171 @@ POST /chapters/{nextChapterId}/actions/continue
 ---
 
 **API 设计结论**：同步接口负责资源读写和命令受理，耗时 AI 操作统一返回 `AgentRun`，通过 SSE 提供进度。任何生成结果都先成为候选或草稿，只有带正史版本校验、提交预览和幂等键的 `CanonCommit` 接口能够改变项目正史。
+
+## 23. 当前已实现：第一章风格试写（2026-10-03）
+
+`POST /api/v1/projects/{projectId}/writing-style/actions/preview`
+
+这是当前同步生成接口，不是上述目标设计中的异步 SSE 任务。真实模型成功路径调用一次，使用独立 `STYLE_PREVIEW` 工作流；不得把反复点击视为幂等查询。
+
+请求字段：
+
+| 字段 | 约束 |
+| --- | --- |
+| outlineVersionId | 必填，同项目已保存大纲，可为草稿 |
+| expectedOutlineVersion | 必填，非负的大纲行版本 |
+| profile | 必填，经过领域校验的 WritingStyleProfile 候选，不要求已应用 |
+| provider | 必填，LOCAL_CODEX / DEEPSEEK / LOCAL_TEMPLATE |
+| targetWords | 可选，300～1500，默认 800，柔性篇幅参考 |
+| instruction | 可选，最多 1000 字符 |
+
+返回 `sourceOutlineVersionId`、`sourceOutlineRowVersion`、`outlineGenerationNumber`、`sourceBibleVersionId`、`profile`、`provider`、`targetWords`、`previewMode`（MODEL / TEMPLATE）以及 `content`（title / body）。只根据所选大纲第 1 章生成开头场景样例；标题最多 200、正文最多 6000 字符，不允许空白。
+
+项目或关联版本不可访问为 404，请求/第一章缺失为 400，来源大纲版本过期或模型调用期间改变为 409。模型错误沿用既有供应商错误处理。试写不发布大纲、不应用风格、不保存正式正文、不提交正史；风格仍通过既有 PUT writing-style 显式应用。
+
+## 24. 当前已实现：圣经风格推荐（2026-10-03）
+
+`POST /api/v1/projects/{projectId}/writing-style/actions/recommend`
+
+同步生成建议；每次真实请求可能产生模型调用费用，不是幂等查询。
+
+| 请求字段 | 约束 |
+| --- | --- |
+| bibleVersionId | 必填，同项目已保存圣经，可为草稿 |
+| expectedBibleVersion | 必填，非负的圣经行版本 |
+| provider | 必填，LOCAL_CODEX / DEEPSEEK / LOCAL_TEMPLATE |
+| instruction | 可选，最多 1000 字符的风格偏好 |
+
+响应：sourceBibleVersionId/sourceBibleRowVersion/bibleGenerationNumber/provider/recommendationMode/summary/recommendations。
+每项 recommendations 包含规范 WritingStyleProfile、reason、tradeoff、evidence（field/quote）；真实模型推荐一至三种已知且不重复的预设，证据必须在对应圣经字段连续逐字出现。本地模板模式为 TEMPLATE，返回空建议和无语义判断提示。
+
+404 表示项目或圣经不可访问；400 表示请求无效或姓名渲染后的来源内容变化；409 表示圣经行版本过期/调用期间改变；502 表示模型失败或推荐未通过预设/证据校验。生成不修改圣经、大纲、风格、合同、正文或正史。应用仍使用原有 PUT writing-style 及项目行版本校验；推荐历史不持久化到业务表。
+
+## 25. 当前已实现：试写编辑检查与修订（2026-10-04，V035）
+
+`POST /api/v1/projects/{projectId}/writing-style/actions/check-preview`
+
+请求包含 `source`（第 23 节 preview 请求字段，同样约束）和 `content`（title 1～200、body 1～6000 字符，非空白）。接受作者提供的样例作为待检查输入，不证明其曾由模型生成。provider 指本次检查模型，候选风格必须显式提供，不要求应用项目风格。
+
+响应为 `id`、`preview`（实际检查来源快照）、`provider`、`reviewMode`（MODEL/RULES）、`content`（QualityReviewContent）、`revisionAttempted`。四维评分各一，问题最多 20 条，每条 evidence 必须在源 body 连续逐字出现；缺少依据不能视为已经证明矛盾。本地规则评分 null，不作语义判断。
+
+`POST /api/v1/projects/{projectId}/writing-style/preview-reviews/{id}/actions/revise`
+
+请求：`provider`（LOCAL_CODEX/DEEPSEEK，不支持 LOCAL_TEMPLATE）、`issueIds`（1～20 个不重复且属于这份服务端报告的问题 ID）、`instruction`（可选，最多 1000 字符）。不能提交任意报告或建议替代服务端证据。响应复用 WritingStylePreviewResponse，生成新候选，不覆盖原样例，也不自动确认或应用风格。
+
+权限或关联资源不存在为 404；非法来源/问题 ID、重复尝试、上下文依据变化为 400；大纲行版本过期为 409；供应商失败为 502。V035 的 style_preview_review 保存私有原样例、档案、报告和 SHA-256 依据，保存前与修订前后复核。每份报告最多一次修订尝试，锁内认领成功后即计入，失败也不重置；再次修改必须显式重检获取新报告。未提供报告列表/恢复接口，页面最新三份样例仍为会话缓存。
+
+两个接口均同步执行，不是幂等查询；真实检查与修订各有独立模型请求及 AgentRun，Codex 新线程。页面默认试写后检查，修订后再次检查，失败不自动重试、不自动选择建议。正式大纲、风格应用、正文版本和正史门禁均不改变。
+
+## 26. 当前已实现：创作融合扩展（2026-10-05）
+
+以下路径前缀均为 `/api/v1/projects/{projectId}`。同步生成可能产生费用，不自动重试；权限、来源、版本和作者门禁仍适用。完整交付边界见 NOVEL_AGENT_REFERENCE_INTEGRATION_DELIVERY.md。
+
+### 26.1 项目创作策略
+
+`GET /settings/creative-strategy` 返回 strategy、policyVersion、version；`PUT` 请求 strategy（STANDARD / FANQIE_GRIPPING）和项目行 version。缺省标准策略，过期 409。新建项目可提供 creativeStrategy，未提供默认 STANDARD。策略独立于模型和风格，修改不会重写正文，但使相关报告失效。
+
+### 26.2 正文质量修订授权
+
+既有质量报告修订请求新增 scope：默认 EXPRESSION_ONLY 只接受未解决的 STYLE/FLUENCY；SCENE_STRUCTURE 必须显式选择，才能接受 LOGIC/SCENE。issueIds 必须来自当前服务端报告，不能用作者 instruction 扩大权限。成功创建新 DRAFT，保留旧稿；结构权限仍禁止新增事实、改变真实事件顺序或结果。
+
+### 26.3 完整前三章
+
+`GET /opening-review`：可选 manuscriptIds（第 1～3 章各一 ID）、provider、instruction；返回来源、完整正文/合同、预算、指纹、检查状态与报告。不触发模型调用。
+
+`POST /opening-review/actions/check`：manuscriptIds、provider、instruction、expectedFingerprint、maxInputTokens；作者显式允许一次通读。必须完整读取三章，不静默截断。报告 observation 的引用逐字匹配并标注章次；无依据 NOT_ASSESSED，不以分数放行正史。本地仅规则检查。V038 保存来源绑定报告，输入变化需重新检查。
+
+### 26.4 伏笔与承诺台账
+
+`GET/POST /reader-experiences`、`GET/PUT/DELETE /reader-experiences/{id}`；删除参数 expectedVersion/requestId。计划输入含版本和 requestId，重复请求幂等、并发修改拒绝。
+
+`GET /reader-experiences/sources` 与 `/sources/{manuscriptId}` 查询作者已确认的可选正文及来源指纹；`POST /reader-experiences/{id}/events` 提交状态、正文来源、逐字证据、来源指纹、作者确认、版本及 requestId。计划不自动成为实际埋设/兑现，不提交正史。`GET /reader-experiences/memory` 查询已有有效正史摘要，按当前大纲分卷，不伪造压缩摘要。V039 保存计划及证据事件。
+
+### 26.5 精确局部改写
+
+`POST /chapters/{chapterNumber}/manuscripts/actions/local-edit` 请求 sourceManuscriptId、sourceRowVersion、selection（1～12000 字符）、occurrence（从 1 开始）或 offset（UTF-16，从 0 开始）、provider、instruction（1～2000 字符）、authorized。
+
+服务端校验逐字选区和来源，模型仅返回替换片段，确定性拼接保留选区外正文。成功 201 返回新草稿与差异；未评估/无新稿 200，不伪造版本；来源变化 409，code=MANUSCRIPT_LOCAL_EDIT_STALE。不支持本地模板语义改写；不自动确认、不覆盖原稿。
+
+### 26.6 私有模型请求快照
+
+`GET /agent-runs/{runId}/request-snapshot`：当前项目所有者可读，no-store。包含完整 Prompt/Schema、哈希、实际供应商模型/强度/配置版本、会话策略、请求预算及可得真实 usage。运行列表区分 actual 与 estimated，未知不是 0。V037 不保存密钥；估算成本不代表账单，单次请求冻结不代表整项自动任务冻结。
+
+### 26.7 单个规划片段检查点
+
+`GET/POST /planning-checkpoints`、`GET /planning-checkpoints/{id}`。创建请求 chunkKey（1～128）、chapterFrom、chapterTo（至多 100 章）、provider、instruction（至多 1000）；冻结当前已发布圣经和策略，匹配来源可复用已有检查点。
+
+`POST /planning-checkpoints/{id}/actions/run|cancel|retry` 请求 version；run 同步执行一次新会话生成，LOCAL_TEMPLATE 不执行模型生成。`POST .../actions/reuse` 复核依赖后返回成功片段。状态为 PENDING/RUNNING/SUCCEEDED/FAILED/CANCELLED，迟到结果不能覆盖取消或重试。V041 持久化；V042 增加前置依赖，批次片段只能从对应批次执行，不能从单片段 run 绕过批次来源校验。
+
+### 26.7.1 规划批次与拼装
+
+`GET/POST /planning-batches`、`GET /planning-batches/{id}`。创建 body：chapterTo（1～500）、chunkSize（1～20）、真实 provider、instruction（至多 1000）、UUID requestId、expectedBibleId、expectedBibleVersion。来源必须是项目当前发布圣经；相同 requestId 和同一输入返回同一批次，异输入 409。拒绝已有正史或 OCCURRED 章节的全书重新分块规划。
+
+响应为 id/projectId/bibleId/bibleRowVersion/chapterTo/chunkSize/provider/instruction/version/status/outlineVersionId/checkpoints/createdAt。checkpoints 仅含已创建片段；未轮到的片段不伪造 PENDING 产物。总片段数为 ceil(chapterTo/chunkSize)。
+
+`POST /planning-batches/{id}/actions/run-next`，body {version}：最多调用一次模型；下一片段带完整成功前缀计划、前置尝试/指纹和冻结字数参考。失败不自动重试。`actions/cancel` / `actions/resume` 同样 body {version}；保留成功片段，拒绝重复执行、旧版本和迟到结果，恢复后必须再明确推进。
+
+`POST .../actions/assemble`，body {version}：校验成功连续覆盖、跨块依赖、来源及章字数与作品预算交集，在同一事务保存新 OutlineResponse 草稿和批次关联；不发布、不移动当前大纲指针、不改正文或正史。成功后重复拼装返回同一大纲 ID，不制造新版本。批次状态 READY/RUNNING/FAILED/CANCELLED/SUCCEEDED，SUCCEEDED 仅表示已拼装，不表示已发布或文学验收通过。
+
+`GET /story-bibles/current` 按项目当前指针返回发布圣经，未发布时 204；不以 latest 草稿替代。页面在原大纲页接入批次，拼装后沿用原编辑/发布操作。
+
+V042 保存 planning_batch 与片段 dependencies；checkpoint/2 指纹增加渲染后的圣经和前置结果，旧 /1 结果来源失效需重建。超模型预算仍由网关拒绝，不静默截断完整前缀。全任务模型配置冻结及增量分块调整尚未实现。
+
+### 26.8 全书来源巡检
+
+`GET /book-scan` 返回实时 RULES_SUMMARY_ONLY 来源巡检，no-store。检查当前大纲章节的有效正史/摘要覆盖、相邻完全相同核心事件文本及台账来源/登记状态；不调用模型、不读取全书正文、不保存文学报告。缺少兑现登记不证明正文未兑现。
+
+## 27. 任务响应与实时观测（2026-10-05）
+
+- `GET /projects/{projectId}/agent-runs/{runId}/response`：项目私有、no-store；未知任务/同项目不匹配返回 404。返回 id、status、responseText、truncated、errorType、errorCategory、errorDetail、durationMs。历史 responseText=null 表示没有保存，不等于模型输出为空。结束时响应最多保留 200000 字符并标记截断，错误详情最多 2000 字符、移除常见凭据和本地路径。
+- `GET .../events`：`text/event-stream`、no-store、X-Accel-Buffering=no；先发送当前 output 快照，运行中每秒有变化发送一次，15 秒无变化发心跳，结束发送终态并关闭。连接最长 30 分钟，重新连接只读取状态，不创建生成请求。代理部署需关闭 SSE 响应缓冲并允许长读超时。
+- V043 新增响应和错误字段；列表不包含完整响应或完整错误详情。Codex 公开 agentMessage 增量实时展示，不展示推理正文；DeepSeek 仍只保存最终响应。进行中的片段仅存当前进程内存，进程崩溃/多节点切换不保证恢复，终态响应持久化在 PostgreSQL。
+- 生成 POST 仍同步，不是后台 202 任务；SSE 仅为独立只读观测。默认生成等待 1200 秒，协议等待 600 秒，分别由 CODEX_TURN_TIMEOUT_SECONDS / CODEX_CLI_TIMEOUT_SECONDS 配置；超过生成上限尝试中断已知 turnId，但不保证供应商立即停止。旧轮终止前不允许复用，无自动付费重试，不变更作者选定强度。
+- 展示响应不代表结构校验通过、已发布圣经、已采纳正文或正史提交。未保存的历史数据不自动补造；用户明确不恢复本次迟到结果。
+
+## 28. 数据库风格档案（2026-10-05）
+
+接口路径不变：GET `/projects/{projectId}/writing-style/presets` 读取数据库当前启用目录；GET/PUT `/writing-style` 读取/显式应用项目快照。项目权限与 expectedVersion 守卫不变。V044 初始化 11 种预设，运行时无静态预设回退。
+
+`WritingStyleProfile` 保留原八字段，新增可选 `basePresetId`、`basePresetVersion`、`craft`。标识和版本同时提供或同时省略；标识为最多 60 字符小写字母/数字/连字符，版本 1 至 10000。旧请求与 JSONB 仍可读；不按显示名称猜测风格。
+
+`craft` 八项必填文字字段（各 1 至 1000 字符）：narratorPosition、paragraphMoves、sentenceMoves、wordChoice、dialogueMoves、rhetoricMoves、sceneVariants、revisionChecks。examples 最多 3 组，包含 scene/facts/positive/nearMiss/explanation，上限分别 80/500/1500/1500/600 字符；evidence 最多 6 条，dimension 为八项之一，quote/explanation 最多 300/600 字符。
+
+项目应用将完整档案保存至 `novel_project.settings.writingStyle`；目录的新版或停用不自动改小说快照。基础引用缺少 craft 时读取数据库对应历史版本，即使该版已停用；未知版本返回 400。无标识、无 craft 的旧档案只有全部旧字段匹配 legacy_profile 才解析初始版；同名自定义保持原样。读取解析不修改旧 settings，作者再次应用时才保存完整快照。
+
+样本分析返回 writing_style_v2：基础标识/版本必须 null、craft 必须非空、examples 必须空、evidence 为 1 至 6 条，quote 必须在样本中连续逐字存在；不满足则供应商输出校验失败。引文在页面可查看，但写作指南只使用规律说明。LOCAL_TEMPLATE 保持旧指标模式，无 craft 深析。
+
+推荐使用同一次读取的目录构造 Prompt、名称枚举与解析，返回前复核目录未变；改变时返回 400 要求重新推荐。系统预设维护目前由数据库完成，未新增管理员 CRUD 接口或管理页面；推荐、试写、编辑项目风格不会修改系统目录。
+
+## 29. 已发布规划资料同步（2026-10-05）
+
+接口前缀 `/api/v1/projects/{projectId}/planning-materials`，全部校验项目所有权：
+
+- POST `/actions/sync`：204；锁定项目，读取当前已发布圣经/大纲，补齐可确定的规划资料和有效正史伏笔，不调用模型。无发布圣经返回 400。重复执行不覆盖已有非空人物档案，不重建同源台账，也不恢复作者软删除的台账。
+- GET `/characters`：当前发布圣经的完整人物底稿快照，包含 sourceBibleId/characterId/blueprint；原独立人物档案继续用于作者编辑与提示词。
+- GET `/relationships?characterId={uuid}`：当前发布圣经的规划关系叙述；指定人物时包含该人物与全局关系。无人物参数返回全部。不是正文事实，也不猜测文本中的对象 ID 或关系类型。
+- GET `/plan-origins`：planId/sourceKind/sourceId/current；BIBLE/OUTLINE/CANON 来源区分，源版本替换后 current=false。读取均 no-store，不触发同步。
+
+StoryBibleContent/OutlineContent 增加可选 readerExperiencePlans（旧数据缺失为空），每项 key/kind/title/promise/setup/payoff/aftermath/plannedChapter。key 最多 80 字符，英文数字下划线/短横线，同版本唯一；kind 为 PROMISE/FORESHADOW，title 最多 200，其余文字最多 4000，promise 必填，plannedChapter 正整数或 null。每份最多 80 项；大纲发布时兑现章必须实际存在。更新与修订沿用原接口，前端提供独立编辑区。
+
+圣经/大纲发布和同步在同一事务中执行，失败整体回滚。完整蓝图与关系按圣经版本保存，台账来源按版本内标识幂等；旧版台账保留及标记替换来源，不将旧进展转移到新版本。人物身份以当前姓名、来源姓名或已确认别名精确匹配；无法唯一匹配拒绝，不依赖角色排序猜测身份。人物档案只补空白，现有非空值不会因新版发布被覆盖；身份字段上限统一为 3000。
+
+正史提交后的 FORESHADOW_CHANGE 同步创建来源为 CANON 的台账记录；正文正史伏笔的状态保持权威，台账事件仍要求作者和逐字证据确认，不伪造 PAYOFF 或 AUTHOR_ACCEPTED 来源。故事资料的伏笔视图与伏笔承诺页共用同一个组件及数据。旧数据没有明确计划时不自动从 openQuestions/物品/普通钩子推断；V046 的独立创作准备设计结构化规划实体、状态、时间线和知识边界，仍不写入实际事实。
+
+## 30. 创作准备与单元复核（2026-10-05，V046）
+
+实际项目私有路径为 `/api/v1/projects/{projectId}/creation-preparations`：GET 列表/`/{id}`，POST 创建；POST `/{id}/actions/run-next`、`run-all`、`resume`、`cancel`、`confirm`；PUT `/{id}` 保存完整设计；GET `/checkpoints`、`/plan-links`；POST `/plan-links/{id}/actions/confirm`。
+
+创建接受 `requestId/mode/provider/startChapter/endChapter/instruction`，模式为 PREPARE 或 REVIEW。创建只保存冻结来源，不调用模型。操作带 `version`；编辑带 `version/world/plot`；确认带 `version/authorConfirmed/acceptWarnings/selectedChapters`。关联确认另带 `requestId/planVersion/authorConfirmed`。读取与任务响应为 no-store，所有路径验证项目权限。
+
+PREPARE 依次运行人物与世界、剧情协同、一致性检查；REVIEW 只运行检查。状态为 READY、RUNNING、FAILED、AWAITING_CONFIRMATION、CONFIRMED、CANCELLED。失败不自动重试，来源失效禁止运行或确认，取消后的迟到结果拒绝；编辑清除旧检查报告，阻断问题不能直接接受。生成 POST 仍同步，run-all 最多三个串行步骤，非后台无限队列。
+
+确认准备后同步规划身份/档案空白/实体/明确台账和当前指针；确认复核只保存关联建议及作者选定未来章的新大纲草稿，不发布、不改正史。关联再次确认复用原台账的来源、证据、行版本与状态转换门禁。范围和结束条件由大纲剧情单元决定，不固定 15 万字。完整数据与部署边界见 NOVEL_AGENT_CREATION_PREPARATION.md。
+
+## 31. 原文解析与导入确认门禁（2026-10-05，V047）
+
+已实现项目私有 `/imports/{importId}/analyses`：GET 列表、GET `/{id}`；POST 创建（requestId/provider），POST `/{id}/actions/run-next/resume/cancel`（version）；POST `/{id}/actions/confirm`（version/mode/decisions/authorConfirmed）。所有读取 no-store，只读不付费。报告完成全部分段后才能确认，FACT/INFERENCE 证据须来自实际提供的原文片段；来源及行版本变化拒绝操作，失败不自动重试。
+
+原 `/imports/{importId}/actions/reverse-plan` 现在必须携带 analysisId、analysisVersion，验证当前确认报告和 mode 后才调用模型。改编可逐项 KEEP/REWORK/DROP，REWORK 必须有 note；续写只支持 KEEP/DROP，DROP 不授权删除真实过去。保存新圣经和大纲草稿前再次事务内复核，不自动发布或正史提交。旧客户端须升级，缺少解析确认返回错误，不静默跳过。
+
+完整原文不再截取前 80000 字符；原文分析每段最多 16000 字符、最多 40 段，反推规划超上下文预算拒绝。分段报告不是跨段语义一致性或全面识别的证明。详细说明见 NOVEL_AGENT_IMPORT_ANALYSIS.md。

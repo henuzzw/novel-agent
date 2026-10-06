@@ -9,7 +9,17 @@ public record OutlineContent(
         String pacingStrategy,
         int suggestedMinWords,
         int suggestedMaxWords,
-        List<OutlineArc> arcs) {
+        List<OutlineArc> arcs,
+        List<ReaderExperienceSeed> readerExperiencePlans) {
+
+    public OutlineContent {
+        readerExperiencePlans = StoryBibleContent.validatedPlans(readerExperiencePlans);
+    }
+
+    public OutlineContent(String title, String premise, String structureSummary, String pacingStrategy,
+            int suggestedMinWords, int suggestedMaxWords, List<OutlineArc> arcs) {
+        this(title, premise, structureSummary, pacingStrategy, suggestedMinWords, suggestedMaxWords, arcs, List.of());
+    }
 
     public int chapterCount() {
         return arcs == null ? 0 : arcs.stream()

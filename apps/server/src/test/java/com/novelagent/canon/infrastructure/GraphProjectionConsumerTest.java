@@ -1,6 +1,8 @@
 package com.novelagent.canon.infrastructure;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -63,6 +65,41 @@ class GraphProjectionConsumerTest {
 
         verify(commits, never()).findById(commitId);
         verify(neo4j, never()).query(anyString());
+    }
+
+    @Test
+    void skipsFactsFromRetiredCommit() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        UUID commitId = UUID.randomUUID();
+        CanonCommit retired = new CanonCommit(commitId, UUID.randomUUID(), 1, UUID.randomUUID(),
+                UUID.randomUUID(), 1, List.of(fact("F1", "发现", "旧笔记")));
+        retired.supersede(UUID.randomUUID());
+        when(commits.findById(commitId)).thenReturn(Optional.of(retired));
+
+        consumer.project(message(eventId, commitId));
+
+        verify(neo4j, never()).query(anyString());
+        verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.NEO4J);
+    }
+
+    @Test
+    void replacementCleansRetiredGraphVersionBeforeProjecting() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        UUID commitId = UUID.randomUUID();
+        UUID projectId = UUID.randomUUID();
+        CanonCommit current = new CanonCommit(commitId, projectId, 1, UUID.randomUUID(),
+                UUID.randomUUID(), 2, List.of());
+        CanonCommit previous = new CanonCommit(UUID.randomUUID(), projectId, 1, UUID.randomUUID(),
+                UUID.randomUUID(), 1, List.of());
+        previous.supersede(commitId);
+        when(commits.findById(commitId)).thenReturn(Optional.of(current));
+        when(commits.findByProjectIdAndChapterNumberAndActiveFalse(any(UUID.class), anyInt()))
+                .thenReturn(List.of(previous));
+
+        consumer.project(message(eventId, commitId));
+
+        verify(neo4j, times(4)).query(anyString());
+        verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.NEO4J);
     }
 
     private FactProposal fact(String id, String predicate, String object) {

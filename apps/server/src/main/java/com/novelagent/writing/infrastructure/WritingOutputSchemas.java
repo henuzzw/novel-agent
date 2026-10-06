@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.writing.domain.WritingStyleProfile;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -30,6 +31,15 @@ class WritingOutputSchemas {
         string(properties, "hook");
         integer(properties, "suggestedMinWords");
         integer(properties, "suggestedMaxWords");
+        required(root, properties);
+        return root;
+    }
+
+    JsonNode stylePreview() {
+        ObjectNode root = objectSchema();
+        ObjectNode properties = root.putObject("properties");
+        string(properties, "title");
+        string(properties, "body");
         required(root, properties);
         return root;
     }
@@ -79,6 +89,110 @@ class WritingOutputSchemas {
         enumString(factProperties, "decision", "PENDING", "ACCEPTED", "REJECTED");
         required(fact, factProperties);
         properties.putObject("factProposals").put("type", "array").set("items", fact);
+        required(root, properties);
+        return root;
+    }
+
+    JsonNode contractReview() {
+        ObjectNode root = objectSchema();
+        ObjectNode properties = root.putObject("properties");
+        string(properties, "summary");
+        ObjectNode issue = objectSchema();
+        ObjectNode fields = issue.putObject("properties");
+        string(fields, "id");
+        enumString(fields, "severity", "BLOCKING", "WARNING", "INFO");
+        string(fields, "category");
+        string(fields, "description");
+        string(fields, "evidence");
+        string(fields, "suggestion");
+        fields.putObject("resolved").put("type", "boolean");
+        required(issue, fields);
+        properties.putObject("issues").put("type", "array").set("items", issue);
+        required(root, properties);
+        return root;
+    }
+
+    JsonNode qualityReview() {
+        ObjectNode root = objectSchema();
+        ObjectNode properties = root.putObject("properties");
+        string(properties, "summary");
+        ObjectNode score = objectSchema();
+        ObjectNode scoreFields = score.putObject("properties");
+        enumString(scoreFields, "dimension", "STYLE", "FLUENCY", "LOGIC", "SCENE");
+        nullableInteger(scoreFields, "score");
+        scoreFields.withObject("score").put("minimum", 0).put("maximum", 100);
+        string(scoreFields, "rationale");
+        required(score, scoreFields);
+        properties.putObject("scores").put("type", "array").set("items", score);
+        ObjectNode issue = objectSchema();
+        ObjectNode fields = issue.putObject("properties");
+        string(fields, "id");
+        enumString(fields, "severity", "WARNING", "INFO");
+        enumString(fields, "category", "STYLE", "FLUENCY", "LOGIC", "SCENE");
+        string(fields, "description");
+        string(fields, "evidence");
+        string(fields, "suggestion");
+        fields.putObject("resolved").put("type", "boolean");
+        required(issue, fields);
+        properties.putObject("issues").put("type", "array").set("items", issue);
+        required(root, properties);
+        return root;
+    }
+
+    JsonNode styleRecommendation(java.util.List<WritingStyleProfile> presets) {
+        ObjectNode root = objectSchema();
+        ObjectNode properties = root.putObject("properties");
+        string(properties, "summary");
+        ObjectNode recommendation = objectSchema();
+        ObjectNode fields = recommendation.putObject("properties");
+        enumString(fields, "presetName", presets.stream().map(profile -> profile.name()).toArray(String[]::new));
+        string(fields, "reason");
+        string(fields, "tradeoff");
+        ObjectNode evidence = objectSchema();
+        ObjectNode evidenceFields = evidence.putObject("properties");
+        enumString(evidenceFields, "field", "logline", "theme", "worldSetting", "protagonist", "protagonistArc",
+                "centralConflict", "stakes", "narrativeStyle", "endingDirection");
+        string(evidenceFields, "quote");
+        required(evidence, evidenceFields);
+        fields.putObject("evidence").put("type", "array").set("items", evidence);
+        required(recommendation, fields);
+        properties.putObject("recommendations").put("type", "array").set("items", recommendation);
+        required(root, properties);
+        return root;
+    }
+
+    JsonNode writingStyle() {
+        ObjectNode root = objectSchema();
+        ObjectNode properties = root.putObject("properties");
+        for (String field : new String[] {"name", "narrativeVoice", "sentenceRhythm", "descriptionFocus",
+                "dialogueStyle", "emotionalExpression", "pacing"}) string(properties, field);
+        strings(properties, "avoidPatterns");
+        nullableString(properties, "basePresetId");
+        nullableInteger(properties, "basePresetVersion");
+        ObjectNode craft = objectSchema();
+        ObjectNode fields = craft.putObject("properties");
+        for (String field : new String[] {"narratorPosition", "paragraphMoves", "sentenceMoves", "wordChoice",
+                "dialogueMoves", "rhetoricMoves", "sceneVariants", "revisionChecks"}) {
+            string(fields, field);
+            fields.withObject(field).put("maxLength", 1000);
+        }
+        ObjectNode example = objectSchema();
+        ObjectNode exampleFields = example.putObject("properties");
+        for (String field : new String[] {"scene", "facts", "positive", "nearMiss", "explanation"}) string(exampleFields, field);
+        required(example, exampleFields);
+        fields.putObject("examples").put("type", "array").put("maxItems", 0).set("items", example);
+        ObjectNode evidence = objectSchema();
+        ObjectNode evidenceFields = evidence.putObject("properties");
+        enumString(evidenceFields, "dimension", "narratorPosition", "paragraphMoves", "sentenceMoves", "wordChoice",
+                "dialogueMoves", "rhetoricMoves", "sceneVariants", "revisionChecks");
+        string(evidenceFields, "quote");
+        evidenceFields.withObject("quote").put("maxLength", 300);
+        string(evidenceFields, "explanation");
+        evidenceFields.withObject("explanation").put("maxLength", 600);
+        required(evidence, evidenceFields);
+        fields.putObject("evidence").put("type", "array").put("minItems", 1).put("maxItems", 6).set("items", evidence);
+        required(craft, fields);
+        properties.set("craft", craft);
         required(root, properties);
         return root;
     }

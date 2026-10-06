@@ -30,9 +30,11 @@ class StoryMemorySearchTool implements NovelReadTool {
                        d.summary, left(d.content, 4000) AS content
                   FROM semantic_document d
                   JOIN manuscript_version m ON m.id = d.source_id
+                  JOIN canon_commit c ON c.manuscript_version_id = m.id AND c.active = TRUE
                  WHERE d.project_id = ?
                    AND d.embedding IS NOT NULL
                    AND d.canon_version <= ?
+                   AND c.canon_version = d.canon_version
                    AND m.chapter_number < ?
                  ORDER BY d.embedding OPERATOR(public.<=>) CAST(? AS public.vector)
                  LIMIT ?

@@ -135,4 +135,81 @@ class PlanningPromptConstraintTest {
                 "只改第三卷");
         assertThat(revision).doesNotContain("status 全部设为 PLANNED");
     }
+
+    @Test
+    void outlineRevisionPutsAuthorRequestBeforeLongContextAndChecksItAgainAtTheEnd() {
+        StoryBibleContent bible = new StoryBibleContent("故事", "主题", "世界", List.of(),
+                "主角", "弧光", List.of(), List.of(), "冲突", "代价", "风格", "结局", List.of(), List.of());
+        OutlineWordBudget budget = new OutlineWordBudget(120_000, 110_000, 130_000,
+                3, 40, 3_000, 2_400, 3_600);
+        OutlineContent selected = new OutlineContent("旧版", "前提", "结构", "节奏",
+                110_000, 130_000, List.of());
+        OutlineModelPromptFactory factory = new OutlineModelPromptFactory(new ObjectMapper());
+
+        String prompt = factory.userPrompt(bible, budget, selected, "只修改第三卷的结尾");
+
+        assertThat(prompt.indexOf("【作者本次要求（本轮修改重点）】"))
+                .isLessThan(prompt.indexOf("【已发布故事圣经（完整 JSON）】"));
+        assertThat(prompt.indexOf("只修改第三卷的结尾"))
+                .isLessThan(prompt.indexOf("选定的基准大纲："));
+        assertThat(factory.systemPrompt()).contains("先识别作者本次要求具体影响的卷、章节和字段");
+        assertThat(prompt).contains("逐条核对开头的作者本次要求是否落实",
+                "未受影响的卷章、因果顺序和 status 必须保持原样");
+        assertThat(prompt.lastIndexOf("逐条核对开头的作者本次要求是否落实"))
+                .isGreaterThan(prompt.indexOf("选定的基准大纲："));
+    }
+
+    @Test
+    void outlineDesignsOneThreeChapterArcOnlyUnderExplicitStrongOpeningPolicy() {
+        OutlineModelPromptFactory factory = new OutlineModelPromptFactory(new ObjectMapper());
+        String prompt = factory.userPrompt(craftBible(), craftBudget(), null,
+                "项目创作策略：FANQIE_GRIPPING；策略版本：1。偏向关系驱动。");
+
+        assertThat(prompt).contains("项目创作策略：FANQIE_GRIPPING；策略版本：1。偏向关系驱动。",
+                "【整份大纲的前三章短弧】", "第 1～3 章一起设计", "开场问题 -> 主角行动 -> 阻力与代价 -> 第一轮兑现 -> 更长线目标",
+                "第一章：", "第一次真实回报或不可逆变化", "第二章：", "回应第一章一个具体期待",
+                "第三章：", "用前两章已有铺垫", "明确已兑现与长期未兑现的承诺",
+                "目标、回报和钩子落到同一份大纲的现有章节字段", "不重复设定介绍、心理结论或同型冲突");
+    }
+
+    @Test
+    void standardOrMissingPolicyPreservesGenrePaceAndExistingOutputShape() {
+        OutlineModelPromptFactory factory = new OutlineModelPromptFactory(new ObjectMapper());
+        for (String instruction : List.of("项目创作策略：STANDARD；策略版本：1。保留慢热节奏。", "无")) {
+            String prompt = factory.userPrompt(craftBible(), craftBudget(), null, instruction);
+            assertThat(prompt).contains(instruction, "STANDARD 或未明确提供 FANQIE_GRIPPING",
+                    "不强制爽点或前三章强开篇", "按题材与作者节奏", "作者明确选择慢热文学叙事时保留该选择",
+                    "objective/coreEvent/reveal/endingHook", "承诺 / 铺垫依据 / 本章兑现 / 余波", "不增加输出字段",
+                    "起点、意图、阻力或信息差、行动、结束变化与重要依据", "安静章、压抑章和悲剧章不强制正向快感",
+                    "不设置反转、回报或钩子的硬配额", "关系确认", "悬疑公平揭示", "成长的选择与代价", "日常理解",
+                    "不新编人物能力、道具权限、信息来源或帮助方向", "不靠围观夸赞、反派降智、临时能力或巧合救场",
+                    "不连续重复同一铺垫、同型钩子或场景功能");
+        }
+    }
+
+    @Test
+    void strongOpeningPolicyCannotAutomaticallyRewriteUnaffectedOrOccurredMaterial() {
+        ChapterPlan occurred = new ChapterPlan(1, "已发生的选择", "主角", "原目标", "原事件",
+                "原揭示", "原钩子", 2400, 3600, ChapterPlanStatus.OCCURRED);
+        OutlineContent selected = new OutlineContent("旧大纲", "前提", "结构", "节奏", 110_000,
+                130_000, List.of(new OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果",
+                110_000, 130_000, List.of(occurred))));
+        String prompt = new OutlineModelPromptFactory(new ObjectMapper()).userPrompt(
+                craftBible(), craftBudget(), selected, "项目创作策略：FANQIE_GRIPPING。只调整第三卷结尾。");
+
+        assertThat(prompt).contains("只调整第三卷结尾", "\"status\" : \"OCCURRED\"", "原事件",
+                "从头规划或获授权调整前三章时", "不自动改写旧版未受影响大纲",
+                "不为统一格式改写旧字段", "仅切换 policy 不构成重写授权",
+                "OCCURRED 章节及已确认事实不得为开篇强度自动改写", "既有素材不足时指出限制交作者决定",
+                "未受影响的卷章、因果顺序和 status 必须保持原样");
+    }
+
+    private StoryBibleContent craftBible() {
+        return new StoryBibleContent("故事", "主题", "世界", List.of(), "主角", "弧光", List.of(),
+                List.of(), "冲突", "代价", "风格", "结局", List.of(), List.of());
+    }
+
+    private OutlineWordBudget craftBudget() {
+        return new OutlineWordBudget(120_000, 110_000, 130_000, 3, 40, 3_000, 2_400, 3_600);
+    }
 }

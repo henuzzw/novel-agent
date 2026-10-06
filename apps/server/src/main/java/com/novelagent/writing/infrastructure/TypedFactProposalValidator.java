@@ -41,15 +41,12 @@ final class TypedFactProposalValidator {
             case "EVENT_CREATE" -> {
                 required(first(payload.eventTitle(), fact.subject()), "事件标题");
                 required(first(payload.eventSummary(), fact.object()), "事件摘要");
-                required(payload.storyTime(), "故事时间");
-                if (payload.participants() == null) fail("事件参与者不能为空");
             }
             case "STATE_CHANGE" -> {
                 member(payload.stateEntityType(), Set.of("CHARACTER", "ITEM"), "状态实体类型");
                 required(first(payload.entityName(), fact.subject()), "状态实体名称");
                 member(payload.fieldKey(), STATE_FIELDS, "状态字段");
                 required(first(payload.afterValue(), fact.object()), "状态变化后的值");
-                required(payload.storyTime(), "状态变化故事时间");
                 uuid(payload.entityId(), "状态实体 ID");
             }
             case "RELATION_CHANGE" -> {

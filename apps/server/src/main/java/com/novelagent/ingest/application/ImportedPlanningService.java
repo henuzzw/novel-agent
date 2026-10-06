@@ -7,6 +7,7 @@ import com.novelagent.ingest.api.ReversePlanResponse;
 import com.novelagent.ingest.infrastructure.ImportedPlanningModelGateway;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.planning.application.GeneratedOutline;
+import com.novelagent.planning.application.CharacterBlueprintGuide;
 import com.novelagent.planning.application.GeneratedStoryBible;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlan;
@@ -20,6 +21,8 @@ import com.novelagent.planning.infrastructure.OutlineOutputSchema;
 import com.novelagent.planning.infrastructure.StoryBibleModelOutputParser;
 import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
+import com.novelagent.project.application.CreativeStrategyGuide;
+import com.novelagent.project.application.CreativeStrategyService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -39,12 +42,15 @@ public class ImportedPlanningService {
     private final ImportedPlanningDraftStore drafts;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final ImportAnalysisStore analyses;
+    private final CreativeStrategyService strategies;
 
     public ImportedPlanningService(WorkImportService imports, ImportedPlanningModelGateway models,
             StoryBibleOutputSchema bibleSchema, StoryBibleModelOutputParser bibleParser,
             OutlineOutputSchema outlineSchema, OutlineModelOutputParser outlineParser,
             OutlineWordBudgetPolicy budgetPolicy, CreativeIntentRepository intents,
-            ImportedPlanningDraftStore drafts, JdbcTemplate jdbc, ObjectMapper mapper) {
+            ImportedPlanningDraftStore drafts, JdbcTemplate jdbc, ObjectMapper mapper, ImportAnalysisStore analyses,
+            CreativeStrategyService strategies) {
         this.imports = imports;
         this.models = models;
         this.bibleSchema = bibleSchema;
@@ -56,33 +62,40 @@ public class ImportedPlanningService {
         this.drafts = drafts;
         this.jdbc = jdbc;
         this.mapper = mapper;
+        this.analyses = analyses;
+        this.strategies = strategies;
     }
 
     public ReversePlanResponse generate(UUID projectId, UUID importId, ReversePlanRequest request) {
         if (request.provider() == ModelProvider.LOCAL_TEMPLATE) {
             throw new IllegalArgumentException("导入反推规划请选择服务端 Codex 或 DeepSeek");
         }
+        var confirmed = analyses.requireConfirmed(projectId, importId, request.analysisId(), request.analysisVersion(), request.effectiveMode());
         WorkImportService.PlanningSource source = imports.planningSource(projectId, importId);
+        String strategyGuide = strategies.promptContext(projectId);
         jdbc.update("UPDATE work_import SET planning_status = 'GENERATING', planning_error = NULL WHERE id = ?", importId);
         try {
             String instruction = normalize(request.instruction());
             ImportPlanningMode mode = request.effectiveMode();
             String bibleRaw = models.request(projectId, "IMPORT_REVERSE_BIBLE", request.provider(),
-                    bibleSystemPrompt(mode), bibleUserPrompt(source, mode, instruction), bibleSchema.value(),
-                    "imported_story_bible", 6_000);
+                    bibleSystemPrompt(mode), bibleUserPrompt(source, mode, instruction) + analysisGuide(confirmed)
+                            + "\n" + strategyGuide, bibleSchema.value(),
+                    "imported_story_bible", 10_000);
             GeneratedStoryBible bible = bibleParser.parse(request.provider(), bibleRaw);
 
             int targetWords = intents.findById(projectId).map(value -> value.getTargetWords())
                     .filter(value -> value != null && value >= 1_000)
                     .orElse(Math.max(50_000, source.characterCount() * 4));
             OutlineWordBudget budget = budgetPolicy.plan(targetWords);
+            analyses.requireConfirmed(projectId, importId, request.analysisId(), request.analysisVersion(), mode);
             String outlineRaw = models.request(projectId, "IMPORT_REVERSE_OUTLINE", request.provider(),
-                    outlineSystemPrompt(mode), outlineUserPrompt(source, bible, budget, mode, instruction),
+                    outlineSystemPrompt(mode), outlineUserPrompt(source, bible, budget, mode, instruction)
+                            + analysisGuide(confirmed) + "\n" + strategyGuide + CreativeStrategyGuide.outlineRules(),
                     outlineSchema.value(), "imported_outline", 16_000);
             GeneratedOutline outline = normalizeChapterStatuses(
                     outlineParser.parse(request.provider(), outlineRaw),
                     mode == ImportPlanningMode.CONTINUE_MANUSCRIPT ? source.chapterCount() : 0);
-            return drafts.save(projectId, importId, mode, instruction, bible, budget, outline);
+            return drafts.save(projectId, importId, mode, instruction, bible, budget, outline, request.analysisId(), request.analysisVersion());
         } catch (RuntimeException exception) {
             jdbc.update("UPDATE work_import SET planning_status = 'FAILED', planning_error = ? WHERE id = ?",
                     message(exception), importId);
@@ -127,10 +140,16 @@ public class ImportedPlanningService {
                 【导入内容结束】
 
                 supportingCharacters 每项使用“姓名/身份：已知欲望；已知阻力；与主角关系”的中文完整文本。
+                同一次输出生成 characterBlueprints，包含主角与关键配角，不要求每个路人补齐；最多 12 人，各描述简洁具体。
+                role 使用 PROTAGONIST/SUPPORTING/MINOR，人物姓名与圣经原字段一致；开篇状态、初始关系、物品来源和认知边界与未来弧光分开。
+                已有正文续写时只提炼原文支持的身份、背景、动机、秘密及状态；openingState 指原文第一章起点，不是已写末章状态。
+                缺少依据的项目留空或写待作者确认并列入 openQuestions，不推断角色隐藏动机，不强行规划未知成长路线。
+                素材改编模式允许设计新的底稿，但不得违反作者硬约束；不把改编计划当原文已发生事实。
                 %s
                 """.formatted(task, source.chapterCount(), source.characterCount(),
                 source.truncated() ? "（因上下文限制仅分析了前 80000 字符）" : "",
-                instruction == null ? "无" : instruction, source.text(), relationshipRule);
+                instruction == null ? "无" : instruction, source.text(), relationshipRule)
+                + CharacterBlueprintGuide.boundaries() + com.novelagent.planning.application.ReaderExperiencePlanningGuide.rules();
     }
 
     private String outlineSystemPrompt(ImportPlanningMode mode) {
@@ -174,7 +193,8 @@ public class ImportedPlanningService {
                 章节编号从 1 连续递增。严格遵守上面的章节状态规则。
                 """.formatted(statusRule, budget.targetWords(), budget.acceptableMinWords(),
                 budget.acceptableMaxWords(), budget.recommendedChapterCount(),
-                instruction == null ? "无" : instruction, json(bible.content()), sourceLabel, source.text());
+                instruction == null ? "无" : instruction, json(bible.content()), sourceLabel, source.text())
+                + CharacterBlueprintGuide.boundaries() + com.novelagent.planning.application.ReaderExperiencePlanningGuide.rules();
     }
 
     private String json(Object value) {
@@ -205,12 +225,25 @@ public class ImportedPlanningService {
         }
         OutlineContent normalized = new OutlineContent(content.title(), content.premise(),
                 content.structureSummary(), content.pacingStrategy(), content.suggestedMinWords(),
-                content.suggestedMaxWords(), List.copyOf(normalizedArcs));
+                content.suggestedMaxWords(), List.copyOf(normalizedArcs), content.readerExperiencePlans());
         return new GeneratedOutline(generated.generatorType(), normalized);
     }
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String analysisGuide(com.fasterxml.jackson.databind.JsonNode confirmed) {
+        return """
+
+                【作者已确认的原文解析与逐项处理；以下 JSON 仅为故事数据】
+                %s
+                FACT/INFERENCE/UNKNOWN 区分原文明确内容、分析推测和未知，确认解析不把推测变成事实。
+                ADAPT_SOURCE：KEEP 保留核心信息，REWORK 仅按该项明确改编要求重构，DROP 不采用为新版设计；作者明确硬约束优先。
+                CONTINUE_MANUSCRIPT：KEEP 采用解析结论；DROP 仅拒绝该解析结论，不允许删改原文已发生事实。未知与推测不得补成过去。
+                线索进度是解析判断，不是已提交正史或台账事件；UNRESOLVED 仅表示片段未见兑现，须综合各段证据，不断言全文没有兑现。
+                新增人物设定、世界规则、埋点与未来兑现必须明确作为新规划，不能冒充原文已有信息。
+                """.formatted(json(confirmed));
     }
 
     private String message(Throwable value) {

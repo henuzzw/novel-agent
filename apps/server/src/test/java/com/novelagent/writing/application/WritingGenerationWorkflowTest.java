@@ -1,6 +1,7 @@
 package com.novelagent.writing.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
@@ -15,8 +16,10 @@ import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.domain.ChapterContractContent;
+import com.novelagent.writing.domain.ChapterContractReviewContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
+import com.novelagent.writing.domain.WritingStylePreviewContent;
 import com.novelagent.writing.infrastructure.WritingGenerationGateway;
 import java.util.List;
 import java.util.UUID;
@@ -36,13 +39,25 @@ class WritingGenerationWorkflowTest {
     @Test
     void runsContractGenerationThroughGraph() {
         ChapterContractContent generated = contract();
-        when(gateway.contract(any(), any(), any(), any(), any(), eq(ModelProvider.LOCAL_TEMPLATE), any()))
+        when(gateway.contract(any(), any(), any(), any(), any(), any(), eq(ModelProvider.LOCAL_TEMPLATE), any()))
                 .thenReturn(generated);
 
         ChapterContractContent result = workflow.generateContract(UUID.randomUUID(), bible(), arc(), chapter(),
-                memory(), ModelProvider.LOCAL_TEMPLATE, "增强冲突");
+                memory(), null, ModelProvider.LOCAL_TEMPLATE, "增强冲突");
 
         assertThat(result).isEqualTo(generated);
+    }
+
+    @Test
+    void passesSelectedContractThroughGraph() {
+        ChapterContractContent previous = contract();
+        when(gateway.contract(any(), any(), any(), any(), any(), eq(previous),
+                eq(ModelProvider.LOCAL_TEMPLATE), eq("微调"))).thenReturn(previous);
+
+        ChapterContractContent result = workflow.generateContract(UUID.randomUUID(), bible(), arc(), chapter(),
+                memory(), previous, ModelProvider.LOCAL_TEMPLATE, "微调");
+
+        assertThat(result).isEqualTo(previous);
     }
 
     @Test
@@ -56,6 +71,18 @@ class WritingGenerationWorkflowTest {
                 contract(), memory(), null, ModelProvider.LOCAL_TEMPLATE, null);
 
         assertThat(result).isEqualTo(generatedResult);
+    }
+
+    @Test
+    void runsIndependentContractReviewThroughGraph() {
+        ChapterContractReviewContent generated = new ChapterContractReviewContent("合同可执行", List.of());
+        when(gateway.contractReview(any(), any(), any(), any(), any(), any(),
+                eq(ModelProvider.LOCAL_TEMPLATE), eq("检查人物位置"))).thenReturn(generated);
+
+        ChapterContractReviewContent result = workflow.generateContractReview(UUID.randomUUID(), bible(), arc(),
+                chapter(), contract(), memory(), ModelProvider.LOCAL_TEMPLATE, "检查人物位置");
+
+        assertThat(result).isEqualTo(generated);
     }
 
     @Test
@@ -75,6 +102,24 @@ class WritingGenerationWorkflowTest {
     private StoryBibleContent bible() {
         return new StoryBibleContent("一句话故事", "主题", "世界", List.of("规则"), "主角", "成长",
                 List.of(), List.of(), "冲突", "代价", "风格", "结局", List.of(), List.of());
+    }
+
+    @Test
+    void runsIndependentPreviewWithExplicitStyleThroughGraph() {
+        var profile = WritingStylePresets.all().getFirst();
+        var generated = new WritingStylePreviewContent("试写", "她停在门口。");
+        when(gateway.stylePreview(any(), any(), any(), any(), eq(profile), eq(ModelProvider.LOCAL_TEMPLATE),
+                eq(800), eq("只写开场"))).thenReturn(generated);
+        assertThat(workflow.generateStylePreview(UUID.randomUUID(), bible(), arc(), chapter(), profile,
+                ModelProvider.LOCAL_TEMPLATE, 800, "只写开场")).isEqualTo(generated);
+    }
+
+    @Test
+    void rejectsInvalidPreviewBudgetThroughGraph() {
+        assertThatThrownBy(() -> workflow.generateStylePreview(UUID.randomUUID(), bible(), arc(), chapter(),
+                WritingStylePresets.all().getFirst(), ModelProvider.LOCAL_TEMPLATE, 200, null))
+                .hasStackTraceContaining("300 至 1500");
+        org.mockito.Mockito.verifyNoInteractions(gateway);
     }
 
     private ChapterPlan chapter() {

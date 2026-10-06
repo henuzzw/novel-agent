@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
-import { ArrowLeft, BookOpen, FileText, Lightbulb, Upload } from 'lucide-vue-next'
+import { ArrowLeft, BookOpen, FileText, Lightbulb, Sparkles, Upload } from 'lucide-vue-next'
 import { computed, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { createProject, type CreateProjectInput, type EntryMode } from '@/api/projects'
+import { createProject, type CreativeStrategy, type CreateProjectInput, type EntryMode } from '@/api/projects'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +17,7 @@ const initialMode = ['IDEA', 'MANUSCRIPT', 'MATERIALS'].includes(String(route.qu
 const form = reactive({
   name: '',
   entryMode: initialMode,
+  creativeStrategy: 'STANDARD' as CreativeStrategy,
   premise: '',
   genresText: '青春校园',
   protagonistBrief: '',
@@ -67,6 +68,7 @@ function submit() {
   const input: CreateProjectInput = {
     name: form.name.trim(),
     entryMode: form.entryMode,
+    creativeStrategy: form.creativeStrategy,
   }
 
   if (isIdeaMode.value) {
@@ -117,6 +119,20 @@ function submit() {
         </label>
       </fieldset>
 
+      <fieldset class="form-section">
+        <legend>创作策略</legend>
+        <div class="creative-strategy-segment" role="radiogroup" aria-label="创作策略">
+          <label :class="{ selected: form.creativeStrategy === 'STANDARD' }">
+            <input v-model="form.creativeStrategy" type="radio" name="creative-strategy" value="STANDARD" :disabled="createMutation.isPending.value" />
+            <BookOpen :size="18" aria-hidden="true" /><span>标准创作</span>
+          </label>
+          <label :class="{ selected: form.creativeStrategy === 'FANQIE_GRIPPING' }">
+            <input v-model="form.creativeStrategy" type="radio" name="creative-strategy" value="FANQIE_GRIPPING" :disabled="createMutation.isPending.value" />
+            <Sparkles :size="18" aria-hidden="true" /><span>番茄强开篇</span>
+          </label>
+        </div>
+      </fieldset>
+
       <fieldset v-if="isIdeaMode" class="form-section">
         <legend>创作意图</legend>
         <label class="field full-span">
@@ -161,3 +177,14 @@ function submit() {
     </form>
   </section>
 </template>
+
+<style scoped>
+.creative-strategy-segment { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.creative-strategy-segment label { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1px solid #cbd2d9; border-radius: 4px; cursor: pointer; }
+.creative-strategy-segment label.selected { border-color: #176b63; background: #f3faf8; }
+.creative-strategy-segment label:focus-within { outline: 2px solid #176b63; outline-offset: 2px; }
+.creative-strategy-segment input { width: auto; margin: 0; accent-color: #176b63; }
+.creative-strategy-segment svg { flex-shrink: 0; }
+.creative-strategy-segment span { overflow-wrap: anywhere; }
+@media (max-width: 480px) { .creative-strategy-segment { grid-template-columns: 1fr; } }
+</style>

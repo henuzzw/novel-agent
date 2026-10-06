@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
+import GenerationStatusPanel from '@/components/GenerationStatusPanel.vue'
+import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
   Activity,
@@ -25,7 +28,6 @@ import {
   getLatestStoryDirections,
   selectStoryDirection,
   type GenerationMode,
-  type ModelProvider,
   type StoryDirectionSet,
 } from '@/api/planning'
 import { getProject, updateCreativeIntent, type CreativeIntentInput, type ProjectSummary } from '@/api/projects'
@@ -37,15 +39,28 @@ import StoryMaterialsPanel from '@/components/StoryMaterialsPanel.vue'
 import WorkImportPanel from '@/components/WorkImportPanel.vue'
 import AgentRunPanel from '@/components/AgentRunPanel.vue'
 import WritingWorkbench from '@/components/WritingWorkbench.vue'
+import WritingStylePanel from '@/components/WritingStylePanel.vue'
+import ProjectSettingsPanel from '@/components/ProjectSettingsPanel.vue'
+import ReaderExperiencePanel from '@/components/ReaderExperiencePanel.vue'
+import BookScanPanel from '@/components/BookScanPanel.vue'
+import CreationPreparationPanel from '@/components/CreationPreparationPanel.vue'
+import type { AutomationChapterTarget } from '@/api/automation'
 
 const props = defineProps<{ projectId: string }>()
+const generationBusy = ref(false)
 const queryClient = useQueryClient()
-const activeSection = ref<'writing' | 'outline' | 'materials' | 'relations' | 'imports' | 'runs'>('outline')
+const automationTarget = ref<AutomationChapterTarget | null>(null)
+watch(() => props.projectId, () => { automationTarget.value = null })
+function openAutomationChapter(target: AutomationChapterTarget) {
+  automationTarget.value = target
+  activeSection.value = 'writing'
+}
+const activeSection = ref<'writing' | 'outline' | 'materials' | 'experience' | 'relations' | 'imports' | 'runs' | 'settings'>('outline')
 const sectionInitialized = ref(false)
-const planningView = ref<'directions' | 'bible' | 'outline'>('directions')
+const planningView = ref<'directions' | 'bible' | 'outline' | 'style' | 'preparation'>('directions')
 const selectedCandidateId = ref<string | null>(null)
 const instruction = ref('')
-const modelProvider = ref<ModelProvider>('LOCAL_CODEX')
+const { provider: modelProvider } = useGlobalModelSettings()
 const generationMode = ref<GenerationMode>('REVISE')
 const actionError = ref('')
 const prefillNotice = ref('')
@@ -122,10 +137,11 @@ const navigation = [
   { value: 'writing', label: '写作', icon: PenLine, disabled: false },
   { value: 'outline', label: '大纲', icon: ListTree, disabled: false },
   { value: 'materials', label: '故事资料', icon: BookOpen, disabled: false },
+  { value: 'experience', label: '伏笔与承诺', icon: GitBranch, disabled: false },
   { value: 'relations', label: '关系', icon: Share2, disabled: false },
   { value: 'imports', label: '导入', icon: Upload, disabled: false },
   { value: 'runs', label: '任务', icon: Activity, disabled: false },
-  { value: 'settings', label: '设置', icon: Settings, disabled: true },
+  { value: 'settings', label: '设置', icon: Settings, disabled: false },
 ] as const
 
 function formatWords(value: number) {
@@ -319,20 +335,29 @@ const selectMutation = useMutation({
           <span class="eyebrow">正史 v{{ projectQuery.data.value?.currentCanonVersion }}</span>
           <h1>{{ projectQuery.data.value?.name }}</h1>
         </div>
-        <span class="save-status">已保存</span>
+        <span class="save-status">{{ generationBusy ? '生成请求中' : '已保存' }}</span>
       </header>
 
-      <WritingWorkbench v-if="activeSection === 'writing'" :project-id="projectId" />
-      <StoryMaterialsPanel v-else-if="activeSection === 'materials'" :project-id="projectId" />
+      <GenerationStatusPanel :key="projectId" :project-id="projectId" @busy="generationBusy = $event" @open-tasks="activeSection = 'runs'" />
+
+      <WritingWorkbench v-if="activeSection === 'writing'" :project-id="projectId" :initial-target="automationTarget" />
+      <StoryMaterialsPanel v-else-if="activeSection === 'materials'" :key="projectId" :project-id="projectId" @open-bible="activeSection = 'outline'; planningView = 'bible'" />
+      <div v-else-if="activeSection === 'experience'" :key="projectId">
+        <ReaderExperiencePanel :project-id="projectId" />
+        <BookScanPanel :project-id="projectId" />
+      </div>
       <RelationshipPanel v-else-if="activeSection === 'relations'" :project-id="projectId" />
       <WorkImportPanel v-else-if="activeSection === 'imports'" :project-id="projectId" @planning-generated="activeSection = 'outline'; planningView = 'outline'" />
-      <AgentRunPanel v-else-if="activeSection === 'runs'" :project-id="projectId" />
+      <AgentRunPanel v-else-if="activeSection === 'runs'" :project-id="projectId" @open-chapter="openAutomationChapter" />
+      <ProjectSettingsPanel v-else-if="activeSection === 'settings'" :project-id="projectId" />
 
       <div v-else class="direction-workbench">
         <div class="planning-tabs" role="tablist" aria-label="故事规划步骤">
           <button type="button" :class="{ active: planningView === 'directions' }" @click="planningView = 'directions'"><ListTree :size="16" />故事方向</button>
           <button type="button" :class="{ active: planningView === 'bible' }" @click="planningView = 'bible'"><ScrollText :size="16" />故事圣经</button>
           <button type="button" :class="{ active: planningView === 'outline' }" @click="planningView = 'outline'"><GitBranch :size="16" />分层大纲</button>
+          <button type="button" :class="{ active: planningView === 'style' }" @click="planningView = 'style'"><PenLine :size="16" />风格试写</button>
+          <button type="button" :class="{ active: planningView === 'preparation' }" @click="planningView = 'preparation'"><Sparkles :size="16" />创作准备</button>
         </div>
         <div v-if="planningView === 'directions'">
         <div class="section-heading">
@@ -434,7 +459,7 @@ const selectMutation = useMutation({
             <label class="field full-span"><span>本次生成要求（可选）</span><textarea v-model="instruction" rows="2" maxlength="1000" placeholder="例如：减少悬疑，更突出人物成长" /></label>
           </div>
           <div class="intent-setup-actions">
-            <label class="provider-field"><span>生成模型</span><select v-model="modelProvider"><option value="LOCAL_CODEX">服务端 Codex</option><option value="DEEPSEEK">DeepSeek</option><option value="LOCAL_TEMPLATE">本地模板</option></select></label>
+            <GlobalModelBadge />
             <button class="button primary" type="submit" :disabled="setupAndGenerateMutation.isPending.value"><Sparkles :size="16" />{{ setupAndGenerateMutation.isPending.value ? '正在保存并生成…' : '保存并生成故事方向' }}</button>
           </div>
         </form>
@@ -499,11 +524,7 @@ const selectMutation = useMutation({
           </label>
           <label class="provider-field">
             <span>生成模型</span>
-            <select v-model="modelProvider">
-              <option value="LOCAL_CODEX">服务端 Codex</option>
-              <option value="DEEPSEEK">DeepSeek</option>
-              <option value="LOCAL_TEMPLATE">本地模板</option>
-            </select>
+            <GlobalModelBadge />
           </label>
           <div class="direction-action-buttons">
             <button
@@ -546,7 +567,9 @@ const selectMutation = useMutation({
         </p>
         </div>
         <StoryBiblePanel v-else-if="planningView === 'bible'" :project-id="projectId" />
-        <OutlinePanel v-else :project-id="projectId" />
+        <OutlinePanel v-else-if="planningView === 'outline'" :project-id="projectId" @choose-style="planningView = 'style'" />
+        <CreationPreparationPanel v-else-if="planningView === 'preparation'" :project-id="projectId" @outline-created="planningView = 'outline'" />
+        <WritingStylePanel v-else :project-id="projectId" />
       </div>
     </section>
   </div>

@@ -2,16 +2,94 @@ package com.novelagent.ingest.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.ingest.api.ReversePlanRequest;
+import com.novelagent.ingest.domain.ImportPlanningMode;
+import com.novelagent.ingest.infrastructure.ImportedPlanningModelGateway;
 import com.novelagent.planning.application.GeneratedOutline;
+import com.novelagent.planning.application.GeneratedStoryBible;
+import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
+import com.novelagent.planning.domain.OutlineWordBudgetPolicy;
+import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.planning.infrastructure.OutlineModelOutputParser;
+import com.novelagent.planning.infrastructure.OutlineOutputSchema;
+import com.novelagent.planning.infrastructure.StoryBibleModelOutputParser;
+import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
+import com.novelagent.project.application.CreativeStrategyGuide;
+import com.novelagent.project.application.CreativeStrategyService;
+import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class ImportedPlanningServiceTest {
+    @ParameterizedTest
+    @EnumSource(ImportPlanningMode.class)
+    void importPlanningReceivesSelectedStrategyWithoutRewritingOccurredChapters(ImportPlanningMode mode) {
+        var project = UUID.randomUUID();
+        var importId = UUID.randomUUID();
+        var analysisId = UUID.randomUUID();
+        var mapper = new ObjectMapper();
+        var imports = mock(WorkImportService.class);
+        var models = mock(ImportedPlanningModelGateway.class);
+        var bibleParser = mock(StoryBibleModelOutputParser.class);
+        var outlineParser = mock(OutlineModelOutputParser.class);
+        var intents = mock(CreativeIntentRepository.class);
+        var analyses = mock(ImportAnalysisStore.class);
+        var strategies = mock(CreativeStrategyService.class);
+        var drafts = mock(ImportedPlanningDraftStore.class);
+        var service = new ImportedPlanningService(imports, models, new StoryBibleOutputSchema(mapper), bibleParser,
+                new OutlineOutputSchema(mapper), outlineParser, new OutlineWordBudgetPolicy(), intents, drafts,
+                mock(JdbcTemplate.class), mapper, analyses, strategies);
+        String guide = CreativeStrategyGuide.render(CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING));
+        when(strategies.promptContext(project)).thenReturn(guide);
+        when(analyses.requireConfirmed(project, importId, analysisId, 1L, mode)).thenReturn(mapper.createObjectNode());
+        when(imports.planningSource(project, importId)).thenReturn(new WorkImportService.PlanningSource("原文内容", 1, 4, false));
+        when(intents.findById(project)).thenReturn(Optional.empty());
+        when(models.request(eq(project), eq("IMPORT_REVERSE_BIBLE"), eq(ModelProvider.DEEPSEEK),
+                anyString(), anyString(), any(), eq("imported_story_bible"), eq(10000))).thenReturn("bible");
+        when(models.request(eq(project), eq("IMPORT_REVERSE_OUTLINE"), eq(ModelProvider.DEEPSEEK),
+                anyString(), anyString(), any(), eq("imported_outline"), eq(16000))).thenReturn("outline");
+        var bible = new GeneratedStoryBible("TEST", new StoryBibleContent("故事", "主题", "世界", List.of(),
+                "主角", "弧光", List.of(), List.of(), "冲突", "代价", "风格", "结局", List.of(), List.of()));
+        when(bibleParser.parse(ModelProvider.DEEPSEEK, "bible")).thenReturn(bible);
+        when(outlineParser.parse(ModelProvider.DEEPSEEK, "outline")).thenReturn(outline(3));
+
+        service.generate(project, importId, new ReversePlanRequest(ModelProvider.DEEPSEEK, mode, null, analysisId, 1L));
+
+        var biblePrompt = ArgumentCaptor.forClass(String.class);
+        var outlinePrompt = ArgumentCaptor.forClass(String.class);
+        verify(models).request(eq(project), eq("IMPORT_REVERSE_BIBLE"), eq(ModelProvider.DEEPSEEK),
+                anyString(), biblePrompt.capture(), any(), eq("imported_story_bible"), eq(10000));
+        verify(models).request(eq(project), eq("IMPORT_REVERSE_OUTLINE"), eq(ModelProvider.DEEPSEEK),
+                anyString(), outlinePrompt.capture(), any(), eq("imported_outline"), eq(16000));
+        assertThat(biblePrompt.getValue()).contains(guide);
+        assertThat(outlinePrompt.getValue()).contains(guide, CreativeStrategyGuide.outlineRules());
+        var saved = ArgumentCaptor.forClass(GeneratedOutline.class);
+        verify(drafts).save(eq(project), eq(importId), eq(mode), eq(null), eq(bible), any(), saved.capture(),
+                eq(analysisId), eq(1L));
+        assertThat(saved.getValue().content().arcs().getFirst().chapters().getFirst().status())
+                .isEqualTo(mode == ImportPlanningMode.CONTINUE_MANUSCRIPT ? ChapterPlanStatus.OCCURRED : ChapterPlanStatus.PLANNED);
+    }
+
     @Test
     void deterministicallySeparatesOccurredAndPlannedChapters() {
         GeneratedOutline normalized = ImportedPlanningService.normalizeChapterStatuses(outline(3), 2);

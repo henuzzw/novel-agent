@@ -48,7 +48,7 @@ class OutlineServiceVersionSelectionTest {
     private final CurrentActorProvider actor = mock(CurrentActorProvider.class);
     private final CharacterNameService characterNames = mock(CharacterNameService.class);
     private final OutlineService service = new OutlineService(
-            projects, intents, bibles, outlines, budgetPolicy, workflow, actor, characterNames);
+            projects, intents, bibles, outlines, budgetPolicy, workflow, actor, characterNames, mock(PlanningMaterialSyncService.class));
 
     @BeforeEach
     void setUp() {
@@ -81,7 +81,7 @@ class OutlineServiceVersionSelectionTest {
         when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
         when(outlines.findByIdAndProjectId(older.getId(), projectId)).thenReturn(Optional.of(older));
         when(workflow.generate(eq(projectId), any(), eq(budget), eq(ModelProvider.LOCAL_TEMPLATE),
-                eq(older.getContent()), eq("突出人物性格")))
+                eq(older.getContent()), eq(strategyInstruction("突出人物性格"))))
                 .thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", resultContent, List.of("强化性格")));
 
         var result = service.generate(projectId, new GenerateOutlineRequest(
@@ -92,7 +92,7 @@ class OutlineServiceVersionSelectionTest {
         assertThat(result.baseOutlineVersionId()).isEqualTo(older.getId());
         assertThat(result.content().title()).isEqualTo("基于旧版微调");
         verify(workflow).generate(eq(projectId), any(), eq(budget), eq(ModelProvider.LOCAL_TEMPLATE),
-                eq(older.getContent()), eq("突出人物性格"));
+                eq(older.getContent()), eq(strategyInstruction("突出人物性格")));
     }
 
     @Test
@@ -100,7 +100,7 @@ class OutlineServiceVersionSelectionTest {
         OutlineVersion latest = version(3, "最新草稿");
         when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
         when(workflow.generate(eq(projectId), any(), eq(budget), eq(ModelProvider.LOCAL_TEMPLATE),
-                eq(latest.getContent()), eq(null)))
+                eq(latest.getContent()), eq(strategyInstruction(null))))
                 .thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", content("微调结果")));
 
         var result = service.generate(projectId, new GenerateOutlineRequest(
@@ -122,7 +122,7 @@ class OutlineServiceVersionSelectionTest {
         when(characterNames.render(projectId, older.getContent(), OutlineContent.class)).thenReturn(renderedBase);
         when(characterNames.render(projectId, bibleContent(), StoryBibleContent.class)).thenReturn(renderedBible);
         when(workflow.generate(projectId, renderedBible, budget, ModelProvider.LOCAL_CODEX,
-                renderedBase, "微调"))
+                renderedBase, strategyInstruction("微调")))
                 .thenReturn(new GeneratedOutline("LOCAL_CODEX", renderedBase));
 
         var result = service.generate(projectId, new GenerateOutlineRequest(
@@ -130,7 +130,7 @@ class OutlineServiceVersionSelectionTest {
 
         assertThat(result.baseOutlineVersionId()).isEqualTo(older.getId());
         verify(workflow).generate(projectId, renderedBible, budget, ModelProvider.LOCAL_CODEX,
-                renderedBase, "微调");
+                renderedBase, strategyInstruction("微调"));
     }
 
     @Test
@@ -176,6 +176,13 @@ class OutlineServiceVersionSelectionTest {
     private OutlineVersion version(int number, String title) {
         return OutlineVersion.create(UUID.randomUUID(), projectId, number, "LOCAL_TEMPLATE", null,
                 bibleId, budget, content(title));
+    }
+
+    private static String strategyInstruction(String authorInstruction) {
+        return com.novelagent.project.application.CreativeStrategyGuide.render(
+                com.novelagent.project.domain.CreativeStrategyPolicy.of(
+                        com.novelagent.project.domain.CreativeStrategy.STANDARD))
+                + "\n作者本次要求：" + (authorInstruction == null ? "无" : authorInstruction);
     }
 
     private static OutlineContent content(String title) {

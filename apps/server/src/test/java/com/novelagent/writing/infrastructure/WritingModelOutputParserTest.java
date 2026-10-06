@@ -90,4 +90,37 @@ class WritingModelOutputParserTest {
         assertThat(review.factProposals()).hasSize(1);
         assertThat(review.factProposals().getFirst().subject()).isEqualTo("顾弦");
     }
+
+    @Test
+    void acceptsEventAndStateWithoutInventingStoryTime() {
+        String output = """
+                {
+                  "summary": "时间无法从正文确定", "issues": [],
+                  "factProposals": [
+                    {
+                      "id": "F1", "factType": "EVENT_CREATE", "subject": "许言川",
+                      "predicate": "翻找", "object": "旧相册", "evidence": "他翻出旧相册",
+                      "confidence": 0.9,
+                      "payload": {"eventTitle": "翻找旧相册", "eventSummary": "许言川翻找旧相册",
+                        "storyTime": null, "participants": null},
+                      "decision": "PENDING"
+                    },
+                    {
+                      "id": "F2", "factType": "STATE_CHANGE", "subject": "许言川",
+                      "predicate": "当前目标", "object": "找到纸条照片", "evidence": "他继续寻找照片",
+                      "confidence": 0.8,
+                      "payload": {"stateEntityType": "CHARACTER", "fieldKey": "character.current_goal",
+                        "storyTime": null},
+                      "decision": "PENDING"
+                    }
+                  ]
+                }
+                """;
+
+        var review = parser.review(output);
+
+        assertThat(review.factProposals()).hasSize(2);
+        assertThat(review.factProposals()).allSatisfy(fact ->
+                assertThat(fact.payload().storyTime()).isNull());
+    }
 }

@@ -19,6 +19,8 @@ import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.NovelProject;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.Optional;
@@ -37,14 +39,16 @@ public class OutlineService {
     private final OutlineGenerationWorkflow workflow;
     private final CurrentActorProvider actorProvider;
     private final CharacterNameService characterNames;
+    private final PlanningMaterialSyncService materials;
 
     public OutlineService(NovelProjectRepository projects, CreativeIntentRepository intents,
             StoryBibleVersionRepository bibles, OutlineVersionRepository outlines,
             OutlineWordBudgetPolicy budgetPolicy, OutlineGenerationWorkflow workflow,
-            CurrentActorProvider actorProvider, CharacterNameService characterNames) {
+            CurrentActorProvider actorProvider, CharacterNameService characterNames, PlanningMaterialSyncService materials) {
         this.projects = projects; this.intents = intents; this.bibles = bibles; this.outlines = outlines;
         this.budgetPolicy = budgetPolicy; this.workflow = workflow; this.actorProvider = actorProvider;
         this.characterNames = characterNames;
+        this.materials = materials;
     }
 
     public OutlineResponse generate(UUID projectId, GenerateOutlineRequest request) {
@@ -69,7 +73,8 @@ public class OutlineService {
         OutlineContent previousContent = base == null ? null
                 : characterNames.render(projectId, base.getContent(), OutlineContent.class);
         GeneratedOutline generated = workflow.generate(projectId, promptBible, budget, provider,
-                previousContent, normalize(request.instruction()));
+                previousContent, CreativeStrategyGuide.render(CreativeStrategyPolicy.from(project))
+                        + "\n作者本次要求：" + (normalize(request.instruction()) == null ? "无" : normalize(request.instruction())));
         int generation = latest
                 .map(value -> value.getGenerationNumber() + 1).orElse(1);
         OutlineVersion version = OutlineVersion.create(UUID.randomUUID(), projectId, generation,
@@ -126,6 +131,7 @@ public class OutlineService {
         version.publish();
         project.publishOutline(version.getId());
         projects.save(project);
+        materials.syncOutline(version);
         return response(outlines.saveAndFlush(version));
     }
 

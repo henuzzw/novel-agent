@@ -16,6 +16,8 @@ public class ManuscriptVersion {
     @Id private UUID id;
     @Column(name = "project_id", nullable = false) private UUID projectId;
     @Column(name = "source_contract_version_id", nullable = false) private UUID sourceContractVersionId;
+    @Column(name = "base_manuscript_version_id") private UUID baseManuscriptVersionId;
+    @Column(name = "source_review_version_id") private UUID sourceReviewVersionId;
     @Column(name = "chapter_number", nullable = false) private int chapterNumber;
     @Column(name = "version_number", nullable = false) private int versionNumber;
     @Column(name = "schema_version", nullable = false, length = 50) private String schemaVersion;
@@ -31,8 +33,10 @@ public class ManuscriptVersion {
 
     protected ManuscriptVersion() {}
     private ManuscriptVersion(UUID id, UUID projectId, UUID contractId, int chapterNumber, int versionNumber,
-            String generatorType, String instruction, ManuscriptContent content, List<String> changeSummary) {
+            String generatorType, String instruction, UUID baseManuscriptVersionId,
+            ManuscriptContent content, List<String> changeSummary) {
         this.id = id; this.projectId = projectId; this.sourceContractVersionId = contractId;
+        this.baseManuscriptVersionId = baseManuscriptVersionId;
         this.chapterNumber = chapterNumber; this.versionNumber = versionNumber; this.schemaVersion = "manuscript/1";
         this.status = ManuscriptStatus.DRAFT; this.generatorType = required(generatorType, "generatorType");
         this.authorInstruction = instruction; this.content = validate(content);
@@ -41,20 +45,30 @@ public class ManuscriptVersion {
     public static ManuscriptVersion create(UUID id, UUID projectId, UUID contractId, int chapterNumber,
             int versionNumber, String generatorType, String instruction, ManuscriptContent content) {
         return create(id, projectId, contractId, chapterNumber, versionNumber, generatorType, instruction,
-                content, List.of());
+                null, content, List.of());
     }
     public static ManuscriptVersion create(UUID id, UUID projectId, UUID contractId, int chapterNumber,
             int versionNumber, String generatorType, String instruction, ManuscriptContent content,
             List<String> changeSummary) {
+        return create(id, projectId, contractId, chapterNumber, versionNumber, generatorType, instruction,
+                null, content, changeSummary);
+    }
+    public static ManuscriptVersion create(UUID id, UUID projectId, UUID contractId, int chapterNumber,
+            int versionNumber, String generatorType, String instruction, UUID baseManuscriptVersionId,
+            ManuscriptContent content, List<String> changeSummary) {
         if (chapterNumber <= 0 || versionNumber <= 0) throw new IllegalArgumentException("章节号和版本号必须为正数");
         return new ManuscriptVersion(id, projectId, contractId, chapterNumber, versionNumber,
-                generatorType, instruction, content, changeSummary);
+                generatorType, instruction, baseManuscriptVersionId, content, changeSummary);
     }
     public void revise(ManuscriptContent value) {
         if (status == ManuscriptStatus.AUTHOR_ACCEPTED) throw new IllegalStateException("作者已确认的正文不能修改，请生成新版本");
         content = validate(value);
     }
     public void accept() { status = ManuscriptStatus.AUTHOR_ACCEPTED; }
+    public void linkReturnedReview(UUID reviewVersionId) {
+        if (sourceReviewVersionId != null) throw new IllegalStateException("正文已关联打回审稿");
+        sourceReviewVersionId = java.util.Objects.requireNonNull(reviewVersionId);
+    }
     private static ManuscriptContent validate(ManuscriptContent value) {
         if (value == null) throw new IllegalArgumentException("正文不能为空");
         required(value.title(), "title"); required(value.body(), "body"); required(value.summary(), "summary");
@@ -66,6 +80,8 @@ public class ManuscriptVersion {
     }
     public UUID getId() { return id; } public UUID getProjectId() { return projectId; }
     public UUID getSourceContractVersionId() { return sourceContractVersionId; }
+    public UUID getBaseManuscriptVersionId() { return baseManuscriptVersionId; }
+    public UUID getSourceReviewVersionId() { return sourceReviewVersionId; }
     public int getChapterNumber() { return chapterNumber; } public int getVersionNumber() { return versionNumber; }
     public String getSchemaVersion() { return schemaVersion; } public ManuscriptStatus getStatus() { return status; }
     public String getGeneratorType() { return generatorType; } public String getAuthorInstruction() { return authorInstruction; }

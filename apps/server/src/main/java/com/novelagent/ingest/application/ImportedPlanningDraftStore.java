@@ -21,17 +21,21 @@ class ImportedPlanningDraftStore {
     private final StoryBibleVersionRepository bibles;
     private final OutlineVersionRepository outlines;
     private final JdbcTemplate jdbc;
+    private final ImportAnalysisStore analyses;
 
     ImportedPlanningDraftStore(StoryBibleVersionRepository bibles, OutlineVersionRepository outlines,
-            JdbcTemplate jdbc) {
+            JdbcTemplate jdbc, ImportAnalysisStore analyses) {
         this.bibles = bibles;
         this.outlines = outlines;
         this.jdbc = jdbc;
+        this.analyses = analyses;
     }
 
     @Transactional
     ReversePlanResponse save(UUID projectId, UUID importId, ImportPlanningMode mode, String instruction,
-            GeneratedStoryBible generatedBible, OutlineWordBudget budget, GeneratedOutline generatedOutline) {
+            GeneratedStoryBible generatedBible, OutlineWordBudget budget, GeneratedOutline generatedOutline, UUID analysisId, Long analysisVersion) {
+        analyses.lock(projectId);
+        analyses.requireConfirmed(projectId, importId, analysisId, analysisVersion, mode);
         int bibleGeneration = bibles.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
                 .map(value -> value.getGenerationNumber() + 1).orElse(1);
         StoryBibleVersion bible = StoryBibleVersion.createFromImport(UUID.randomUUID(), projectId,
@@ -45,8 +49,8 @@ class ImportedPlanningDraftStore {
         outline = outlines.saveAndFlush(outline);
         jdbc.update("""
                 UPDATE work_import SET planning_status = 'GENERATED', planning_mode = ?, planning_error = NULL,
-                    generated_bible_version_id = ?, generated_outline_version_id = ? WHERE id = ?
-                """, mode.name(), bible.getId(), outline.getId(), importId);
+                    generated_bible_version_id = ?, generated_outline_version_id = ?, generated_analysis_id = ?, generated_analysis_version = ? WHERE id = ?
+                """, mode.name(), bible.getId(), outline.getId(), analysisId, analysisVersion, importId);
         return new ReversePlanResponse(StoryBibleResponse.from(bible), OutlineResponse.from(outline));
     }
 }

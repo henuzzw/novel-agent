@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.canon.api.CanonCommitResponse;
 import com.novelagent.canon.api.CommitCanonRequest;
+import com.novelagent.canon.api.ReplaceCanonRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.domain.OutboxEvent;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
@@ -65,11 +66,21 @@ public class CanonCommitService {
 
         CanonCommit existing = commits.findByReviewVersionId(request.reviewVersionId()).orElse(null);
         if (existing != null) {
-            return CanonCommitResponse.from(existing);
+            if (existing.isActive() && existing.getProjectId().equals(projectId)
+                    && existing.getChapterNumber() == chapterNumber) {
+                return CanonCommitResponse.from(existing);
+            }
+            throw new IllegalStateException("这份审稿对应的正史已失效，不能重复提交");
+        }
+        if (commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber)) {
+            throw new IllegalStateException("本章已提交正史，修订稿暂不能再次提交；需使用正史替换流程");
         }
 
         ChapterReviewVersion review = requireApprovedReview(projectId, chapterNumber, request.reviewVersionId());
         ManuscriptVersion manuscript = requireAcceptedManuscript(projectId, review.getSourceManuscriptVersionId());
+        if (manuscript.getChapterNumber() != chapterNumber) {
+            throw new IllegalArgumentException("审稿关联的正文不属于本章");
+        }
         List<FactProposal> acceptedFacts = acceptedFacts(review);
         long canonVersion = project.commitCanon(request.expectedCanonVersion());
 
@@ -78,6 +89,60 @@ public class CanonCommitService {
         outbox.save(createCanonCommittedEvent(projectId, chapterNumber, manuscript, commit, canonVersion));
         projects.save(project);
         return CanonCommitResponse.from(commit);
+    }
+
+    @Transactional
+    public CanonCommitResponse replace(UUID projectId, int chapterNumber, ReplaceCanonRequest request) {
+        NovelProject project = requireOwnedProject(projectId);
+        CanonCommit existingReviewCommit = commits.findByReviewVersionId(request.reviewVersionId()).orElse(null);
+        if (existingReviewCommit != null) {
+            if (existingReviewCommit.isActive()
+                    && existingReviewCommit.getProjectId().equals(projectId)
+                    && existingReviewCommit.getChapterNumber() == chapterNumber) {
+                return CanonCommitResponse.from(existingReviewCommit);
+            }
+            throw new IllegalStateException("这份审稿已用于旧版正史，请重新审稿");
+        }
+        CanonCommit previous = commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber)
+                .orElseThrow(() -> new IllegalStateException("本章尚无可替换的正史"));
+        if (!previous.getId().equals(request.expectedActiveCommitId())) {
+            throw new IllegalStateException("本章正史已变化，请刷新后重试");
+        }
+        if (commits.existsByProjectIdAndChapterNumberGreaterThanAndActiveTrue(projectId, chapterNumber)) {
+            throw new IllegalStateException("后续章节已有正史；请先处理后续章节依赖，暂不能替换本章");
+        }
+        ChapterReviewVersion review = requireApprovedReview(projectId, chapterNumber, request.reviewVersionId());
+        ManuscriptVersion manuscript = requireAcceptedManuscript(projectId, review.getSourceManuscriptVersionId());
+        if (manuscript.getChapterNumber() != chapterNumber) {
+            throw new IllegalArgumentException("审稿关联的正文不属于本章");
+        }
+        if (previous.getManuscriptVersionId().equals(manuscript.getId())) {
+            throw new IllegalStateException("替换正史必须使用重新确认并审稿的新版正文");
+        }
+        List<FactProposal> acceptedFacts = acceptedFacts(review);
+        long canonVersion = project.commitCanon(request.expectedCanonVersion());
+        UUID replacementId = UUID.randomUUID();
+        previous.supersede(replacementId);
+        commits.saveAndFlush(previous);
+        CanonCommit replacement = saveCommit(replacementId, projectId, chapterNumber, manuscript, review,
+                canonVersion, acceptedFacts);
+        typedCanon.retire(previous.getId(), canonVersion);
+        typedCanon.materialize(projectId, chapterNumber, replacement.getId(), canonVersion, acceptedFacts);
+        outbox.save(createCanonCommittedEvent(projectId, chapterNumber, manuscript, replacement, canonVersion));
+        projects.save(project);
+        return CanonCommitResponse.from(replacement);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasCommittedChapter(UUID projectId, int chapterNumber) {
+        requireOwnedProject(projectId);
+        return commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber);
+    }
+
+    @Transactional(readOnly = true)
+    public CanonCommit currentCommit(UUID projectId, int chapterNumber) {
+        requireOwnedProject(projectId);
+        return commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber).orElse(null);
     }
 
     private NovelProject requireOwnedProject(UUID projectId) {
@@ -117,8 +182,15 @@ public class CanonCommitService {
             ChapterReviewVersion review,
             long canonVersion,
             List<FactProposal> acceptedFacts) {
+        return saveCommit(UUID.randomUUID(), projectId, chapterNumber, manuscript, review,
+                canonVersion, acceptedFacts);
+    }
+
+    private CanonCommit saveCommit(UUID commitId, UUID projectId, int chapterNumber,
+            ManuscriptVersion manuscript, ChapterReviewVersion review, long canonVersion,
+            List<FactProposal> acceptedFacts) {
         CanonCommit commit = new CanonCommit(
-                UUID.randomUUID(),
+                commitId,
                 projectId,
                 chapterNumber,
                 manuscript.getId(),

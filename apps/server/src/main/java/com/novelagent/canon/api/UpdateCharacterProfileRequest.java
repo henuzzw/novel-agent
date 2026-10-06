@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Size;
 public record UpdateCharacterProfileRequest(
         @Size(max = 40) String gender,
         @Size(max = 100) String ageDescription,
-        @Size(max = 2000) String identity,
+        @Size(max = 3000) String identity,
         @Size(max = 3000) String appearance,
         @Size(max = 6000) String background,
         @Size(max = 4000) String externalPersonality,

@@ -6,15 +6,26 @@ import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.writing.domain.ChapterContractContent;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CharacterProfileService {
+    private static final Pattern ENTITY_REFERENCE = Pattern.compile(
+            "\\{\\{entity:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):(CANONICAL|NICKNAME|TITLE)}}");
+    private static final String KNOWLEDGE_BOUNDARY = "人物档案是作者侧设定参考，不代表视角人物已知信息；"
+            + "秘密、内在动机和人物弧光不得直接当作本章已发生事实或允许揭示的信息。"
+            + "叙述、对白与检查结论仍须遵守本章视角、正文证据及已提供的知识边界。\n";
     private final NovelProjectRepository projects;
     private final CurrentActorProvider actor;
     private final JdbcTemplate jdbc;
@@ -68,6 +79,117 @@ public class CharacterProfileService {
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId) {
         List<CharacterProfileResponse> profiles = rows(projectId).stream().filter(this::hasDetails).toList();
+        return renderProfiles(profiles);
+    }
+
+    @Transactional(readOnly = true)
+    public String promptContext(UUID projectId, String pov, Collection<UUID> relatedCharacterIds) {
+        return promptContext(projectId, pov, null, relatedCharacterIds);
+    }
+
+    @Transactional(readOnly = true)
+    public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
+            Collection<UUID> relatedCharacterIds) {
+        return promptContext(projectId, pov, contract, relatedCharacterIds, List.of());
+    }
+
+    @Transactional(readOnly = true)
+    public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
+            Collection<UUID> relatedCharacterIds, Collection<String> relatedReferences) {
+        requireOwnedProject(projectId);
+        Set<UUID> ids = new LinkedHashSet<>();
+        if (relatedCharacterIds != null) {
+            relatedCharacterIds.stream().filter(java.util.Objects::nonNull).forEach(ids::add);
+        }
+        List<String> references = new ArrayList<>();
+        references.add(pov);
+        if (contract != null) {
+            references.add(contract.pov());
+            references.add(contract.objective());
+            addReferences(references, contract.requiredBeats());
+            addReferences(references, contract.requiredReveals());
+            addReferences(references, contract.foreshadowActions());
+            references.add(contract.expectedExitState());
+            references.add(contract.hook());
+        }
+        addReferences(references, relatedReferences);
+        references = references.stream().filter(CharacterProfileService::hasText).distinct().toList();
+        if (references.isEmpty() && ids.isEmpty()) return "暂无本章相关人物档案";
+
+        List<CharacterReference> characters = characterReferences(projectId);
+        Set<UUID> activeIds = characters.stream().map(CharacterReference::id)
+                .collect(java.util.stream.Collectors.toSet());
+        boolean uncertain = !activeIds.containsAll(ids);
+        for (String reference : references) {
+            uncertain |= !resolveReference(reference, characters, ids);
+        }
+        if (uncertain) {
+            // Free prose has no authoritative participant list; guessing a partial list can drop key actors.
+            return KNOWLEDGE_BOUNDARY + "人物来源未能完全确定，回退到完整人物档案供核对；不表示所有人物都参与本章。\n"
+                    + renderProfiles(rows(projectId).stream().filter(this::hasDetails).toList());
+        }
+        ids.retainAll(activeIds);
+        if (ids.isEmpty()) return "暂无本章相关人物档案";
+        List<Object> params = new ArrayList<>();
+        params.add(projectId);
+        params.addAll(ids);
+        String selection = " AND e.id IN (" + String.join(",", java.util.Collections.nCopies(ids.size(), "?"))
+                + ") ORDER BY CASE WHEN e.role_key = 'PROTAGONIST' THEN 0 ELSE 1 END, e.role_key, e.canonical_name";
+        var profiles = jdbc.query(selectSql() + selection, (rs, number) -> map(rs), params.toArray())
+                .stream().filter(this::hasDetails).toList();
+        return profiles.isEmpty() ? "暂无本章相关人物档案" : KNOWLEDGE_BOUNDARY + renderProfiles(profiles);
+    }
+
+    private static void addReferences(List<String> target, Collection<String> references) {
+        if (references != null) target.addAll(references);
+    }
+
+    private boolean resolveReference(String reference, List<CharacterReference> characters, Set<UUID> ids) {
+        String remaining = reference.trim();
+        var matcher = ENTITY_REFERENCE.matcher(remaining);
+        boolean resolved = false;
+        while (matcher.find()) {
+            UUID id = UUID.fromString(matcher.group(1));
+            if (characters.stream().noneMatch(character -> character.id().equals(id))) return false;
+            ids.add(id);
+            resolved = true;
+        }
+        remaining = matcher.replaceAll(" ").trim();
+        // Only whole, delimited references are names. Unsegmented narrative requires the conservative fallback.
+        for (String part : remaining.split("[\\s,，、;；/()（）\\[\\]【】]+")) {
+            if (part.isBlank()) continue;
+            List<CharacterReference> matches = characters.stream().filter(character ->
+                    part.equals(character.id().toString()) || part.equals(character.roleKey())
+                            || character.names().contains(part)).toList();
+            if (matches.size() != 1) return false;
+            ids.add(matches.getFirst().id());
+            resolved = true;
+        }
+        return resolved;
+    }
+
+    private List<CharacterReference> characterReferences(UUID projectId) {
+        return jdbc.query("""
+                SELECT e.id, e.role_key, e.canonical_name, e.source_name, e.nickname, e.title_name,
+                       array_remove(array_agg(DISTINCT a.alias), NULL) AS aliases
+                FROM story_entity e
+                LEFT JOIN entity_alias a ON a.project_id = e.project_id AND a.entity_id = e.id
+                    AND a.canon_version_to IS NULL
+                WHERE e.project_id = ? AND e.entity_type = 'CHARACTER' AND e.canon_version_to IS NULL
+                GROUP BY e.id, e.role_key, e.canonical_name, e.source_name, e.nickname, e.title_name
+                """, (rs, number) -> {
+            List<String> forms = new ArrayList<>(Arrays.asList(rs.getString("canonical_name"),
+                    rs.getString("source_name"), rs.getString("nickname"), rs.getString("title_name")));
+            java.sql.Array aliases = rs.getArray("aliases");
+            if (aliases != null && aliases.getArray() instanceof String[] values) forms.addAll(Arrays.asList(values));
+            return new CharacterReference(rs.getObject("id", UUID.class), rs.getString("role_key"),
+                    forms.stream().filter(CharacterProfileService::hasText).map(String::trim).distinct().toList());
+        }, projectId);
+    }
+
+    private record CharacterReference(UUID id, String roleKey, List<String> names) { }
+
+    private String renderProfiles(List<CharacterProfileResponse> profiles) {
         if (profiles.isEmpty()) return "暂无单独配置的人物档案";
         StringBuilder result = new StringBuilder();
         for (CharacterProfileResponse profile : profiles) {

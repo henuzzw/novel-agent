@@ -42,10 +42,11 @@ public class ChapterReviewVersion {
                 generatorType, instruction, content);
     }
     public void revise(ChapterReviewContent value) {
-        if (status == ReviewStatus.APPROVED) throw new IllegalStateException("已确认的审稿结果不能修改");
+        if (status != ReviewStatus.DRAFT) throw new IllegalStateException("只有待处理审稿可以修改");
         content = validate(value);
     }
     public void approve() {
+        if (status != ReviewStatus.DRAFT) throw new IllegalStateException("只有待处理审稿可以确认");
         if (content.issues().stream().anyMatch(issue -> "BLOCKING".equals(issue.severity()) && !issue.resolved()))
             throw new IllegalArgumentException("仍有未解决的阻断问题");
         if (content.factProposals().stream().anyMatch(fact -> fact.decision() == FactDecision.PENDING))
@@ -55,6 +56,10 @@ public class ChapterReviewVersion {
                 .anyMatch(this::hasUnresolvedPronoun))
             throw new IllegalArgumentException("接受的候选事实仍有未解析的人物代词，请先选择具体实体");
         status = ReviewStatus.APPROVED;
+    }
+    public void returnForRewrite() {
+        if (status != ReviewStatus.DRAFT) throw new IllegalStateException("只有待处理审稿可以打回正文");
+        status = ReviewStatus.RETURNED;
     }
     private static ChapterReviewContent validate(ChapterReviewContent value) {
         if (value == null || value.summary() == null || value.summary().isBlank())
