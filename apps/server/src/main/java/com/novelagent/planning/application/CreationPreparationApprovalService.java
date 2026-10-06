@@ -14,6 +14,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 创作准备应用。
+ *
+ * <p>在作者确认后复核准备来源、检查报告并应用规划资料。必要的未来章调整另建大纲草稿，已发生章不可改写，正文事实关联还需显式确认。</p>
+ */
 @Service
 public class CreationPreparationApprovalService {
     private final CreationPreparationStore store;
@@ -26,6 +31,13 @@ public class CreationPreparationApprovalService {
         this.store = store; this.materials = materials; this.outlines = outlines; this.jdbc = jdbc; this.names = names;
     }
     public record Confirm(long version, boolean authorConfirmed, boolean acceptWarnings, List<Integer> selectedChapters) { }
+    /**
+     * 执行本模块明确的作者确认步骤，并核对必要来源、版本与状态；确认不替代其他阶段的发布或正史提交。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param input 本次结构化业务输入或确认命令。
+     */
     @Transactional
     public CreationPreparationStore.View confirm(UUID projectId, UUID id, Confirm input) {
         if (input == null || !input.authorConfirmed()) throw new IllegalArgumentException("请明确确认创作资料或复核报告");

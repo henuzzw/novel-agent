@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -31,11 +32,11 @@ public class OutlineGenerationWorkflow {
     }
 
     public GeneratedOutline generate(UUID projectId, StoryBibleContent bible, OutlineWordBudget budget,
-            ModelProvider provider, OutlineContent previousOutline, String instruction) {
+            ModelProvider provider, OutlineContent previousOutline, String instruction, CreativeStrategyPolicy policy) {
         OverAllState result = graph.invoke(Map.of("projectId", projectId.toString(), "bible", write(bible),
                         "budget", write(budget), "provider", provider.name(),
                         "previousOutline", previousOutline == null ? "" : write(previousOutline),
-                        "instruction", instruction == null ? "" : instruction))
+                        "instruction", instruction == null ? "" : instruction, "policy", write(policy)))
                 .orElseThrow(() -> new IllegalStateException("分层大纲 Agent 工作流未返回结果"));
         return read(required(result, "generated"), GeneratedOutline.class);
     }
@@ -58,6 +59,7 @@ public class OutlineGenerationWorkflow {
         OutlineWordBudget budget = read(required(state, "budget"), OutlineWordBudget.class);
         if (budget.acceptableMinWords() >= budget.acceptableMaxWords()) throw new IllegalArgumentException("字数区间无效");
         ModelProvider.valueOf(required(state, "provider"));
+        read(required(state, "policy"), CreativeStrategyPolicy.class);
         return Map.of();
     }
 
@@ -70,7 +72,8 @@ public class OutlineGenerationWorkflow {
         String previousJson = state.value("previousOutline", "");
         OutlineContent previousOutline = previousJson.isBlank() ? null : read(previousJson, OutlineContent.class);
         return Map.of("generated", write(registry.require(provider).generate(projectId, bible, budget,
-                previousOutline, instruction.isBlank() ? null : instruction)));
+                previousOutline, instruction.isBlank() ? null : instruction,
+                read(required(state, "policy"), CreativeStrategyPolicy.class))));
     }
 
     private Map<String, Object> validateOutput(OverAllState state) {

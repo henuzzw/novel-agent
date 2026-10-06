@@ -23,6 +23,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 故事圣经。
+ *
+ * <p>管理圣经版本生成、手动修订与发布，保持选定基准和作者授权范围。发布更新项目当前指针并同步人物、规划关系与明确台账；生成草稿不自动发布。</p>
+ */
 @Service
 public class StoryBibleService {
     private final NovelProjectRepository projectRepository;
@@ -45,6 +50,12 @@ public class StoryBibleService {
         this.materials = materials;
     }
 
+    /**
+     * 按创作意图和选中方向新生成圣经，或在明确基准版本上有限修订；模型前后复核主要依据，保存草稿供作者发布。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public StoryBibleResponse generate(UUID projectId, GenerateStoryBibleRequest request) {
         requireOwnedProject(projectId);
         StoryDirectionSet source = directionRepository
@@ -74,12 +85,24 @@ public class StoryBibleService {
         return response(bibleRepository.saveAndFlush(version));
     }
 
+    /**
+     * 读取最新保存结果；“最新”不自动表示已发布、已确认或已进入正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<StoryBibleResponse> latest(UUID projectId) {
         requireOwnedProject(projectId);
         return bibleRepository.findFirstByProjectIdOrderByGenerationNumberDesc(projectId).map(this::response);
     }
 
+    /**
+     * 读取项目当前已发布规划指针对应的版本，不能用最新草稿替代正式创作依据。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<StoryBibleResponse> current(UUID projectId) {
         var project = requireOwnedProject(projectId);
@@ -91,6 +114,12 @@ public class StoryBibleService {
         return Optional.of(response(bible));
     }
 
+    /**
+     * 按生成顺序返回历史版本摘要，供作者显式选择基准，不修改当前发布指针。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<StoryBibleVersionSummaryResponse> versions(UUID projectId) {
         requireOwnedProject(projectId);
@@ -100,12 +129,26 @@ public class StoryBibleService {
                 .toList();
     }
 
+    /**
+     * 读取指定版本并限定所属项目；版本 ID 与用于并发编辑的行版本是不同概念。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param versionId 所读取或操作的产物版本 ID。
+     */
     @Transactional(readOnly = true)
     public StoryBibleResponse version(UUID projectId, UUID versionId) {
         requireOwnedProject(projectId);
         return response(requireVersion(projectId, versionId));
     }
 
+    /**
+     * 保存作者提交的编辑内容，并遵循当前业务状态及预期版本约束；不隐式触发模型重新生成。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param versionId 所读取或操作的产物版本 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public StoryBibleResponse update(UUID projectId, UUID versionId, long expectedVersion, StoryBibleContent content) {
         requireOwnedProject(projectId);
@@ -118,6 +161,14 @@ public class StoryBibleService {
         return response(bibleRepository.saveAndFlush(version));
     }
 
+    /**
+     * 基于作者选定的已发布或确认来源创建可编辑修订草稿，保持原版本与来源关联，不调用模型。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param versionId 所读取或操作的产物版本 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public StoryBibleResponse createRevision(UUID projectId, UUID versionId, long expectedVersion,
             StoryBibleContent content) {
@@ -137,6 +188,13 @@ public class StoryBibleService {
         return response(bibleRepository.saveAndFlush(revision));
     }
 
+    /**
+     * 由作者显式发布指定规划版本，更新项目当前依据并执行该规划对应的资料同步；不提交正文正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param versionId 所读取或操作的产物版本 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     @Transactional
     public StoryBibleResponse publish(UUID projectId, UUID versionId, long expectedVersion) {
         NovelProject project = requireOwnedProject(projectId);

@@ -10,6 +10,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+/**
+ * 外部文本向量。
+ *
+ * <p>按兼容接口请求嵌入并检查响应维度。属于外部依赖调用，错误不能伪装为有效向量；模型与维度须匹配现有索引配置。</p>
+ */
 @Component
 @ConditionalOnProperty(name = "app.memory.embedding.provider", havingValue = "remote")
 public class OpenAiCompatibleEmbeddingService implements TextEmbeddingService {
@@ -32,16 +37,27 @@ public class OpenAiCompatibleEmbeddingService implements TextEmbeddingService {
         this.restClient = RestClient.builder().baseUrl(baseUrl).build();
     }
 
+    /**
+     * 返回本实现的向量维度，必须与索引及调用方配置一致。
+     */
     @Override
     public int dimensions() {
         return dimensions;
     }
 
+    /**
+     * 返回当前嵌入实现的模型标识，供索引来源与配置核对使用。
+     */
     @Override
     public String modelName() {
         return model + "-" + dimensions;
     }
 
+    /**
+     * 将输入文本转换为本实现的向量，并遵循配置维度；外部实现失败不能返回伪造的成功结果。
+     *
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     */
     @Override
     public float[] embed(String text) {
         if (apiKey == null || apiKey.isBlank()) {

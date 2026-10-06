@@ -5,21 +5,37 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+/**
+ * 本地文本向量。
+ *
+ * <p>用确定性的特征哈希构造本地向量，便于离线运行与流程测试。它不调用外部模型，不能等同于语言模型的语义嵌入质量。</p>
+ */
 @Component
 @ConditionalOnProperty(name = "app.memory.embedding.provider", havingValue = "local", matchIfMissing = true)
 public class LocalFeatureHashEmbeddingService implements TextEmbeddingService {
     private static final int DIMENSIONS = 1024;
 
+    /**
+     * 返回本实现的向量维度，必须与索引及调用方配置一致。
+     */
     @Override
     public int dimensions() {
         return DIMENSIONS;
     }
 
+    /**
+     * 返回当前嵌入实现的模型标识，供索引来源与配置核对使用。
+     */
     @Override
     public String modelName() {
         return "local-feature-hash-v2-1024";
     }
 
+    /**
+     * 将输入文本转换为本实现的向量，并遵循配置维度；外部实现失败不能返回伪造的成功结果。
+     *
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     */
     @Override
     public float[] embed(String text) {
         float[] vector = new float[DIMENSIONS];

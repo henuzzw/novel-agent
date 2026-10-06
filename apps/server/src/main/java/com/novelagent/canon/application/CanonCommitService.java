@@ -27,6 +27,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 正史提交。
+ *
+ * <p>在同一事务中保存正史提交、物化作者接受的候选事实并写入 Outbox。正文必须由作者确认、审稿必须通过；只提交 ACCEPTED 事实，图谱及向量更新由异步消费者完成。</p>
+ */
 @Service
 public class CanonCommitService {
     private final NovelProjectRepository projects;
@@ -60,6 +65,13 @@ public class CanonCommitService {
         this.topic = topic;
     }
 
+    /**
+     * 把作者确认正文和已确认审稿中接受的事实提交正史，校验预期正史版本；同一有效审稿提交可幂等返回。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     @Transactional
     public CanonCommitResponse commit(UUID projectId, int chapterNumber, CommitCanonRequest request) {
         NovelProject project = requireOwnedProject(projectId);
@@ -91,6 +103,13 @@ public class CanonCommitService {
         return CanonCommitResponse.from(commit);
     }
 
+    /**
+     * 显式替换本章有效正史，要求新的确认正文、审稿及匹配的当前提交；后续章已有正史时拒绝直接替换。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     @Transactional
     public CanonCommitResponse replace(UUID projectId, int chapterNumber, ReplaceCanonRequest request) {
         NovelProject project = requireOwnedProject(projectId);
@@ -133,12 +152,24 @@ public class CanonCommitService {
         return CanonCommitResponse.from(replacement);
     }
 
+    /**
+     * 判断指定章节是否存在 active 正史提交，不把确认正文或失效历史提交计为当前正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     */
     @Transactional(readOnly = true)
     public boolean hasCommittedChapter(UUID projectId, int chapterNumber) {
         requireOwnedProject(projectId);
         return commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber);
     }
 
+    /**
+     * 返回指定章节当前 active 正史提交；尚未提交时返回 null，查询本身不推进版本。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     */
     @Transactional(readOnly = true)
     public CanonCommit currentCommit(UUID projectId, int chapterNumber) {
         requireOwnedProject(projectId);
@@ -151,6 +182,13 @@ public class CanonCommitService {
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
     }
 
+    /**
+     * 限定项目与章号并要求审稿 APPROVED，不能以其他章或未确认报告提交事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param reviewVersionId 作者确认的审稿版本 ID。
+     */
     private ChapterReviewVersion requireApprovedReview(UUID projectId, int chapterNumber, UUID reviewVersionId) {
         ChapterReviewVersion review = reviews.findByIdAndProjectId(reviewVersionId, projectId)
                 .orElseThrow(() -> new IllegalArgumentException("审稿版本不存在"));
@@ -160,6 +198,12 @@ public class CanonCommitService {
         return review;
     }
 
+    /**
+     * 要求审稿引用的正文属于本项目且为 AUTHOR_ACCEPTED，不从任意最新草稿抽取正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param manuscriptVersionId 正文版本 ID，作为审稿或正史提交的明确来源。
+     */
     private ManuscriptVersion requireAcceptedManuscript(UUID projectId, UUID manuscriptVersionId) {
         ManuscriptVersion manuscript = manuscripts.findByIdAndProjectId(manuscriptVersionId, projectId)
                 .orElseThrow(() -> new IllegalArgumentException("审稿关联正文不存在"));
@@ -169,6 +213,12 @@ public class CanonCommitService {
         return manuscript;
     }
 
+    /**
+     * 只筛选作者将 decision 标为 ACCEPTED 的候选事实，未决定和拒绝项不进入正史物化。
+     *
+     * @param review 已读取的审稿或检查记录，使用前仍需核对状态与来源。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     private List<FactProposal> acceptedFacts(ChapterReviewVersion review) {
         return review.getContent().factProposals().stream()
                 .filter(fact -> fact.decision() == FactDecision.ACCEPTED)
@@ -200,6 +250,15 @@ public class CanonCommitService {
         return commits.saveAndFlush(commit);
     }
 
+    /**
+     * 构造与正史提交同事务保存的 Outbox 事件，仅携带稳定来源标识；Kafka 实际发送由发布器负责。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param manuscript 已读取的正文版本，确认状态与有效正史状态分别判断。
+     * @param commit 已保存的正史提交，包含投影来源及版本水位。
+     * @param canonVersion 有效正史版本水位，与记录行版本不同。
+     */
     private OutboxEvent createCanonCommittedEvent(
             UUID projectId,
             int chapterNumber,

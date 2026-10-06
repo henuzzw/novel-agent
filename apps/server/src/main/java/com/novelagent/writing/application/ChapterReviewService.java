@@ -34,6 +34,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/**
+ * 章节审稿。
+ *
+ * <p>检查作者确认正文并提出候选事实，维护审稿修改、确认及返工。事实是否进入正史仍由作者选择并另行提交，返工创建新草稿，不覆盖确认原稿。</p>
+ */
 @Service
 public class ChapterReviewService {
     private final WritingContextService contexts;
@@ -62,6 +67,15 @@ public class ChapterReviewService {
         this.transactions = transactions;
     }
 
+    /**
+     * 基于审稿所引用的正文及作者选定建议生成返工草稿，保留原确认稿；修改范围服从作者授权。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param reviewId 作为修订或提交依据的审稿版本 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public ManuscriptResponse returnReviewToWriting(UUID projectId, int chapterNumber, UUID reviewId,
             long expectedVersion, ReturnReviewRequest request) {
         contexts.requireOwnedProject(projectId);
@@ -136,6 +150,13 @@ public class ChapterReviewService {
         return feedback.toString();
     }
 
+    /**
+     * 读取本章最新审稿结果，实际正史提交仍要求报告与确认正文匹配并经作者确认。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<ChapterReviewResponse> latestReview(UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
@@ -143,6 +164,13 @@ public class ChapterReviewService {
                 .map(ChapterReviewResponse::from);
     }
 
+    /**
+     * 审查作者确认正文的一致性并提取候选事实，报告保存后由作者处理问题及事实决定，不自动提交正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public ChapterReviewResponse generateReview(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
         WritingContextService.Context context = contexts.context(projectId, chapterNumber);
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
@@ -166,6 +194,14 @@ public class ChapterReviewService {
         return ChapterReviewResponse.from(reviews.saveAndFlush(review));
     }
 
+    /**
+     * 按审稿行版本保存问题处理与候选事实决定，不在此物化事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public ChapterReviewResponse updateReview(UUID projectId, UUID id, long expected, ChapterReviewContent content) {
         contexts.requireOwnedProject(projectId);
@@ -175,6 +211,14 @@ public class ChapterReviewService {
         return ChapterReviewResponse.from(reviews.saveAndFlush(value));
     }
 
+    /**
+     * 确认已处理的审稿结果，阻断问题及来源约束由审稿领域规则检查；确认报告不等于正史提交。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public ChapterReviewResponse approveReview(UUID projectId, UUID id, long expected, ChapterReviewContent content) {
         contexts.requireOwnedProject(projectId);
@@ -190,4 +234,3 @@ public class ChapterReviewService {
                 .orElseThrow(() -> new WritingResourceNotFoundException("章节审稿", id));
     }
 }
-

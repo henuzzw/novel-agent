@@ -21,6 +21,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 局部改写草稿存储。
+ *
+ * <p>读取源正文、上下文及逐字选区快照，保存前锁内复核来源。确定性替换只触及选区，其他文字原样保留。</p>
+ */
 @Service
 public class ManuscriptLocalEditStore {
     private final ProjectAccessService access;
@@ -52,6 +57,14 @@ public class ManuscriptLocalEditStore {
             UUID contractId, ManuscriptContent rendered, String context, String fingerprint) {
     }
 
+    /**
+     * 读取待处理内容及关联依据的快照，供事务外模型调用后再次核对；不是对文学正确性的证明。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @param sourceId 本次处理的基准记录 ID，不隐式改用最新版本。
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     */
     @Transactional(readOnly = true)
     public Snapshot snapshot(UUID projectId, int chapter, UUID sourceId, long expected) {
         return read(projectId, chapter, sourceId, expected, false);
@@ -99,6 +112,14 @@ public class ManuscriptLocalEditStore {
         return new Snapshot(projectId, chapter, sourceId, expected, contract.getId(), rendered, context, fingerprint);
     }
 
+    /**
+     * 保存本步骤已校验的业务结果，保留来源关联；并发条件和事务范围由该存储方法及调用方约定控制。
+     *
+     * @param source 生成或检查前读取的来源快照，用于保存时再次复核。
+     * @param selection 明确选定的正文片段或版本集合，具体含义见方法说明。
+     * @param replacement 仅用于准确选区的替换文本，不重写选区外内容。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     @Transactional
     public ManuscriptResponse save(Snapshot source, ManuscriptLocalEditSelection selection, String replacement,
             ManuscriptLocalEditRequest request) {

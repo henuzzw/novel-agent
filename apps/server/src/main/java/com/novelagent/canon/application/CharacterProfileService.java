@@ -19,6 +19,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 人物档案。
+ *
+ * <p>管理独立设定与写作上下文中的人物档案筛选。精确引用不足时回退完整档案，不能用子串猜参与者；档案秘密不突破视角知识边界。</p>
+ */
 @Service
 public class CharacterProfileService {
     private static final Pattern ENTITY_REFERENCE = Pattern.compile(
@@ -36,6 +41,12 @@ public class CharacterProfileService {
         this.jdbc = jdbc;
     }
 
+    /**
+     * 为当前有效人物幂等建立缺失的空档案后返回列表；这是带事务的补空操作，不会调用模型补齐详细设定。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional
     public List<CharacterProfileResponse> list(UUID projectId) {
         requireOwnedProject(projectId);
@@ -48,6 +59,14 @@ public class CharacterProfileService {
         return rows(projectId);
     }
 
+    /**
+     * 保存作者提交的编辑内容，并遵循当前业务状态及预期版本约束；不隐式触发模型重新生成。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param characterId 稳定人物实体 ID，不以显示姓名作为主键。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
+     */
     @Transactional
     public CharacterProfileResponse update(UUID projectId, UUID characterId, long expectedVersion,
             UpdateCharacterProfileRequest value) {
@@ -76,23 +95,52 @@ public class CharacterProfileService {
         return row(projectId, characterId);
     }
 
+    /**
+     * 按明确人物 ID、角色键、姓名或别名选取有内容的档案；无法精确解析参与者时保守回退全量，不把秘密当作视角已知。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     */
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId) {
         List<CharacterProfileResponse> profiles = rows(projectId).stream().filter(this::hasDetails).toList();
         return renderProfiles(profiles);
     }
 
+    /**
+     * 按明确人物 ID、角色键、姓名或别名选取有内容的档案；无法精确解析参与者时保守回退全量，不把秘密当作视角已知。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param pov 本章视角标识，不表示作者侧秘密对该人物可见。
+     * @param relatedCharacterIds 本章明确关联的人物稳定 ID 集合。
+     */
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId, String pov, Collection<UUID> relatedCharacterIds) {
         return promptContext(projectId, pov, null, relatedCharacterIds);
     }
 
+    /**
+     * 按明确人物 ID、角色键、姓名或别名选取有内容的档案；无法精确解析参与者时保守回退全量，不把秘密当作视角已知。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param pov 本章视角标识，不表示作者侧秘密对该人物可见。
+     * @param contract 本次关联章节合同，内容及版本必须与来源匹配。
+     * @param relatedCharacterIds 本章明确关联的人物稳定 ID 集合。
+     */
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
             Collection<UUID> relatedCharacterIds) {
         return promptContext(projectId, pov, contract, relatedCharacterIds, List.of());
     }
 
+    /**
+     * 按明确人物 ID、角色键、姓名或别名选取有内容的档案；无法精确解析参与者时保守回退全量，不把秘密当作视角已知。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param pov 本章视角标识，不表示作者侧秘密对该人物可见。
+     * @param contract 本次关联章节合同，内容及版本必须与来源匹配。
+     * @param relatedCharacterIds 本章明确关联的人物稳定 ID 集合。
+     * @param relatedReferences 可核对的完整人物引用，模糊叙述不可用于子串猜测。
+     */
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
             Collection<UUID> relatedCharacterIds, Collection<String> relatedReferences) {
@@ -144,6 +192,13 @@ public class CharacterProfileService {
         if (references != null) target.addAll(references);
     }
 
+    /**
+     * 仅接受完整分隔引用或稳定实体 ID；自由叙述及同名歧义返回未确定，触发全量档案回退而非子串猜测。
+     *
+     * @param reference 待核对的人物或来源引用，模糊引用不自动猜测。
+     * @param characters 本次读取的人物命名快照，所有文本转换使用同一映射。
+     * @param ids 作者显式选定的三章正文版本 ID。
+     */
     private boolean resolveReference(String reference, List<CharacterReference> characters, Set<UUID> ids) {
         String remaining = reference.trim();
         var matcher = ENTITY_REFERENCE.matcher(remaining);
@@ -246,6 +301,11 @@ public class CharacterProfileService {
                 """;
     }
 
+    /**
+     * 将实体身份与独立档案的 LEFT JOIN 结果映射为响应，row_version 为档案编辑版本；未配置设定保留空值。
+     *
+     * @param rs 当前数据库结果行，字段对应本方法的 SQL 投影。
+     */
     private CharacterProfileResponse map(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new CharacterProfileResponse(rs.getObject("id", UUID.class), rs.getString("role_key"),
                 rs.getString("canonical_name"), rs.getString("gender"), rs.getString("age_description"),

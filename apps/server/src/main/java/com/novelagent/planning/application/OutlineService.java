@@ -20,7 +20,6 @@ import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
-import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.Optional;
@@ -29,6 +28,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 分层大纲。
+ *
+ * <p>依据发布圣经和项目策略生成或有限调整分层大纲。生成前后核对依据，作者显式发布时更新当前指针并同步明确台账；草稿不是正史。</p>
+ */
 @Service
 public class OutlineService {
     private final NovelProjectRepository projects;
@@ -51,6 +55,12 @@ public class OutlineService {
         this.materials = materials;
     }
 
+    /**
+     * 读取项目当前发布圣经及字数预算、策略，按重新规划或指定基准模式调用模型；保存完整新大纲草稿，不自动替换发布指针。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public OutlineResponse generate(UUID projectId, GenerateOutlineRequest request) {
         NovelProject project = requireOwnedProject(projectId);
         UUID bibleId = project.getCurrentBibleVersionId();
@@ -73,8 +83,7 @@ public class OutlineService {
         OutlineContent previousContent = base == null ? null
                 : characterNames.render(projectId, base.getContent(), OutlineContent.class);
         GeneratedOutline generated = workflow.generate(projectId, promptBible, budget, provider,
-                previousContent, CreativeStrategyGuide.render(CreativeStrategyPolicy.from(project))
-                        + "\n作者本次要求：" + (normalize(request.instruction()) == null ? "无" : normalize(request.instruction())));
+                previousContent, normalize(request.instruction()), CreativeStrategyPolicy.from(project));
         int generation = latest
                 .map(value -> value.getGenerationNumber() + 1).orElse(1);
         OutlineVersion version = OutlineVersion.create(UUID.randomUUID(), projectId, generation,
@@ -83,6 +92,12 @@ public class OutlineService {
         return response(outlines.saveAndFlush(version));
     }
 
+    /**
+     * 按生成顺序返回历史版本摘要，供作者显式选择基准，不修改当前发布指针。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<OutlineVersionSummaryResponse> versions(UUID projectId) {
         requireOwnedProject(projectId);
@@ -92,18 +107,36 @@ public class OutlineService {
                 .toList();
     }
 
+    /**
+     * 读取指定版本并限定所属项目；版本 ID 与用于并发编辑的行版本是不同概念。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param outlineId 大纲版本 ID，与生成序号和行版本不同。
+     */
     @Transactional(readOnly = true)
     public OutlineResponse version(UUID projectId, UUID outlineId) {
         requireOwnedProject(projectId);
         return response(requireVersion(projectId, outlineId));
     }
 
+    /**
+     * 读取最新保存结果；“最新”不自动表示已发布、已确认或已进入正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<OutlineResponse> latest(UUID projectId) {
         requireOwnedProject(projectId);
         return outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId).map(this::response);
     }
 
+    /**
+     * 读取项目当前已发布规划指针对应的版本，不能用最新草稿替代正式创作依据。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<OutlineResponse> current(UUID projectId) {
         NovelProject project = requireOwnedProject(projectId);
@@ -112,6 +145,14 @@ public class OutlineService {
         return Optional.of(response(requireVersion(projectId, currentId)));
     }
 
+    /**
+     * 保存作者提交的编辑内容，并遵循当前业务状态及预期版本约束；不隐式触发模型重新生成。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param outlineId 大纲版本 ID，与生成序号和行版本不同。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public OutlineResponse update(UUID projectId, UUID outlineId, long expectedVersion, OutlineContent content) {
         requireOwnedProject(projectId);
@@ -123,6 +164,13 @@ public class OutlineService {
         return response(outlines.saveAndFlush(version));
     }
 
+    /**
+     * 由作者显式发布指定规划版本，更新项目当前依据并执行该规划对应的资料同步；不提交正文正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param outlineId 大纲版本 ID，与生成序号和行版本不同。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     @Transactional
     public OutlineResponse publish(UUID projectId, UUID outlineId, long expectedVersion) {
         NovelProject project = requireOwnedProject(projectId);

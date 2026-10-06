@@ -19,6 +19,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 人物补全草稿。
+ *
+ * <p>提供补全前的只读来源和补全后的短事务保存。锁内复核圣经行版本及来源，合并仅允许补空白或新增人物，不直接写独立人物正史。</p>
+ */
 @Service
 public class CharacterBlueprintDraftStore {
     public record Source(UUID projectId, UUID bibleId, long rowVersion,
@@ -35,6 +40,13 @@ public class CharacterBlueprintDraftStore {
         this.projects = projects; this.bibles = bibles; this.actor = actor; this.names = names; this.entities = entities;
     }
 
+    /**
+     * 读取待补全的源圣经及必要上下文，校验作者给出的源行版本，不调用模型。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param bibleId 故事圣经版本 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     @Transactional(readOnly = true)
     public Source load(UUID projectId, UUID bibleId, long expectedVersion) {
         owned(projectId);
@@ -44,6 +56,14 @@ public class CharacterBlueprintDraftStore {
                 names.render(projectId, bible.getContent(), StoryBibleContent.class));
     }
 
+    /**
+     * 保存本步骤已校验的业务结果，保留来源关联；并发条件和事务范围由该存储方法及调用方约定控制。
+     *
+     * @param source 生成或检查前读取的来源快照，用于保存时再次复核。
+     * @param proposed 本次提出、尚待校验或作者确认的数据。
+     * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     */
     @Transactional
     public StoryBibleResponse save(Source source, List<CharacterBlueprint> proposed, ModelProvider provider,
             String instruction) {

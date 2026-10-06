@@ -28,6 +28,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 章节合同。
+ *
+ * <p>生成和编辑可执行节拍，独立审阅后才能由作者确认合同。模型等待不包在长事务中，完成后核对主要来源；审阅必须对应当前合同及行版本，不能用旧审阅批准新合同。</p>
+ */
 @Service
 public class ChapterContractService {
     private final WritingContextService contexts;
@@ -48,6 +53,13 @@ public class ChapterContractService {
         this.characterNames = characterNames;
     }
 
+    /**
+     * 读取本章最新保存合同，可能仍是草稿；不代表已通过审阅或作者确认。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<ChapterContractResponse> latestContract(UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
@@ -55,6 +67,13 @@ public class ChapterContractService {
                 .map(ChapterContractResponse::from);
     }
 
+    /**
+     * 列出本章历史合同版本摘要，供作者显式选择生成基准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<ChapterContractVersionSummaryResponse> contractVersions(UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
@@ -63,6 +82,13 @@ public class ChapterContractService {
                         characterNames.render(projectId, value.getContent().chapterTitle()))).toList();
     }
 
+    /**
+     * 按项目、章号和版本 ID 读取指定合同，避免把其他章节版本用作当前依据。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param id 当前方法所操作记录的稳定 ID。
+     */
     @Transactional(readOnly = true)
     public ChapterContractResponse contractVersion(UUID projectId, int chapterNumber, UUID id) {
         contexts.requireOwnedProject(projectId);
@@ -70,6 +96,13 @@ public class ChapterContractService {
                 .orElseThrow(() -> new WritingResourceNotFoundException("章节合同版本", id)));
     }
 
+    /**
+     * 根据当前发布规划及记忆生成或有限调整合同草稿，模型返回后核对主要来源；不自动审阅或确认。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public ChapterContractResponse generateContract(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
         WritingContextService.Context context = contexts.context(projectId, chapterNumber);
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
@@ -99,6 +132,13 @@ public class ChapterContractService {
         return ChapterContractResponse.from(contracts.saveAndFlush(result));
     }
 
+    /**
+     * 读取本章最新合同审阅报告；是否可用于批准合同还需核对来源版本和状态。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<ChapterContractReviewResponse> latestContractReview(UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
@@ -106,6 +146,13 @@ public class ChapterContractService {
                 .map(ChapterContractReviewResponse::from);
     }
 
+    /**
+     * 独立审阅当前大纲下的合同草稿，保存与合同 ID 及行版本绑定的报告，不直接批准合同。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public ChapterContractReviewResponse generateContractReview(UUID projectId, int chapterNumber,
             GenerateWritingRequest request) {
         WritingContextService.Context context = contexts.context(projectId, chapterNumber);
@@ -142,6 +189,14 @@ public class ChapterContractService {
         return ChapterContractReviewResponse.from(contractReviews.saveAndFlush(review));
     }
 
+    /**
+     * 保存作者对审阅问题的处理并确认报告；来源合同或最新报告变化时拒绝使用旧结果。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public ChapterContractReviewResponse approveContractReview(UUID projectId, UUID id, long expected,
             ChapterContractReviewContent content) {
@@ -173,6 +228,14 @@ public class ChapterContractService {
         }
     }
 
+    /**
+     * 按合同当前状态和行版本保存作者编辑；修改后的合同不能沿用不匹配的旧审阅批准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public ChapterContractResponse updateContract(UUID projectId, UUID id, long expected, ChapterContractContent content) {
         contexts.requireOwnedProject(projectId);
@@ -182,6 +245,13 @@ public class ChapterContractService {
         return ChapterContractResponse.from(contracts.saveAndFlush(value));
     }
 
+    /**
+     * 核对最新合同、最新已确认审阅及来源行版本后确认合同，为正式正文提供依据。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     */
     @Transactional
     public ChapterContractResponse approveContract(UUID projectId, UUID id, long expected) {
         contexts.requireOwnedProject(projectId);

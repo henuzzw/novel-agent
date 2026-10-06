@@ -11,6 +11,11 @@ import java.util.HashSet;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/**
+ * 试写编辑。
+ *
+ * <p>独立检查开头样例并执行报告中作者明确选中的建议。模型前后复核来源；修订只产生候选，不改变项目风格、正式正文或正史。</p>
+ */
 @Service
 public class StylePreviewEditingService {
     private final StylePreviewReviewStore store;
@@ -21,6 +26,12 @@ public class StylePreviewEditingService {
         this.workflow = workflow;
     }
 
+    /**
+     * 按不可变样例与指定大纲建立快照，独立检查四维并核验连续原文证据，保存私有报告，不修改样例。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public StylePreviewReviewResponse check(UUID projectId, CheckStylePreviewRequest request) {
         var input = request.source();
         var source = new StylePreviewSource(input.outlineVersionId(), input.expectedOutlineVersion(), input.profile(),
@@ -34,6 +45,13 @@ public class StylePreviewEditingService {
                 input.provider() == ModelProvider.LOCAL_TEMPLATE ? "RULES" : "MODEL", content, report.isRevisionAttempted());
     }
 
+    /**
+     * 锁内认领报告的一次修订尝试，仅处理服务端报告中选中的问题；事务外生成后复核依据，返回候选不采用风格。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public WritingStylePreviewResponse revise(UUID projectId, UUID id, ReviseStylePreviewRequest request) {
         if (request.provider() == null || request.provider() == ModelProvider.LOCAL_TEMPLATE) {
             throw new IllegalArgumentException("本地模板不能执行语义修订，请选择 Codex 或 DeepSeek");

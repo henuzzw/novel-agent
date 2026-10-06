@@ -15,7 +15,8 @@ class LocalOutlineGeneratorTest {
         StoryBibleContent bible = new StoryBibleContent("故事", "主题", "世界", List.of(), "主角", "弧光",
                 List.of(), List.of(), "冲突", "代价", "文风", "结局", List.of(), List.of());
 
-        var result = new LocalOutlineGenerator().generate(UUID.randomUUID(), bible, budget, null, null);
+        var result = new LocalOutlineGenerator().generate(UUID.randomUUID(), bible, budget, null, null,
+                com.novelagent.project.domain.CreativeStrategyPolicy.of(com.novelagent.project.domain.CreativeStrategy.STANDARD));
 
         assertThat(result.content().arcs()).hasSize(2);
         assertThat(result.content().chapterCount()).isEqualTo(40);

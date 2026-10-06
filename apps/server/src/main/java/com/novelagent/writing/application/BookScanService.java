@@ -18,6 +18,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 全书规则巡检。
+ *
+ * <p>组合已有正史摘要、台账状态和来源指纹作确定性检查。没有读取全书逐字正文，不宣称已完成文学、逻辑或所有伏笔兑现检查。</p>
+ */
 @Service
 public class BookScanService {
     private final ProjectAccessService access;
@@ -37,6 +42,11 @@ public class BookScanService {
             String fingerprint, int plannedChapters, int canonChapters, List<Chapter> chapters,
             List<Observation> observations) { }
 
+    /**
+     * 基于当前大纲、已有有效正史摘要和台账进行规则巡检；不逐字通读全书、不判定文学吸引力。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public View scan(UUID projectId) {
         var project = access.requireOwnedProject(projectId);
@@ -48,6 +58,16 @@ public class BookScanService {
                 readers.memory(projectId), readers.list(projectId));
     }
 
+    /**
+     * 仅对既有摘要覆盖、相邻大纲字段逐字重复及台账有效性作规则观察；未登记兑现不等于正文确有遗漏。
+     *
+     * @param outlineId 大纲版本 ID，与生成序号和行版本不同。
+     * @param rowVersion 已读取记录的编辑行版本。
+     * @param canonVersion 有效正史版本水位，与记录行版本不同。
+     * @param plans 范围内的大纲章节计划，不当成已发生正文。
+     * @param memory 已有有效正史摘要的分组视图。
+     * @param ledger 台账计划与已确认进展的展示视图。
+     */
     View assemble(UUID outlineId, long rowVersion, long canonVersion,
             List<com.novelagent.planning.domain.ChapterPlan> plans, ReaderExperienceMemory memory,
             List<ReaderExperienceEntry> ledger) {

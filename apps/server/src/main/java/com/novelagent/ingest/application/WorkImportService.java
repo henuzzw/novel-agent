@@ -31,6 +31,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.xml.sax.ContentHandler;
 
+/**
+ * 作品导入。
+ *
+ * <p>保存原始字节、提取 TXT/Markdown/DOCX/文本型 PDF 并识别章节。确认选区后规划读取完整选中原文；格式解析与小说语义分析是不同阶段。</p>
+ */
 @Service
 public class WorkImportService {
     private static final String PARSER_VERSION = "tika-2.9.2+chapter-v1";
@@ -54,6 +59,12 @@ public class WorkImportService {
         this.maxFileBytes = maxFileBytes;
     }
 
+    /**
+     * 检查大小及文件类型，保存原文件和提取文本，识别章节并记录警告；这里只完成格式识别，尚未调用模型解析人物与世界。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param file 上传的原始文件，仍须经过类型和大小检查。
+     */
     @Transactional
     public WorkImportResponse upload(UUID projectId, MultipartFile file) {
         requireOwnedProject(projectId);
@@ -99,6 +110,12 @@ public class WorkImportService {
         }
     }
 
+    /**
+     * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<WorkImportResponse> list(UUID projectId) {
         requireOwnedProject(projectId);
@@ -106,6 +123,12 @@ public class WorkImportService {
                 (rs, row) -> get(projectId, rs.getObject("id", UUID.class)), projectId);
     }
 
+    /**
+     * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param importId 导入文件记录 ID，必须与指定项目匹配。
+     */
     @Transactional(readOnly = true)
     public WorkImportResponse get(UUID projectId, UUID importId) {
         requireOwnedProject(projectId);
@@ -125,6 +148,12 @@ public class WorkImportService {
                 rs.getTimestamp("created_at").toInstant(), instant(rs.getTimestamp("confirmed_at"))), importId, projectId);
     }
 
+    /**
+     * 确认识别出的导入章节可供后续解析，保留原文件；此确认不自动生成故事圣经或发布规划。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param importId 导入文件记录 ID，必须与指定项目匹配。
+     */
     @Transactional
     public WorkImportResponse confirm(UUID projectId, UUID importId) {
         requireOwnedProject(projectId);
@@ -136,6 +165,12 @@ public class WorkImportService {
         return get(projectId, importId);
     }
 
+    /**
+     * 读取原始或已确认来源资料并保留来源版本，供下载、证据引用或后续业务复核。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param importId 导入文件记录 ID，必须与指定项目匹配。
+     */
     @Transactional(readOnly = true)
     public SourceFile source(UUID projectId, UUID importId) {
         requireOwnedProject(projectId);
@@ -146,6 +181,12 @@ public class WorkImportService {
                 rs.getBytes("original_content")), importId, projectId);
     }
 
+    /**
+     * 读取作者确认的导入章节原文供规划使用；读取完整选中范围，不将截断样本冒充完整原文。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param importId 导入文件记录 ID，必须与指定项目匹配。
+     */
     @Transactional(readOnly = true)
     public PlanningSource planningSource(UUID projectId, UUID importId) {
         requireOwnedProject(projectId);
@@ -182,6 +223,14 @@ public class WorkImportService {
         }
     }
 
+    /**
+     * 按受支持的章标题分割提取文本；未识别标题时保留完整文本为一个单元并交作者核对，不丢弃原文。
+     *
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     * @param filename 上传文件名，用于格式识别，不当成可信磁盘路径。
+     * @param warnings 本次校验或消歧过程中累积的警告。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     private static List<ChapterPart> splitChapters(String text, String filename, List<String> warnings) {
         Matcher matcher = CHAPTER_HEADING.matcher(text);
         List<Heading> headings = new ArrayList<>();

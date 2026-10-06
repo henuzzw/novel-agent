@@ -35,6 +35,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 质量报告存储。
+ *
+ * <p>保存报告及来源指纹，复核正文、合同、风格、策略与上下文是否仍有效。修订保存为新草稿，不覆盖原文；事务锁只保护持久化阶段，不含模型等待。</p>
+ */
 @Service
 public class QualityReviewStore {
     private final NovelProjectRepository projects;
@@ -86,6 +91,12 @@ public class QualityReviewStore {
         }
     }
 
+    /**
+     * 读取当前章最新正文及相关合同、圣经、渲染内容、人物档案、风格和准备上下文，构造质量检查来源指纹。不调用模型；模型结果保存前还需重新核对来源。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     */
     @Transactional(readOnly = true)
     public Snapshot snapshot(UUID projectId, int chapter) {
         NovelProject project = owned(projectId);
@@ -127,6 +138,13 @@ public class QualityReviewStore {
                                 .map(Object::toString).orElse("末章，无下一章计划。"));
     }
 
+    /**
+     * 读取最新保存结果；“最新”不自动表示已发布、已确认或已进入正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     @Transactional(readOnly = true)
     public Optional<QualityReviewResponse> latest(UUID projectId, int chapter) {
         owned(projectId);
@@ -134,6 +152,13 @@ public class QualityReviewStore {
                 .map(report -> QualityReviewResponse.from(report, isCurrent(report)));
     }
 
+    /**
+     * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @param id 当前方法所操作记录的稳定 ID。
+     */
     @Transactional(readOnly = true)
     public QualityReviewVersion get(UUID projectId, int chapter, UUID id) {
         owned(projectId);
@@ -141,11 +166,24 @@ public class QualityReviewStore {
                 .orElseThrow(() -> new WritingResourceNotFoundException("质量报告", id));
     }
 
+    /**
+     * 重新核对报告记录的正文来源和上下文指纹，失效时阻止继续使用该报告润色。
+     *
+     * @param report 待保存或读取的解析、审阅报告。
+     */
     @Transactional(readOnly = true)
     public void requireCurrent(QualityReviewVersion report) {
         if (!isCurrent(report)) throw new IllegalStateException("正文、规划、人物档案、创作策略或写作风格已变化，请重新检查质量");
     }
 
+    /**
+     * 在短事务内锁定并刷新相关记录，复核检查来源指纹后保存不可变质量报告；来源已变时拒绝保存旧报告。这里只记录质量意见，不接受正文或提交正史。
+     *
+     * @param source 生成或检查前读取的来源快照，用于保存时再次复核。
+     * @param provider 实际生成器来源标识，随报告保存以便追溯。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional
     public QualityReviewResponse save(Snapshot source, String provider, String instruction, QualityReviewContent content) {
         Snapshot current = lockedSnapshot(source.project().getId(), source.manuscript().getChapterNumber());
@@ -158,6 +196,12 @@ public class QualityReviewStore {
         return QualityReviewResponse.from(reports.saveAndFlush(report), true);
     }
 
+    /**
+     * 锁内复核报告与最新正文来源，保存模型生成的新修订草稿并保留基准稿关联；不覆盖原文，不自动接受新稿。
+     *
+     * @param report 待保存或读取的解析、审阅报告。
+     * @param draft 尚未发布或确认的草稿。
+     */
     @Transactional
     public ManuscriptResponse saveRevision(QualityReviewVersion report, ManuscriptVersion draft) {
         Snapshot current = lockedSnapshot(report.getProjectId(), report.getChapterNumber());
@@ -169,6 +213,12 @@ public class QualityReviewStore {
         return ManuscriptResponse.from(saved, names.render(report.getProjectId(), saved.getContent()));
     }
 
+    /**
+     * 在保存阶段锁定所需来源后重建检查快照，模型等待发生在本方法事务之外。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     */
     private Snapshot lockedSnapshot(UUID projectId, int chapter) {
         NovelProject project = owned(projectId);
         entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
@@ -189,6 +239,12 @@ public class QualityReviewStore {
                 && report.getSourceTextHash().equals(current.fingerprint());
     }
 
+    /**
+     * 比较质量报告与最新源正文关联及行版本，源变更后旧报告不能继续用于修订。
+     *
+     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
+     * @param current 操作开始时读取的当前记录或版本。
+     */
     private static boolean sameSource(Snapshot expected, Snapshot current) {
         return expected.manuscript().getId().equals(current.manuscript().getId())
                 && expected.manuscript().getRowVersion() == current.manuscript().getRowVersion()
@@ -215,6 +271,11 @@ public class QualityReviewStore {
         return source.toString();
     }
 
+    /**
+     * 将本次正文及检查依据计算为稳定指纹，绑定报告适用范围；不是正文无错误的证明。
+     *
+     * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
+     */
     private static String fingerprint(String value) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
         catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 不可用", exception); }

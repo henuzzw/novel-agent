@@ -29,6 +29,11 @@ import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+/**
+ * 导入反推规划。
+ *
+ * <p>按作者已确认解析报告，依次生成故事圣经和大纲草稿。改编可在授权范围重构，续写保留已发生章；传入项目策略，不自动发布或提交正史。</p>
+ */
 @Service
 public class ImportedPlanningService {
     private final WorkImportService imports;
@@ -66,6 +71,13 @@ public class ImportedPlanningService {
         this.strategies = strategies;
     }
 
+    /**
+     * 校验作者确认报告后，串行调用反推圣经和大纲，传入同次读取的创作策略；成功保存两份草稿，失败记录导入规划错误，不自动重试。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param importId 导入文件记录 ID，必须与指定项目匹配。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public ReversePlanResponse generate(UUID projectId, UUID importId, ReversePlanRequest request) {
         if (request.provider() == ModelProvider.LOCAL_TEMPLATE) {
             throw new IllegalArgumentException("导入反推规划请选择服务端 Codex 或 DeepSeek");
@@ -202,6 +214,12 @@ public class ImportedPlanningService {
         catch (JsonProcessingException exception) { throw new IllegalStateException("无法序列化反推故事圣经", exception); }
     }
 
+    /**
+     * 按导入模式确定性重设章节状态：续写的已导入范围为 OCCURRED，其余为 PLANNED；不足以覆盖已发生章时拒绝保存。
+     *
+     * @param generated 模型生成的大纲结果，状态还需按导入模式确定。
+     * @param occurredChapterCount 必须保持已发生状态的导入章节数量。
+     */
     static GeneratedOutline normalizeChapterStatuses(GeneratedOutline generated, int occurredChapterCount) {
         OutlineContent content = generated.content();
         List<OutlineArc> normalizedArcs = new ArrayList<>();

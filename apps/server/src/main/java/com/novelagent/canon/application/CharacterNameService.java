@@ -27,6 +27,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 人物命名。
+ *
+ * <p>管理稳定人物身份及姓名、昵称、称谓的显示映射。内容中的实体占位符可按当前姓名渲染，反向标记需避免歧义；姓名初始化不等于正文已发生事实。</p>
+ */
 @Service
 public class CharacterNameService {
     private static final Pattern REFERENCE = Pattern.compile(
@@ -46,12 +51,24 @@ public class CharacterNameService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<CharacterNameResponse> list(UUID projectId) {
         requireOwnedProject(projectId);
         return rows(projectId);
     }
 
+    /**
+     * 从指定圣经的蓝图及兼容人物描述幂等建立规划人物身份，保留已有名称及别名。仅传项目 ID 时读取最新保存的圣经；传入圣经版本时严格核对项目归属。此步骤不补齐独立档案，也不写正文事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional
     public List<CharacterNameResponse> initializeFromStoryBible(UUID projectId) {
         requireOwnedProject(projectId);
@@ -60,6 +77,13 @@ public class CharacterNameService {
         return initializeFromStoryBible(projectId, bible);
     }
 
+    /**
+     * 从指定圣经的蓝图及兼容人物描述幂等建立规划人物身份，保留已有名称及别名。仅传项目 ID 时读取最新保存的圣经；传入圣经版本时严格核对项目归属。此步骤不补齐独立档案，也不写正文事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param bible 指定圣经来源或其内容，不隐式使用其他最新草稿。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional
     public List<CharacterNameResponse> initializeFromStoryBible(UUID projectId, StoryBibleVersion bible) {
         requireOwnedProject(projectId);
@@ -78,6 +102,13 @@ public class CharacterNameService {
         return rows(projectId);
     }
 
+    /**
+     * 按创作准备蓝图建立稳定人物身份，并保留已有命名；蓝图是规划来源而非正文事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param taskId 创作准备等来源任务 ID。
+     * @param blueprints 待应用或补全的结构化人物蓝图。
+     */
     @Transactional
     public void initializeFromBlueprints(UUID projectId, UUID taskId, List<com.novelagent.planning.domain.CharacterBlueprint> blueprints) {
         requireOwnedProject(projectId);
@@ -89,6 +120,13 @@ public class CharacterNameService {
         registerNames(projectId, names, "PREPARATION:" + taskId);
     }
 
+    /**
+     * 按标准名、来源名及有效别名检查已有人物，避免重复登记；角色键已占用时使用基于姓名的稳定键。新记录标记 PLANNED，带规划证据来源，不带正史提交。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param names 来源人物姓名与角色键映射，用于幂等登记规划身份。
+     * @param evidence 来源中的连续原文证据，不允许拼接或伪造引文。
+     */
     private void registerNames(UUID projectId, Map<String, String> names, String evidence) {
         names.forEach((role, name) -> {
             Integer existing = jdbc.queryForObject("""
@@ -111,6 +149,16 @@ public class CharacterNameService {
         });
     }
 
+    /**
+     * 保存作者提交的编辑内容，并遵循当前业务状态及预期版本约束；不隐式触发模型重新生成。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param entityId 当前项目实体 ID，类型与有效性由业务流程核对。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param canonicalName 当前显示标准名，不替换稳定人物 ID。
+     * @param nickname 作者指定昵称，可为空。
+     * @param title 作者指定称谓或当前记录标题，含义见业务对象。
+     */
     @Transactional
     public CharacterNameResponse update(UUID projectId, UUID entityId, long expectedVersion,
             String canonicalName, String nickname, String title) {
@@ -142,12 +190,25 @@ public class CharacterNameService {
         return row(projectId, entityId);
     }
 
+    /**
+     * 先按稳定实体占位符渲染当前姓名，再兼容替换已有原名及别名；对象重载递归处理文本节点。只是内容转换，不保存新版本；旧文本替换基于字符串匹配，不是语义消歧。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     */
     @Transactional(readOnly = true)
     public String render(UUID projectId, String text) {
         List<CharacterNameResponse> characters = rows(projectId);
         return render(text, characters, nameForms(projectId, characters));
     }
 
+    /**
+     * 先按稳定实体占位符渲染当前姓名，再兼容替换已有原名及别名；对象重载递归处理文本节点。只是内容转换，不保存新版本；旧文本替换基于字符串匹配，不是语义消歧。
+     *
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     * @param characters 本次读取的人物命名快照，所有文本转换使用同一映射。
+     * @param forms 已按长度排序的标准名、旧名及别名映射。
+     */
     private String render(String text, List<CharacterNameResponse> characters, List<NameForm> forms) {
         if (text == null || text.isBlank()) return text;
         Map<UUID, CharacterNameResponse> byId = new LinkedHashMap<>();
@@ -170,6 +231,12 @@ public class CharacterNameService {
         return result;
     }
 
+    /**
+     * 按长度优先的已有人名及别名映射，把正文文本转换为稳定实体占位符，便于后续改名。此转换使用字符串匹配，不自动解决同名歧义，也不创建人物事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional(readOnly = true)
     public ManuscriptContent tokenize(UUID projectId, ManuscriptContent content) {
         List<CharacterNameResponse> characters = rows(projectId);
@@ -179,6 +246,12 @@ public class CharacterNameService {
                         .map(value -> tokenize(value, forms)).toList());
     }
 
+    /**
+     * 先按稳定实体占位符渲染当前姓名，再兼容替换已有原名及别名；对象重载递归处理文本节点。只是内容转换，不保存新版本；旧文本替换基于字符串匹配，不是语义消歧。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     */
     @Transactional(readOnly = true)
     public ManuscriptContent render(UUID projectId, ManuscriptContent content) {
         List<CharacterNameResponse> characters = rows(projectId);
@@ -188,6 +261,14 @@ public class CharacterNameService {
                         .map(value -> render(value, characters, forms)).toList());
     }
 
+    /**
+     * 先按稳定实体占位符渲染当前姓名，再兼容替换已有原名及别名；对象重载递归处理文本节点。只是内容转换，不保存新版本；旧文本替换基于字符串匹配，不是语义消歧。
+     *
+     * @param <T> 返回对象的目标类型；仅对其文本内容执行人物名称渲染。
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
+     * @param type JSON 转换或反序列化的目标 Java 类型。
+     */
     @Transactional(readOnly = true)
     public <T> T render(UUID projectId, T value, Class<T> type) {
         if (value == null) return null;
@@ -201,12 +282,24 @@ public class CharacterNameService {
         }
     }
 
+    /**
+     * 按长度优先的已有人名及别名映射，把正文文本转换为稳定实体占位符，便于后续改名。此转换使用字符串匹配，不自动解决同名歧义，也不创建人物事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     */
     @Transactional(readOnly = true)
     public String tokenize(UUID projectId, String text) {
         List<CharacterNameResponse> characters = rows(projectId);
         return tokenize(text, nameForms(projectId, characters));
     }
 
+    /**
+     * 按长度优先的已有人名及别名映射，把正文文本转换为稳定实体占位符，便于后续改名。此转换使用字符串匹配，不自动解决同名歧义，也不创建人物事实。
+     *
+     * @param text 待渲染、检索或嵌入的文本，不自动成为正史事实。
+     * @param forms 已按长度排序的标准名、旧名及别名映射。
+     */
     private String tokenize(String text, List<NameForm> forms) {
         if (text == null || text.isBlank()) return text;
         String result = text;
@@ -218,6 +311,12 @@ public class CharacterNameService {
         return result;
     }
 
+    /**
+     * 按项目读取尚未失效的人物命名记录，主角优先；source_name 缺失时使用标准名兼容历史数据。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     private List<CharacterNameResponse> rows(UUID projectId) {
         return jdbc.query("""
                 SELECT id, role_key, COALESCE(source_name, canonical_name) AS source_name,
@@ -230,6 +329,12 @@ public class CharacterNameService {
                 rs.getString("nickname"), rs.getString("title_name"), rs.getLong("row_version")), projectId);
     }
 
+    /**
+     * 在项目内读取指定有效人物并映射姓名及行版本；找不到时拒绝修改，不跨项目查找同 ID。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param entityId 当前项目实体 ID，类型与有效性由业务流程核对。
+     */
     private CharacterNameResponse row(UUID projectId, UUID entityId) {
         return jdbc.query("""
                 SELECT id, role_key, COALESCE(source_name, canonical_name) AS source_name,
@@ -242,6 +347,13 @@ public class CharacterNameService {
                 .stream().findFirst().orElseThrow(() -> new IllegalArgumentException("人物不存在"));
     }
 
+    /**
+     * 递归遍历对象及数组中的文本节点，按同一姓名快照渲染；非文本值和对象结构保持不变。
+     *
+     * @param node 递归处理的 JSON 节点，只有文本节点发生名称转换。
+     * @param characters 本次读取的人物命名快照，所有文本转换使用同一映射。
+     * @param forms 已按长度排序的标准名、旧名及别名映射。
+     */
     private void renderTextNodes(JsonNode node, List<CharacterNameResponse> characters, List<NameForm> forms) {
         if (node instanceof ObjectNode object) {
             object.properties().forEach(entry -> {
@@ -258,6 +370,13 @@ public class CharacterNameService {
         }
     }
 
+    /**
+     * 合并人物标准名、来源名、昵称、称谓及有效别名，过滤空值并按名称长度倒序，降低短名称先替换造成的干扰。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param characters 本次读取的人物命名快照，所有文本转换使用同一映射。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     private List<NameForm> nameForms(UUID projectId, List<CharacterNameResponse> characters) {
         List<NameForm> forms = new ArrayList<>();
         for (CharacterNameResponse character : characters) {

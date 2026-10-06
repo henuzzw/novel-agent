@@ -12,6 +12,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 审稿实体目录。
+ *
+ * <p>为审稿构造可消歧的已有实体候选目录，结合章节相关信息标注候选。目录帮助模型引用稳定 ID，不授权模型创造不存在的实体 ID。</p>
+ */
 @Service
 public class EntityCatalogService {
     private final JdbcTemplate jdbc;
@@ -20,6 +25,12 @@ public class EntityCatalogService {
         this.jdbc = jdbc;
     }
 
+    /**
+     * 构建审稿用实体候选目录，标注章节相关候选；模型只能引用目录中的有效 ID，无法确定时应保留未知。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param contract 本次关联章节合同，内容及版本必须与来源匹配。
+     */
     @Transactional(readOnly = true)
     public EntityCatalogContext forReview(UUID projectId, ChapterContractContent contract) {
         Set<String> relevantNames = java.util.stream.Stream.concat(

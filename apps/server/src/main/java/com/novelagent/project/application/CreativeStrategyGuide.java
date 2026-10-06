@@ -6,7 +6,9 @@ import com.novelagent.project.domain.CreativeStrategyPolicy;
 public final class CreativeStrategyGuide {
     public static String render(CreativeStrategyPolicy policy) {
         String common = "项目创作策略：" + policy.strategy().name() + "；策略版本：" + policy.policyVersion()
-                + "。策略控制结构与读者期待，不替代写作风格，不改变事实、人物能力、视角或作者确认内容。\n";
+                + "。策略控制结构与读者期待，不替代写作风格，不改变事实、人物能力、视角或作者确认内容。\n"
+                + "策略是系统辅助规则，不是作者本轮原文；在本阶段有效上游约束和修订授权内，作者本轮明确要求优先于通用策略建议。\n"
+                + "作者明确指定的开场、回忆框架或节奏不得仅为套用策略而更换；在既定选择内改善因果和阅读期待，上游冲突交作者确认，不擅改事实。\n";
         if (policy.strategy() == CreativeStrategy.STANDARD) {
             return common + "标准创作：按故事类型与章节目标组织场景，允许有效的安静场景和必要过渡；不强制每章反转或高强度冲突。";
         }

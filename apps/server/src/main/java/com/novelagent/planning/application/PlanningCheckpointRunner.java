@@ -12,6 +12,11 @@ import com.novelagent.project.application.CreativeStrategyGuide;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/**
+ * 规划片段执行。
+ *
+ * <p>事务外生成指定范围的章节计划，再提交当前尝试结果。前置片段只是计划，不是人物已知事实；拒绝越界范围和已发生状态，不自动重试。</p>
+ */
 @Service
 public class PlanningCheckpointRunner {
     private final PlanningCheckpointService checkpoints;
@@ -24,6 +29,13 @@ public class PlanningCheckpointRunner {
         this.checkpoints = checkpoints; this.models = models; this.mapper = mapper; this.outlineSchema = outlineSchema;
     }
 
+    /**
+     * 执行指定规划片段的当前尝试，按来源及范围保存结果；结果仍是待作者审阅的计划。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     public PlanningCheckpoint run(UUID projectId, UUID id, long expectedVersion) {
         if (checkpoints.get(projectId, id).chunkKey().startsWith("batch:")) {
             throw new IllegalArgumentException("批次片段请通过规划批次生成下一块，不能绕过批次来源校验");
@@ -31,6 +43,15 @@ public class PlanningCheckpointRunner {
         return run(projectId, id, expectedVersion, null, 0);
     }
 
+    /**
+     * 执行指定规划片段的当前尝试，按来源及范围保存结果；结果仍是待作者审阅的计划。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param wordBudget 规划使用的目标字数预算。
+     * @param chapterCount 本次处理的章节数量。
+     */
     public PlanningCheckpoint run(UUID projectId, UUID id, long expectedVersion,
             OutlineWordBudget wordBudget, int chapterCount) {
         if (checkpoints.get(projectId, id).source().provider() == ModelProvider.LOCAL_TEMPLATE) {

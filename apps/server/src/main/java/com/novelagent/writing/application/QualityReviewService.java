@@ -18,6 +18,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/**
+ * 正文质量检查。
+ *
+ * <p>读取固定正文与上下文，事务外生成四维报告，或按作者选中建议有限修订。默认仅表达层，场景结构需显式授权；检查和修订均不批准正文。</p>
+ */
 @Service
 public class QualityReviewService {
     private final QualityReviewStore store;
@@ -35,8 +40,23 @@ public class QualityReviewService {
         this.budgets = budgets;
     }
 
+    /**
+     * 读取最新保存结果；“最新”不自动表示已发布、已确认或已进入正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     public Optional<QualityReviewResponse> latest(UUID projectId, int chapter) { return store.latest(projectId, chapter); }
 
+    /**
+     * 读取当前正文与完整检查依据，在事务外生成四维报告，再由存储层复核并保存；正文无需先进入正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     */
     public QualityReviewResponse generate(UUID projectId, int chapter, ModelProvider provider, String instruction) {
         validateInstruction(instruction);
         var source = store.snapshot(projectId, chapter);
@@ -56,11 +76,32 @@ public class QualityReviewService {
         return store.save(source, selected.name(), instruction, generated);
     }
 
+    /**
+     * 核对当前报告及作者所选问题，按 EXPRESSION_ONLY 或明确 SCENE_STRUCTURE 范围构造修订草稿，再复核来源保存，不自动接受。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @param reportId 用于检查或修订的报告 ID。
+     * @param issueIds 作者选中的报告问题 ID，不能夹带未授权的新问题。
+     * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     */
     public ManuscriptResponse revise(UUID projectId, int chapter, UUID reportId, List<String> issueIds,
             ModelProvider provider, String instruction) {
         return revise(projectId, chapter, reportId, issueIds, provider, instruction, Scope.EXPRESSION_ONLY);
     }
 
+    /**
+     * 核对当前报告及作者所选问题，按 EXPRESSION_ONLY 或明确 SCENE_STRUCTURE 范围构造修订草稿，再复核来源保存，不自动接受。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapter 当前处理章号，从 1 开始。
+     * @param reportId 用于检查或修订的报告 ID。
+     * @param issueIds 作者选中的报告问题 ID，不能夹带未授权的新问题。
+     * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     * @param scope 作者明确授权的修订层次，默认仅表达层。
+     */
     public ManuscriptResponse revise(UUID projectId, int chapter, UUID reportId, List<String> issueIds,
             ModelProvider provider, String instruction, Scope scope) {
         validateInstruction(instruction);
@@ -73,10 +114,25 @@ public class QualityReviewService {
         return store.saveRevision(report, draft);
     }
 
+    /**
+     * 从作者选中的报告问题构造受控修订要求，默认只允许表达层；结构问题必须有显式授权。
+     *
+     * @param report 待保存或读取的解析、审阅报告。
+     * @param issueIds 作者选中的报告问题 ID，不能夹带未授权的新问题。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     */
     static String revisionInstruction(QualityReviewVersion report, List<String> issueIds, String instruction) {
         return revisionInstruction(report, issueIds, instruction, Scope.EXPRESSION_ONLY);
     }
 
+    /**
+     * 从作者选中的报告问题构造受控修订要求，默认只允许表达层；结构问题必须有显式授权。
+     *
+     * @param report 待保存或读取的解析、审阅报告。
+     * @param issueIds 作者选中的报告问题 ID，不能夹带未授权的新问题。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     * @param scope 作者明确授权的修订层次，默认仅表达层。
+     */
     static String revisionInstruction(QualityReviewVersion report, List<String> issueIds, String instruction, Scope scope) {
         validateInstruction(instruction);
         Scope selectedScope = scope == null ? Scope.EXPRESSION_ONLY : scope;

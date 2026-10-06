@@ -26,6 +26,8 @@ import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.NovelProject;
+import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.List;
@@ -81,7 +83,7 @@ class OutlineServiceVersionSelectionTest {
         when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
         when(outlines.findByIdAndProjectId(older.getId(), projectId)).thenReturn(Optional.of(older));
         when(workflow.generate(eq(projectId), any(), eq(budget), eq(ModelProvider.LOCAL_TEMPLATE),
-                eq(older.getContent()), eq(strategyInstruction("突出人物性格"))))
+                eq(older.getContent()), eq("突出人物性格"), eq(standardPolicy())))
                 .thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", resultContent, List.of("强化性格")));
 
         var result = service.generate(projectId, new GenerateOutlineRequest(
@@ -92,7 +94,29 @@ class OutlineServiceVersionSelectionTest {
         assertThat(result.baseOutlineVersionId()).isEqualTo(older.getId());
         assertThat(result.content().title()).isEqualTo("基于旧版微调");
         verify(workflow).generate(eq(projectId), any(), eq(budget), eq(ModelProvider.LOCAL_TEMPLATE),
-                eq(older.getContent()), eq(strategyInstruction("突出人物性格")));
+                eq(older.getContent()), eq("突出人物性格"), eq(standardPolicy()));
+    }
+
+    @Test
+    void passesSavedPolicySeparatelyWithoutAddingSystemTextToAuthorInstruction() {
+        var project = NovelProject.create(projectId, actor.currentUserId(), "测试小说",
+                com.novelagent.project.domain.EntryMode.IDEA);
+        project.publishStoryBible(bibleId);
+        var policy = CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING);
+        policy.applyTo(project);
+        when(projects.findById(projectId)).thenReturn(Optional.of(project));
+        when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.empty());
+        String author = "开头是成年后发现照片缺失。\n保留回忆框架。";
+        when(workflow.generate(projectId, bibleContent(), budget, ModelProvider.LOCAL_CODEX, null, author, policy))
+                .thenReturn(new GeneratedOutline("LOCAL_CODEX", content("新大纲")));
+
+        var result = service.generate(projectId, new GenerateOutlineRequest(
+                ModelProvider.LOCAL_CODEX, "  " + author + "  ", GenerationMode.REGENERATE, null));
+
+        verify(workflow).generate(projectId, bibleContent(), budget, ModelProvider.LOCAL_CODEX, null, author, policy);
+        assertThat(result.authorInstruction()).isEqualTo(author);
+        assertThat(result.status()).isEqualTo(OutlineStatus.DRAFT);
+        assertThat(project.getCurrentOutlineVersionId()).isNull();
     }
 
     @Test
@@ -100,7 +124,7 @@ class OutlineServiceVersionSelectionTest {
         OutlineVersion latest = version(3, "最新草稿");
         when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
         when(workflow.generate(eq(projectId), any(), eq(budget), eq(ModelProvider.LOCAL_TEMPLATE),
-                eq(latest.getContent()), eq(strategyInstruction(null))))
+                eq(latest.getContent()), eq(null), eq(standardPolicy())))
                 .thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", content("微调结果")));
 
         var result = service.generate(projectId, new GenerateOutlineRequest(
@@ -122,7 +146,7 @@ class OutlineServiceVersionSelectionTest {
         when(characterNames.render(projectId, older.getContent(), OutlineContent.class)).thenReturn(renderedBase);
         when(characterNames.render(projectId, bibleContent(), StoryBibleContent.class)).thenReturn(renderedBible);
         when(workflow.generate(projectId, renderedBible, budget, ModelProvider.LOCAL_CODEX,
-                renderedBase, strategyInstruction("微调")))
+                renderedBase, "微调", standardPolicy()))
                 .thenReturn(new GeneratedOutline("LOCAL_CODEX", renderedBase));
 
         var result = service.generate(projectId, new GenerateOutlineRequest(
@@ -130,7 +154,7 @@ class OutlineServiceVersionSelectionTest {
 
         assertThat(result.baseOutlineVersionId()).isEqualTo(older.getId());
         verify(workflow).generate(projectId, renderedBible, budget, ModelProvider.LOCAL_CODEX,
-                renderedBase, strategyInstruction("微调"));
+                renderedBase, "微调", standardPolicy());
     }
 
     @Test
@@ -139,7 +163,7 @@ class OutlineServiceVersionSelectionTest {
                 ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REGENERATE, UUID.randomUUID())))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("不能指定基准");
-        verify(workflow, never()).generate(any(), any(), any(), any(), any(), any());
+        verify(workflow, never()).generate(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -151,7 +175,7 @@ class OutlineServiceVersionSelectionTest {
         assertThatThrownBy(() -> service.generate(projectId, new GenerateOutlineRequest(
                 ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REVISE, unavailableId)))
                 .isInstanceOf(OutlineVersionNotFoundException.class);
-        verify(workflow, never()).generate(any(), any(), any(), any(), any(), any());
+        verify(workflow, never()).generate(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -178,11 +202,8 @@ class OutlineServiceVersionSelectionTest {
                 bibleId, budget, content(title));
     }
 
-    private static String strategyInstruction(String authorInstruction) {
-        return com.novelagent.project.application.CreativeStrategyGuide.render(
-                com.novelagent.project.domain.CreativeStrategyPolicy.of(
-                        com.novelagent.project.domain.CreativeStrategy.STANDARD))
-                + "\n作者本次要求：" + (authorInstruction == null ? "无" : authorInstruction);
+    private static CreativeStrategyPolicy standardPolicy() {
+        return CreativeStrategyPolicy.of(CreativeStrategy.STANDARD);
     }
 
     private static OutlineContent content(String title) {

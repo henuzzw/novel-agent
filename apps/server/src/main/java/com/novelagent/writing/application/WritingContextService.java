@@ -23,6 +23,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 写作依据上下文。
+ *
+ * <p>在短只读事务中组装当前发布规划、记忆预算和适用创作准备。正式写作与允许草稿大纲的试写分开；回忆正文、有效事实和未来计划保持标记。</p>
+ */
 @Service
 public class WritingContextService {
     private final ProjectAccessService access;
@@ -47,6 +52,12 @@ public class WritingContextService {
         this.preparation = preparation;
     }
 
+    /**
+     * 组装正式章节写作依据：当前发布圣经、大纲、章节及适用创作准备，保留规划与正史边界。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     */
     @Transactional(readOnly = true)
     public Context context(UUID projectId, int chapterNumber) {
         NovelProject project = requireOwnedProject(projectId);
@@ -66,10 +77,21 @@ public class WritingContextService {
         return prepared(resolve(outline, bible, chapterNumber, CreativeStrategyPolicy.from(project)));
     }
 
+    /**
+     * 确认项目属于当前用户，否则以项目不可见处理；本方法不锁定项目或保证后续生成期间来源不变。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     */
     public NovelProject requireOwnedProject(UUID projectId) {
         return access.requireOwnedProject(projectId);
     }
 
+    /**
+     * 读取指定已保存大纲的第一章试写依据，可使用草稿大纲；不因此放行正式正文创作。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param outlineVersionId 作者显式指定的大纲版本 ID。
+     */
     @Transactional(readOnly = true)
     public Context previewContext(UUID projectId, UUID outlineVersionId) {
         NovelProject project = requireOwnedProject(projectId);
@@ -85,6 +107,14 @@ public class WritingContextService {
         return new Context(context.outline(), context.bible(), context.arc(), context.chapter(), context.previous(), context.next(), context.creativeStrategy(), text);
     }
 
+    /**
+     * 按阶段、项目、章节与预算召回只读记忆，分别标记有效事实、前文参考和未来计划。
+     *
+     * @param stage 本次记忆或生成所处阶段，用于选择工具与预算。
+     * @param context 当前章节与关联依据的上下文，未来计划不是正史。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     * @param budget 本次上下文或检查预算，约束输入范围但不是实际费用。
+     */
     public NovelMemoryContext recall(AgentStage stage, Context context, String instruction,
             MemoryBudgetPlan budget) {
         NovelProject project = requireOwnedProject(context.outline().getProjectId());
@@ -116,6 +146,12 @@ public class WritingContextService {
         throw new IllegalArgumentException("当前大纲中不存在第 " + number + " 章");
     }
 
+    /**
+     * 根据当前上下文与召回来源计算边界指纹，用于识别记忆或依据变化，不替代文学正确性检查。
+     *
+     * @param context 当前章节与关联依据的上下文，未来计划不是正史。
+     * @param recalled 按记忆策略召回的历史信息，不是新增正史事实。
+     */
     public static String boundaryFingerprint(Context context, NovelMemoryContext recalled) {
         return NovelMemoryContext.fingerprint(context.boundaryFingerprint() + "\n" + recalled.boundaryFingerprint());
     }

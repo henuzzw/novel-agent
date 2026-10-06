@@ -10,6 +10,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * 模型响应订阅。
+ *
+ * <p>管理 SSE 订阅、定时快照推送和终态连接清理。只订阅已有任务，不启动模型；断开页面连接不等于取消任务。</p>
+ */
 @Service
 public class AgentRunStreamService {
     private final AgentRunQueryService queries;
@@ -17,6 +22,13 @@ public class AgentRunStreamService {
 
     public AgentRunStreamService(AgentRunQueryService queries) { this.queries = queries; }
 
+    /**
+     * 为已有模型任务创建 SSE 订阅，注册断开和超时清理；找不到任务时不创建连接。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param runId 模型调用记录 ID，不是供应商线程 ID。
+     * @return 匹配范围的记录；未找到时返回空 Optional。
+     */
     public Optional<SseEmitter> open(UUID projectId, UUID runId) {
         var initial = queries.output(projectId, runId);
         if (initial.isEmpty()) return Optional.empty();
@@ -31,6 +43,9 @@ public class AgentRunStreamService {
         return Optional.of(emitter);
     }
 
+    /**
+     * 逐个读取订阅任务快照并推送变化，终态或失效订阅会清理；定时观测不驱动任务生成。
+     */
     @Scheduled(fixedDelay = 1000)
     public void tick() {
         subscriptions.forEach((id, subscription) -> {

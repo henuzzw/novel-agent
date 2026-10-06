@@ -10,6 +10,11 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/**
+ * 前三章连读检查。
+ *
+ * <p>获取完整三章与依赖来源，预算允许时事务外进行一次独立检查。保存前复核来源，不截断后假装完整连读，本地模板只检查规则覆盖。</p>
+ */
 @Service
 public class FirstThreeChaptersService {
     private final FirstThreeChaptersStore store;
@@ -28,6 +33,14 @@ public class FirstThreeChaptersService {
     }
     public record View(FirstThreeChaptersSource source, boolean available, FirstThreeChaptersBudget budget,
             Report latestReport, Report latestValidReport) { }
+    /**
+     * 读取完整三章与依赖来源、历史报告及保守预算，未调用模型；依据不足或预算超限明确显示不可检查。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param ids 作者显式选定的三章正文版本 ID。
+     * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     */
     public View get(UUID projectId, List<UUID> ids, ModelProvider provider, String instruction) {
         var source = store.snapshot(projectId, selection(ids));
         var reports = store.latest(projectId, source.fingerprint());
@@ -36,6 +49,16 @@ public class FirstThreeChaptersService {
                 .findFirst().map(r -> Report.from(r, source.fingerprint())).orElse(null) : null;
         return new View(source, source.available(), model.budget(source, requireProvider(provider), instruction(instruction)), latest, valid);
     }
+    /**
+     * 核对作者提供的来源指纹和输入额度后，事务外通读完整三章一次，保存时重检来源；不裁剪后声称完整检查。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param ids 作者显式选定的三章正文版本 ID。
+     * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     * @param expectedFingerprint 界面读取的来源指纹，防止模型使用已变化依据。
+     * @param maxInputTokens 作者接受的最大输入预算，不是供应商实际 usage。
+     */
     public Report check(UUID projectId, List<UUID> ids, ModelProvider provider, String instruction,
             String expectedFingerprint, int maxInputTokens) {
         var selection = selection(ids);

@@ -10,6 +10,11 @@ import com.novelagent.writing.domain.WritingStyleRecommendationContent;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/**
+ * 圣经风格推荐。
+ *
+ * <p>根据指定圣经和当前数据库预设目录请求推荐，核对来源版本、内容及目录未变。推荐含可核验的圣经原文依据，不自动应用风格。</p>
+ */
 @Service
 public class WritingStyleRecommendationService {
     private final StoryBibleService bibles;
@@ -22,6 +27,12 @@ public class WritingStyleRecommendationService {
         this.styles = styles;
     }
 
+    /**
+     * 根据指定圣经与数据库预设请求风格推荐，返回前核对圣经及预设目录未变；结果不自动采用。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
+     */
     public WritingStyleRecommendationResponse recommend(UUID projectId, RecommendWritingStyleRequest request) {
         StoryBibleResponse source = bibles.version(projectId, request.bibleVersionId());
         WritingChecks.check(source.version(), request.expectedBibleVersion());

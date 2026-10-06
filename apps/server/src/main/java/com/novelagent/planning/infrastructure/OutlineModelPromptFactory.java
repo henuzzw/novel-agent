@@ -7,6 +7,8 @@ import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.project.application.CreativeStrategyGuide;
+import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -21,6 +23,8 @@ public class OutlineModelPromptFactory {
         return """
                 你是长篇小说规划 Agent，负责生成全书、卷/幕、章节三级大纲。
                 已发布故事圣经的世界规则、人物弧光、结局方向和硬约束是最高优先级；作者本次要求不能推翻这些硬约束。
+                作者本轮明确要求优先于系统生成的项目策略和通用创作建议；策略只在有效上游约束与作者授权范围内优化，不得冒充作者要求。
+                作者指定开场、回忆框架或节奏时，保留这一选择并改善其内部因果，不为强开篇擅自更换场景或补造危机。
                 调整旧版时，先识别作者本次要求具体影响的卷、章节和字段；未受影响部分沿用选定基准大纲。
                 章节由人物目标驱动，事件有原因和后果，关系与冲突逐步发展。不要为了凑章节数凭空增加重复事件。
                 字数是模糊容量参考：整书建议区间落在给定范围内，卷章字数允许随剧情自然浮动，不要求逐级精确相加。
@@ -31,6 +35,12 @@ public class OutlineModelPromptFactory {
 
     public String userPrompt(StoryBibleContent bible, OutlineWordBudget budget, OutlineContent previousOutline,
             String instruction) {
+        return userPrompt(bible, budget, previousOutline, instruction,
+                CreativeStrategyPolicy.of(CreativeStrategy.STANDARD));
+    }
+
+    public String userPrompt(StoryBibleContent bible, OutlineWordBudget budget, OutlineContent previousOutline,
+            String instruction, CreativeStrategyPolicy policy) {
         String modeRules = previousOutline == null
                 ? """
                   【生成方式：从头规划】
@@ -58,13 +68,21 @@ public class OutlineModelPromptFactory {
 
                 【作者本次要求（本轮修改重点）】
                 %s
+                以上为作者填写的本轮要求，不含系统生成的项目策略；空值“无”不表示作者授权整体重写。
                 调整模式下先落实与故事圣经硬约束不冲突的本次要求，再检查哪些旧版内容必须改变；不要因此改写无关章节。
 
                 【依据优先级】
-                1. 已发布故事圣经的明确事实、世界规则和硬约束。
-                2. 与上述内容不冲突的作者本次要求。
-                3. 调整模式下选定的基准大纲；只修正与前两项真正冲突的部分。
+                1. 不可越过的边界：已发布故事圣经的明确事实、世界规则、人物弧光、结局方向和硬约束，以及已发生 OCCURRED 章节与已确认事实。
+                2. 与上述边界不冲突的作者本轮明确要求，决定修改目标、开场和叙事选择。
+                3. 系统生成的项目创作策略，只在前两项范围内优化结构和阅读期待，不覆盖作者选择。
+                4. 调整模式下选定的基准大纲；除作者明确授权或有效上游约束实际影响的部分外保持原样，不能仅因策略建议改变而重写。
+                作者要求与硬约束冲突时，不悄悄改事实；调整模式在 changeSummary 说明未执行的要求、冲突依据及需作者先修改的上游，新规划在相关字段说明限制，不增加输出字段。
                 openQuestions 是待确认问题，不得擅自写成已确立事实。
+
+                【项目创作策略（系统辅助规则，不是作者原文）】
+                %s
+                策略与作者明确选择不一致时，以不违反上游边界的作者要求为准；不能为了套用强开篇删除作者指定的成年开场、回忆框架或慢热安排。
+                若作者指定照片缺失等回忆入口，保留入口，让已知线索引出核实、寻找或判断的当前问题并连接回忆；无法建立依据时说明限制，不虚构删除者、动机或危机。
 
                 【已发布故事圣经（完整 JSON）】
                 %s
@@ -88,7 +106,7 @@ public class OutlineModelPromptFactory {
                 安静章、压抑章和悲剧章不强制正向快感，过渡章可标明主要积累；长期承诺不要求逐章兑现，不设置反转、回报或钩子的硬配额。
 
                 【整份大纲的前三章短弧】
-                以作者本次要求中明确传入的项目 policy 为准；STANDARD 或未明确提供 FANQIE_GRIPPING 时按题材与作者节奏，不强制爽点或前三章强开篇。
+                以独立“项目创作策略”区块中服务端传入的 policy 为准，不从作者原文推断项目配置；STANDARD 或未明确提供 FANQIE_GRIPPING 时按题材与作者节奏，不强制爽点或前三章强开篇。
                 仅 FANQIE_GRIPPING 下，从头规划或获授权调整前三章时，将整份大纲中的第 1～3 章一起设计为“开场问题 -> 主角行动 -> 阻力与代价 -> 第一轮兑现 -> 更长线目标”。
                 第一章：开头进入主角具体处境与迫切问题，主角可见行动遭遇阻力，章内取得第一次真实回报或不可逆变化；先有进展再留下由行动引出的具体问题。
                 第二章：承接第一章行动的后果与代价，升级阻力或使信息翻面，回应第一章一个具体期待；不重复设定介绍、心理结论或同型冲突。
@@ -101,9 +119,11 @@ public class OutlineModelPromptFactory {
                 【输出检查】
                 content 必须包含完整全书大纲，arcs 中每卷包含 chapters，章节编号从 1 连续递增。
                 逐条核对开头的作者本次要求是否落实；与故事圣经硬约束冲突时以圣经为准，不要悄悄改写硬约束。
+                再核对是否保留作者指定的开场与叙事框架；不得用项目策略取代本轮要求，不因作者保留回忆框架就判定必须换场。
                 调整模式再对照选定基准大纲：未受影响的卷章、因果顺序和 status 必须保持原样，changeSummary 只列实际改动及原因。
                 返回格式：{"content":{...完整分层大纲...},"changeSummary":[]}。
-                """.formatted(instruction == null || instruction.isBlank() ? "无" : instruction.trim(), json(bible),
+                """.formatted(instruction == null || instruction.isBlank() ? "无" : instruction.trim(),
+                CreativeStrategyGuide.render(policy), json(bible),
                 budget.targetWords(), budget.acceptableMinWords(), budget.acceptableMaxWords(),
                 budget.recommendedVolumeCount(), budget.recommendedChapterCount(),
                 budget.recommendedChapterMinWords(), budget.recommendedChapterMaxWords(),

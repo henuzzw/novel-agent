@@ -37,6 +37,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 三章报告存储。
+ *
+ * <p>读取完整三章正文及规划、风格、档案等依赖，构造来源指纹并保存私有报告。保存阶段重新核对来源，不以摘要代替完整正文。</p>
+ */
 @Component
 public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
     private final ProjectAccessService access;
@@ -68,11 +73,24 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
         this.jdbc = jdbc; this.qualityReports = qualityReports;
     }
 
+    /**
+     * 读取作者明确选择或当前可用的前三章完整正文及依赖，计算一致来源快照；缺失章节不以摘要代替。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param selection 作者显式选定的正文版本 ID 列表，顺序和范围须满足三章检查要求。
+     */
     @Override @Transactional(readOnly = true)
     public FirstThreeChaptersSource snapshot(UUID projectId, List<UUID> selection) {
         return read(projectId, selection, false);
     }
 
+    /**
+     * 读取完整源章及依赖配置，保持实际正文和状态边界；缺章不从合同或摘要补正文。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param selection 作者显式选定的正文版本 ID 列表，顺序和范围须满足三章检查要求。
+     * @param lock 是否加数据库行锁；加锁需要调用方维持有效事务。
+     */
     private FirstThreeChaptersSource read(UUID projectId, List<UUID> selection, boolean lock) {
         var project = access.requireOwnedProject(projectId);
         if (lock) em.refresh(project, LockModeType.PESSIMISTIC_WRITE);
@@ -151,6 +169,13 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
                 strategy, outlineText, bibleText, style, profile, List.copyOf(chapters), List.copyOf(reasons), hash(json(dependencies)));
     }
 
+    /**
+     * 返回当前作者在本项目的最新连读报告，以及同指纹的最近报告（若不同则补充），避免重复返回同一记录；查询不重新执行检查。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param fingerprint 报告对应的精确来源指纹。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Override @Transactional(readOnly = true)
     public List<FirstThreeChaptersReport> latest(UUID projectId, String fingerprint) {
         access.requireOwnedProject(projectId);
@@ -161,6 +186,16 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
         return List.copyOf(values);
     }
 
+    /**
+     * 在短事务中重新读取来源并比较指纹，来源不变才保存三章报告与预算信息；不接受正文、不修改正史。
+     *
+     * @param source 生成或检查前读取的来源快照，用于保存时再次复核。
+     * @param selection 作者显式选定的正文版本 ID 列表，顺序和范围须满足三章检查要求。
+     * @param provider 实际生成器来源标识，随报告保存以便追溯。
+     * @param instruction 作者本次要求，只能在已有事实与授权边界内执行。
+     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
+     * @param budget 本次上下文或检查预算，约束输入范围但不是实际费用。
+     */
     @Override @Transactional
     public FirstThreeChaptersReport save(FirstThreeChaptersSource source, List<UUID> selection, String provider,
             String instruction, FirstThreeChaptersContent content, FirstThreeChaptersBudget budget) {

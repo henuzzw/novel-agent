@@ -17,6 +17,15 @@ class CreativeStrategyGuideTest {
     }
 
     @Test
+    void strategiesDeferToExplicitAuthorChoicesWithinStageBoundaries() {
+        for (CreativeStrategy strategy : CreativeStrategy.values()) {
+            assertThat(CreativeStrategyGuide.render(CreativeStrategyPolicy.of(strategy)))
+                    .contains("不是作者本轮原文", "有效上游约束和修订授权",
+                            "作者本轮明确要求优先于通用策略建议", "不得仅为套用策略而更换", "不擅改事实");
+        }
+    }
+
+    @Test
     void standardDoesNotInheritGrippingRequirements() {
         assertThat(CreativeStrategyGuide.render(CreativeStrategyPolicy.of(CreativeStrategy.STANDARD)))
                 .contains("标准创作", "允许有效的安静场景", "不强制每章反转")

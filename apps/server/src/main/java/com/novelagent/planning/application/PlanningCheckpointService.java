@@ -24,6 +24,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 规划片段存储。
+ *
+ * <p>管理来源与依赖指纹、执行尝试及片段状态转换。认领与保存都复核来源，复用必须匹配依据；批次依赖不能凭相同标题或范围猜测。</p>
+ */
 @Service
 public class PlanningCheckpointService {
     private final ProjectAccessService access;
@@ -65,11 +70,24 @@ public class PlanningCheckpointService {
             CreativeStrategyPolicy creativeStrategy, ModelProvider provider, String instruction,
             String chunkKey, int chapterFrom, int chapterTo, List<PlanningCheckpoint.Dependency> dependencies) { }
 
+    /**
+     * 创建本模块业务记录或任务；是否继续执行、发布或确认由该模块后续动作决定。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param command 本次显式业务命令，包含范围、来源或预期版本。
+     */
     @Transactional
     public PlanningCheckpoint create(UUID projectId, CreateCommand command) {
         return createDependent(projectId, command, List.of());
     }
 
+    /**
+     * 根据明确前置依赖创建后续规划片段，保存依赖版本及指纹，不按标题猜前置关系。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param command 本次显式业务命令，包含范围、来源或预期版本。
+     * @param precedingIds 当前章之前的来源版本 ID，供建立连续性上下文。
+     */
     @Transactional
     public PlanningCheckpoint createDependent(UUID projectId, CreateCommand command, List<UUID> precedingIds) {
         if (command == null) throw new IllegalArgumentException("规划分块要求不能为空");
@@ -88,18 +106,37 @@ public class PlanningCheckpointService {
                 .orElseGet(() -> store.insert(projectId, command.chunkKey(), command.chapterFrom(), command.chapterTo(), source));
     }
 
+    /**
+     * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<PlanningCheckpoint> list(UUID projectId) {
         access.requireOwnedProject(projectId);
         return store.list(projectId);
     }
 
+    /**
+     * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     */
     @Transactional(readOnly = true)
     public PlanningCheckpoint get(UUID projectId, UUID id) {
         access.requireOwnedProject(projectId);
         return checkpoint(projectId, id, false);
     }
 
+    /**
+     * 在短事务内认领本次执行或修订尝试，校验当前状态、来源和版本；认领不是模型成功。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     @Transactional
     public Claim claim(UUID projectId, UUID id, long expectedVersion) {
         NovelProject project = ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
@@ -114,6 +151,14 @@ public class PlanningCheckpointService {
                         .map(PlanningCheckpoint.Dependency::checkpointId).toList()));
     }
 
+    /**
+     * 保存指定片段当前尝试的生成结果并标记成功，成功不等于大纲已发布。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param attempt 当前执行尝试编号，隔离取消或重试后的旧执行器。
+     * @param result 本次操作或模型调用产生的结果。
+     */
     @Transactional
     public PlanningCheckpoint succeed(UUID projectId, UUID id, long attempt, PlanningCheckpointResult result) {
         NovelProject project = ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
@@ -126,6 +171,14 @@ public class PlanningCheckpointService {
         return checkpoint(projectId, id, false);
     }
 
+    /**
+     * 记录当前尝试失败，保留可恢复来源及状态；取消或过期尝试不应被旧结果重新激活。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param attempt 当前执行尝试编号，隔离取消或重试后的旧执行器。
+     * @param reason 修改、失败或取消原因。
+     */
     @Transactional
     public PlanningCheckpoint fail(UUID projectId, UUID id, long attempt, String reason) {
         ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
@@ -136,6 +189,13 @@ public class PlanningCheckpointService {
         return checkpoint(projectId, id, false);
     }
 
+    /**
+     * 请求取消当前任务并按状态约束阻止继续推进；已完成的业务结果不会因此回滚。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     @Transactional
     public PlanningCheckpoint cancel(UUID projectId, UUID id, long expectedVersion) {
         ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
@@ -147,6 +207,13 @@ public class PlanningCheckpointService {
         return checkpoint(projectId, id, false);
     }
 
+    /**
+     * 显式重开失败任务的执行尝试；保留来源校验并隔离旧尝试结果。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     */
     @Transactional
     public PlanningCheckpoint retry(UUID projectId, UUID id, long expectedVersion) {
         NovelProject project = ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
@@ -160,6 +227,12 @@ public class PlanningCheckpointService {
         return checkpoint(projectId, id, false);
     }
 
+    /**
+     * 复核冻结圣经、项目策略和依赖后复用成功片段，失败或失效来源不因键相同而继续采用。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     */
     @Transactional
     public ReusedResult reuse(UUID projectId, UUID id) {
         NovelProject project = ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);

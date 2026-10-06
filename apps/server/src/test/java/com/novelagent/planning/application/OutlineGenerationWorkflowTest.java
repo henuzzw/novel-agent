@@ -8,6 +8,8 @@ import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -15,10 +17,15 @@ import org.junit.jupiter.api.Test;
 class OutlineGenerationWorkflowTest {
     @Test
     void runsOutlineGeneratorThroughAgentGraph() {
+        var policy = CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING);
+        String authorInstruction = "保留成年开场与回忆框架";
         OutlineGenerator generator = new OutlineGenerator() {
             @Override public ModelProvider provider() { return ModelProvider.LOCAL_TEMPLATE; }
             @Override public GeneratedOutline generate(UUID projectId, StoryBibleContent bible,
-                    OutlineWordBudget budget, OutlineContent previousOutline, String instruction) {
+                    OutlineWordBudget budget, OutlineContent previousOutline, String instruction,
+                    CreativeStrategyPolicy receivedPolicy) {
+                assertThat(instruction).isEqualTo(authorInstruction);
+                assertThat(receivedPolicy).isEqualTo(policy);
                 ChapterPlan chapter = new ChapterPlan(1, "开端", "主角", "目标", "事件", "揭示", "钩子", 2000, 4000);
                 OutlineArc arc = new OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果", 50000, 70000, List.of(chapter));
                 return new GeneratedOutline(provider().name(), new OutlineContent("大纲", "前提", "结构", "节奏",
@@ -32,7 +39,7 @@ class OutlineGenerationWorkflowTest {
         OutlineWordBudget budget = new OutlineWordBudget(120000, 110000, 130000, 2, 40, 3000, 2400, 3600);
 
         GeneratedOutline result = workflow.generate(
-                UUID.randomUUID(), bible, budget, ModelProvider.LOCAL_TEMPLATE, null, null);
+                UUID.randomUUID(), bible, budget, ModelProvider.LOCAL_TEMPLATE, null, authorInstruction, policy);
 
         assertThat(result.content().chapterCount()).isEqualTo(1);
         assertThat(result.generatorType()).isEqualTo("LOCAL_TEMPLATE");

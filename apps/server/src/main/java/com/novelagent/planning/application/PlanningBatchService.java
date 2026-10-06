@@ -34,6 +34,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 分块规划批次。
+ *
+ * <p>冻结圣经、策略、预算和依赖链，控制逐块认领、恢复与组装。只支持未发生正文的全书新规划；组装要求完整连续范围，产生可编辑大纲草稿。</p>
+ */
 @Service
 public class PlanningBatchService {
     private final ProjectAccessService access;
@@ -86,6 +91,12 @@ public class PlanningBatchService {
             StoryBibleContent bible, CreativeIntentSnapshot intent, long intentVersion,
             CreativeStrategyPolicy policy, UUID currentOutlineId, long canonVersion, PlanningBatch.Source source) { }
 
+    /**
+     * 创建本模块业务记录或任务；是否继续执行、发布或确认由该模块后续动作决定。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param command 本次显式业务命令，包含范围、来源或预期版本。
+     */
     @Transactional
     public View create(UUID projectId, CreateCommand command) {
         if (command == null) throw new IllegalArgumentException("规划批次要求不能为空");
@@ -115,18 +126,37 @@ public class PlanningBatchService {
         return view(store.insert(projectId, command.requestId(), source, sourceHash(project, bible, source)));
     }
 
+    /**
+     * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<View> list(UUID projectId) {
         access.requireOwnedProject(projectId);
         return store.list(projectId).stream().map(this::view).toList();
     }
 
+    /**
+     * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     */
     @Transactional(readOnly = true)
     public View get(UUID projectId, UUID id) {
         access.requireOwnedProject(projectId);
         return view(batch(projectId, id, false));
     }
 
+    /**
+     * 锁定批次并校验完整前置链后认领下一块，防止重复执行和跳过依赖。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param version 本次操作要求匹配的业务行版本。
+     */
     @Transactional
     public Claim claimNext(UUID projectId, UUID id, long version) {
         NovelProject project = ownedLocked(projectId);
@@ -162,6 +192,13 @@ public class PlanningBatchService {
         return new Claim(batch.version() + 1, next, batch.source().wordBudget(), batch.source().chapterTo());
     }
 
+    /**
+     * 保存当前认领尝试的结果并推进阶段，复核来源或尝试未变化；迟到输出不能覆盖新尝试。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param claimedVersion 认领时取得的任务行版本，防止旧尝试更新新状态。
+     */
     @Transactional
     public View finish(UUID projectId, UUID id, long claimedVersion) {
         NovelProject project = ownedLocked(projectId);
@@ -173,6 +210,13 @@ public class PlanningBatchService {
         return view(batch(projectId, id, false));
     }
 
+    /**
+     * 记录当前尝试失败，保留可恢复来源及状态；取消或过期尝试不应被旧结果重新激活。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param claimedVersion 认领时取得的任务行版本，防止旧尝试更新新状态。
+     */
     @Transactional
     public void fail(UUID projectId, UUID id, long claimedVersion) {
         ownedLocked(projectId);
@@ -181,6 +225,13 @@ public class PlanningBatchService {
         change(batch, PlanningBatch.Status.FAILED, batch.checkpointIds(), null);
     }
 
+    /**
+     * 请求取消当前任务并按状态约束阻止继续推进；已完成的业务结果不会因此回滚。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param version 本次操作要求匹配的业务行版本。
+     */
     @Transactional
     public View cancel(UUID projectId, UUID id, long version) {
         ownedLocked(projectId);
@@ -197,6 +248,13 @@ public class PlanningBatchService {
         return view(batch(projectId, id, false));
     }
 
+    /**
+     * 按当前来源与状态恢复任务；恢复不是绕过版本校验，也不是无限自动重试授权。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param version 本次操作要求匹配的业务行版本。
+     */
     @Transactional
     public View resume(UUID projectId, UUID id, long version) {
         NovelProject project = ownedLocked(projectId);
@@ -218,6 +276,13 @@ public class PlanningBatchService {
         return view(batch(projectId, id, false));
     }
 
+    /**
+     * 把已完成且范围完整的规划块确定性组装为新大纲草稿，不再调用模型也不自动发布。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param version 本次操作要求匹配的业务行版本。
+     */
     @Transactional
     public OutlineResponse assemble(UUID projectId, UUID id, long version) {
         NovelProject project = ownedLocked(projectId);

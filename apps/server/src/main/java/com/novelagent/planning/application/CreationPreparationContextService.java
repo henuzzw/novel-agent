@@ -14,6 +14,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 创作准备上下文。
+ *
+ * <p>查询当前适用准备资料、剧情单元检查点和正文事实关联候选。只将明确确认的关联写为规划链接，不把未来设计当成正文事实。</p>
+ */
 @Service
 public class CreationPreparationContextService {
     private final ProjectAccessService access;
@@ -25,6 +30,13 @@ public class CreationPreparationContextService {
             CharacterNameService names, ReaderExperienceService ledger) {
         this.access = access; this.jdbc = jdbc; this.mapper = mapper; this.names = names; this.ledger = ledger;
     }
+    /**
+     * 组装正式章节写作依据：当前发布圣经、大纲、章节及适用创作准备，保留规划与正史边界。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param outlineId 大纲版本 ID，与生成序号和行版本不同。
+     * @param chapter 当前处理章号，从 1 开始。
+     */
     @Transactional(readOnly = true)
     public String context(UUID projectId, UUID outlineId, int chapter) {
         access.requireOwnedProject(projectId);
@@ -62,6 +74,12 @@ public class CreationPreparationContextService {
     }
     public record Link(UUID id, UUID planId, String title, int chapterNumber, String state, String evidence, boolean stale, boolean recorded) { }
     public record Checkpoint(String key, String title, int startChapter, int endChapter, boolean ready, boolean reviewed, boolean stale) { }
+    /**
+     * 查询剧情单元检查点及相关来源覆盖，不自动运行复核或调整章节。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<Checkpoint> checkpoints(UUID projectId) {
         access.requireOwnedProject(projectId);
@@ -88,6 +106,12 @@ public class CreationPreparationContextService {
                             && (Integer) review.get("end_chapter") >= unit.endChapter()), stale)).toList();
         } catch (JsonProcessingException e) { throw new IllegalStateException("剧情复核节点无法读取", e); }
     }
+    /**
+     * 查询复核报告提出的正文事实与计划关联及其有效性；待确认关联不表示台账进度已提交。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<Link> links(UUID projectId) {
         access.requireOwnedProject(projectId);
@@ -106,6 +130,15 @@ public class CreationPreparationContextService {
                 names.render(projectId, rs.getString("title")), rs.getInt("chapter_number"), rs.getString("proposed_state"),
                 names.render(projectId, rs.getString("evidence")), rs.getBoolean("stale"), rs.getBoolean("recorded")), projectId);
     }
+    /**
+     * 由作者明确确认有效正史事实与计划的关联，并引用来源正文登记台账进度；拒绝来源失效或未明确确认的提交。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param requestId 客户端请求关联或幂等 ID，具体用途见方法说明。
+     * @param planVersion 计划记录的乐观锁版本，用于拒绝过期修改。
+     * @param authorConfirmed 作者是否明确确认本次操作。
+     */
     @Transactional
     public void confirmLink(UUID projectId, UUID id, UUID requestId, long planVersion, boolean authorConfirmed) {
         access.requireOwnedProject(projectId);

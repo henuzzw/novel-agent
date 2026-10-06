@@ -28,6 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 伏笔与承诺台账。
+ *
+ * <p>校验作者计划、来源正文、逐字证据及合法进展状态，事务内追加确认事件。请求指纹支持幂等，版本条件保护手工编辑；未来计划和正史有效性分别展示。</p>
+ */
 @Service
 public class ReaderExperienceService {
     private final ProjectAccessService access;
@@ -40,24 +45,48 @@ public class ReaderExperienceService {
         this.access = access; this.actor = actor; this.store = store; this.mapper = mapper;
     }
 
+    /**
+     * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<ReaderExperienceEntry> list(UUID projectId) {
         access.requireOwnedProject(projectId);
         return store.plans(projectId).stream().map(plan -> entry(plan)).toList();
     }
 
+    /**
+     * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ReaderExperienceEntry get(UUID projectId, UUID id) {
         access.requireOwnedProject(projectId);
         return entry(requirePlan(projectId, id));
     }
 
+    /**
+     * 列出可引用的作者已确认正文来源，并保留是否已提交正史及是否被替换的区别。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public List<ReaderExperienceManuscript> sources(UUID projectId) {
         access.requireOwnedProject(projectId);
         return store.acceptedSources(projectId);
     }
 
+    /**
+     * 读取原始或已确认来源资料并保留来源版本，供下载、证据引用或后续业务复核。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param manuscriptId 作为来源或证据引用的正文版本 ID。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ReaderExperienceSource source(UUID projectId, UUID manuscriptId) {
         access.requireOwnedProject(projectId);
@@ -65,12 +94,23 @@ public class ReaderExperienceService {
                 .orElseThrow(() -> new WritingResourceNotFoundException("已确认正文", manuscriptId));
     }
 
+    /**
+     * 按当前大纲分组已有有效正史摘要，保留未分配章节；不是新模型生成的全书压缩摘要。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ReaderExperienceMemory memory(UUID projectId) {
         access.requireOwnedProject(projectId);
         return store.memory(projectId);
     }
 
+    /**
+     * 创建本模块业务记录或任务；是否继续执行、发布或确认由该模块后续动作决定。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param input 本次结构化业务输入或确认命令。
+     */
     @Transactional
     public ReaderExperienceEntry create(UUID projectId, ReaderExperiencePlanInput input) {
         if (input == null) throw new IllegalArgumentException("计划不能为空");
@@ -84,6 +124,13 @@ public class ReaderExperienceService {
         return entry(plan);
     }
 
+    /**
+     * 保存作者提交的编辑内容，并遵循当前业务状态及预期版本约束；不隐式触发模型重新生成。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param input 本次结构化业务输入或确认命令。
+     */
     @Transactional
     public ReaderExperienceEntry update(UUID projectId, UUID id, ReaderExperiencePlanInput input) {
         if (input == null) throw new IllegalArgumentException("计划不能为空");
@@ -98,6 +145,14 @@ public class ReaderExperienceService {
         return entry(requirePlan(projectId, id));
     }
 
+    /**
+     * 按预期版本及请求幂等标识软删除计划，保留历史来源与确认事件，不删除正文正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
+     * @param requestId 客户端请求关联或幂等 ID，具体用途见方法说明。
+     */
     @Transactional
     public void delete(UUID projectId, UUID id, long expectedVersion, UUID requestId) {
         if (requestId == null || expectedVersion < 0) throw new IllegalArgumentException("缺少请求标识或有效版本");
@@ -109,6 +164,13 @@ public class ReaderExperienceService {
         store.remember(projectId, requestId, id, hash, actor.currentUserId());
     }
 
+    /**
+     * 校验作者明确确认、合法状态转换和来源正文连续原文证据后追加台账事件；不会因此将正文提交正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param id 当前方法所操作记录的稳定 ID。
+     * @param input 本次结构化业务输入或确认命令。
+     */
     @Transactional
     public ReaderExperienceEntry submit(UUID projectId, UUID id, ReaderExperienceSubmission input) {
         if (input == null) throw new IllegalArgumentException("提交不能为空");

@@ -15,6 +15,8 @@ import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.project.application.CreativeStrategyGuide;
+import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -42,11 +44,17 @@ class CodexAppServerOutlineGeneratorTest {
                 new OutlineModelPromptFactory(new ObjectMapper()), parser,
                 new OutlineOutputSchema(new ObjectMapper()));
 
-        assertThat(generator.generate(projectId, bible, budget, selected, "微调")).isSameAs(expected);
+        assertThat(generator.generate(projectId, bible, budget, selected, "微调",
+                CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING))).isSameAs(expected);
         var prompt = ArgumentCaptor.forClass(String.class);
         verify(models).request(eq(projectId), eq("OUTLINE"), eq(ModelProvider.LOCAL_CODEX),
                 anyString(), prompt.capture(), any(), eq("novel_outline"), eq(16_000),
                 eq(CodexSessionPolicy.NEW_THREAD));
         assertThat(prompt.getValue()).contains(CreativeStrategyGuide.outlineRules(), "仅切换 policy 不构成重写授权");
+        String authorBlock = prompt.getValue().split("【作者本次要求（本轮修改重点）】", 2)[1]
+                .split("【依据优先级】", 2)[0];
+        assertThat(authorBlock).contains("微调").doesNotContain("项目创作策略：FANQIE_GRIPPING");
+        assertThat(prompt.getValue().indexOf("微调"))
+                .isLessThan(prompt.getValue().indexOf("项目创作策略：FANQIE_GRIPPING"));
     }
 }

@@ -20,6 +20,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 规划资料同步。
+ *
+ * <p>按已确认来源确定性建立人物身份、填空档案、保存关系规划并导入明确台账。保留作者已有值及手工修改、删除记录，区分规划关系与正文事实，不调用模型。</p>
+ */
 @Service
 public class PlanningMaterialSyncService {
     private final ProjectAccessService access;
@@ -35,6 +40,11 @@ public class PlanningMaterialSyncService {
         this.jdbc = jdbc; this.mapper = mapper;
     }
 
+    /**
+     * 同步项目当前已发布圣经及大纲，旧项目可显式调用补齐规划资料；读取页面本身不执行此操作。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     */
     @Transactional
     public void syncCurrent(UUID projectId) {
         access.requireOwnedProject(projectId);
@@ -51,6 +61,11 @@ public class PlanningMaterialSyncService {
         syncCanonForeshadows(projectId);
     }
 
+    /**
+     * 从指定圣经同步人物蓝图、初始关系和明确台账；档案只填空白，不覆盖作者已有值。
+     *
+     * @param bible 指定圣经来源或其内容，不隐式使用其他最新草稿。
+     */
     @Transactional
     public void syncBible(StoryBibleVersion bible) {
         if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw new IllegalArgumentException("只能同步已发布故事圣经");
@@ -76,6 +91,11 @@ public class PlanningMaterialSyncService {
         for (var seed : bible.getContent().readerExperiencePlans()) insertPlan(projectId, "BIBLE", bible.getId(), seed);
     }
 
+    /**
+     * 从指定大纲同步明确读者体验计划，保留来源版本与作者手工改动，不猜测普通物件或钩子都是伏笔。
+     *
+     * @param outline 来源大纲或对应的规划内容。
+     */
     @Transactional
     public void syncOutline(OutlineVersion outline) {
         if (outline.getStatus() != OutlineStatus.PUBLISHED) throw new IllegalArgumentException("只能同步已发布大纲");
@@ -91,6 +111,11 @@ public class PlanningMaterialSyncService {
     }
 
     // Canon facts are mirrored as plans, not forged author evidence or automatic PAYOFF events.
+    /**
+     * 将有效正文正史伏笔接入共享台账来源，保留原正史进度，不伪造作者手工确认事件。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     */
     public void syncCanonForeshadows(UUID projectId) {
         jdbc.update("""
                 INSERT INTO reader_experience_plan(id, project_id, kind, title, promise_text, setup_text,
@@ -103,6 +128,14 @@ public class PlanningMaterialSyncService {
                 """, projectId);
     }
 
+    /**
+     * 应用作者确认的创作准备设计，建立规划人物、实体、关系与台账；不物化未经正文确认的已发生事实。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param taskId 创作准备等来源任务 ID。
+     * @param world 已选世界观或其约束内容。
+     * @param plot 剧情结构或剧情规划内容。
+     */
     @Transactional
     public void syncPreparation(UUID projectId, UUID taskId, com.novelagent.planning.domain.CreationPreparation.World world,
             com.novelagent.planning.domain.CreationPreparation.Plot plot) {
@@ -119,6 +152,13 @@ public class PlanningMaterialSyncService {
         for (var seed : plot.readerExperiencePlans()) insertPlan(projectId, "PREPARATION", taskId, seed);
     }
 
+    /**
+     * 返回查询范围内的人物关系，并保留规划与已发生事实各自的来源，不自动生成新关系。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param characterId 稳定人物实体 ID，不以显示姓名作为主键。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<PlannedRelationship> relationships(UUID projectId, UUID characterId) {
         access.requireOwnedProject(projectId);
@@ -155,6 +195,12 @@ public class PlanningMaterialSyncService {
         return result;
     }
 
+    /**
+     * 查询当前来源保存的人物规划快照；完整蓝图与独立可编辑档案各有来源和用途。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<CharacterSnapshot> characters(UUID projectId) {
         access.requireOwnedProject(projectId);
@@ -174,6 +220,12 @@ public class PlanningMaterialSyncService {
         return result;
     }
 
+    /**
+     * 查询规划资料及台账的来源版本、有效性和关联信息，供作者判断是否需要重新同步。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     */
     @Transactional(readOnly = true)
     public List<PlanOrigin> origins(UUID projectId) {
         access.requireOwnedProject(projectId);
@@ -194,6 +246,14 @@ public class PlanningMaterialSyncService {
                 rs.getObject("source_id", UUID.class), rs.getBoolean("current")), projectId);
     }
 
+    /**
+     * 按来源及稳定键幂等导入明确台账，保留作者编辑和软删除；来源替换只标有效性，不伪造进展事件。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param kind 规划条目或业务对象的分类。
+     * @param sourceId 本次处理的基准记录 ID，不隐式改用最新版本。
+     * @param seed 创建规划条目的明确来源设计，不能推定为已发生事实。
+     */
     private void insertPlan(UUID projectId, String kind, UUID sourceId, ReaderExperienceSeed seed) {
         jdbc.update("""
                 INSERT INTO reader_experience_plan(id, project_id, kind, title, promise_text, setup_text,
@@ -221,6 +281,13 @@ public class PlanningMaterialSyncService {
         return ids.getFirst();
     }
 
+    /**
+     * 仅填人物档案中的空白设定，保留作者已有值；完整蓝图另存来源快照，不以发布新版本覆盖手工档案。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param characterId 稳定人物实体 ID，不以显示姓名作为主键。
+     * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
+     */
     private void fillProfile(UUID projectId, UUID characterId, CharacterBlueprint value) {
         jdbc.update("INSERT INTO character_profile(character_id, project_id) VALUES (?, ?) ON CONFLICT DO NOTHING", characterId, projectId);
         Map<String, String> fields = new LinkedHashMap<>();
