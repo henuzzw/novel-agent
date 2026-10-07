@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
+import GenerationModeControl from '@/components/GenerationModeControl.vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import PlanningCheckpointPanel from '@/components/PlanningCheckpointPanel.vue'
 import ReaderExperienceSeedEditor from './ReaderExperienceSeedEditor.vue'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
@@ -55,6 +57,7 @@ const basePreviewQuery = useQuery({
 function copyContent(value: OutlineContent): OutlineContent {
   return {
     ...value,
+    readerExperiencePlans: value.readerExperiencePlans?.map(plan => ({ ...plan })),
     arcs: value.arcs.map((arc) => ({
       ...arc,
       chapters: arc.chapters.map((chapter) => ({ ...chapter })),
@@ -69,6 +72,9 @@ watch(() => props.projectId, () => { baseOutlineVersionId.value = ''; planningBu
 
 const chapterCount = computed(() => draft.value?.arcs.reduce((sum, arc) => sum + arc.chapters.length, 0) ?? 0)
 const editable = computed(() => outlineQuery.data.value?.status === 'DRAFT')
+const hasUnsavedChanges = computed(() => editable.value && !!draft.value && !!outlineQuery.data.value
+  && JSON.stringify(draft.value) !== JSON.stringify(copyContent(outlineQuery.data.value.content)))
+useUnsavedChanges(hasUnsavedChanges, ['section', 'planning'])
 const selectedBase = computed(() => versionsQuery.data.value?.find(
   (version) => version.id === baseOutlineVersionId.value,
 ))
@@ -169,6 +175,21 @@ function formatWords(value: number) {
       <span v-if="outlineQuery.data.value" class="version-label">最新生成：第 {{ outlineQuery.data.value.generationNumber }} 版 · {{ outlineQuery.data.value.status === 'PUBLISHED' ? '已发布' : '草稿' }}</span>
     </div>
 
+    <div class="direction-actions generation-toolbar">
+      <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" maxlength="1000" placeholder="可选，例如：前十章节奏更快，减少解释性章节" /></label>
+      <GenerationModeControl v-if="outlineQuery.data.value" v-model="generationMode" revise-label="基于选定版本调整" :disabled="editingBusy || planningBusy" />
+      <label v-if="outlineQuery.data.value" class="provider-field outline-base-field"><span>选择历史版本</span><select v-model="baseOutlineVersionId"><option value="">{{ currentOutlineQuery.data.value ? `当前写作大纲（第 ${currentOutlineQuery.data.value.generationNumber} 版）` : `最新版本（第 ${outlineQuery.data.value.generationNumber} 版）` }}</option><option v-if="currentIsOlder" :value="outlineQuery.data.value.id">最新生成（第 {{ outlineQuery.data.value.generationNumber }} 版）</option><option v-for="version in historicalVersions" :key="version.id" :value="version.id">第 {{ version.generationNumber }} 版 · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.title }}</option></select></label>
+      <GlobalModelBadge />
+      <div class="direction-action-buttons">
+        <button class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="generateMutation.mutate()"><RefreshCw :size="16" />{{ generateMutation.isPending.value ? '正在生成…' : outlineQuery.data.value ? generationMode === 'REVISE' ? '按要求调整' : '重新生成' : '生成分层大纲' }}</button>
+        <button v-if="editable" class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="saveMutation.mutate()"><Save :size="16" />{{ saveMutation.isPending.value ? '正在保存…' : '保存修改' }}</button>
+        <button v-if="editable" class="button primary" type="button" :disabled="editingBusy || planningBusy || hasUnsavedChanges" @click="publishMutation.mutate()"><Check :size="16" />{{ publishMutation.isPending.value ? '正在发布…' : '确认并发布' }}</button>
+        <button v-if="outlineQuery.data.value" type="button" class="button secondary" @click="emit('choose-style')"><Sparkles :size="16" />选择风格并试写</button>
+      </div>
+    </div>
+
+    <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
+    <p v-if="hasUnsavedChanges" class="acceptance-note" role="status">大纲有未保存修改，请先保存再发布。</p>
     <PlanningCheckpointPanel :key="projectId" :project-id="projectId" :provider="provider" :external-busy="editingBusy" @busy-change="planningBusy = $event" @assembled="selectAssembledOutline" />
 
     <div v-if="outlineQuery.isPending.value" class="direction-loading">正在读取分层大纲…</div>
@@ -227,17 +248,6 @@ function formatWords(value: number) {
 
     <div v-else class="direction-empty"><Sparkles :size="30" /><h3>从已发布故事圣经生成分层大纲</h3><p>先搭建全书路线，再拆分卷/幕和章节；字数只作容量参考。</p></div>
 
-    <div class="direction-actions">
-      <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" maxlength="1000" placeholder="可选，例如：前十章节奏更快，减少解释性章节" /></label>
-      <label v-if="outlineQuery.data.value" class="provider-field"><span>生成方式</span><select v-model="generationMode"><option value="REVISE">基于选定版本调整</option><option value="REGENERATE">重新生成</option></select></label>
-      <label v-if="outlineQuery.data.value" class="provider-field outline-base-field"><span>选择历史版本</span><select v-model="baseOutlineVersionId"><option value="">{{ currentOutlineQuery.data.value ? `当前写作大纲（第 ${currentOutlineQuery.data.value.generationNumber} 版）` : `最新版本（第 ${outlineQuery.data.value.generationNumber} 版）` }}</option><option v-if="currentIsOlder" :value="outlineQuery.data.value.id">最新生成（第 {{ outlineQuery.data.value.generationNumber }} 版）</option><option v-for="version in historicalVersions" :key="version.id" :value="version.id">第 {{ version.generationNumber }} 版 · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.title }}</option></select></label>
-      <GlobalModelBadge />
-      <div class="direction-action-buttons">
-        <button class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="generateMutation.mutate()"><RefreshCw :size="16" />{{ generateMutation.isPending.value ? '正在生成…' : outlineQuery.data.value ? generationMode === 'REVISE' ? '按要求调整' : '重新生成' : '生成分层大纲' }}</button>
-        <button v-if="editable" class="button secondary" type="button" :disabled="editingBusy || planningBusy" @click="saveMutation.mutate()"><Save :size="16" />{{ saveMutation.isPending.value ? '正在保存…' : '保存修改' }}</button>
-        <button v-if="editable" class="button primary" type="button" :disabled="editingBusy || planningBusy" @click="publishMutation.mutate()"><Check :size="16" />{{ publishMutation.isPending.value ? '正在发布…' : '确认并发布' }}</button>
-      </div>
-    </div>
     <div v-if="versionsQuery.isError.value && outlineQuery.data.value" class="form-error" role="alert">历史版本加载失败：{{ versionsQuery.error.value?.message }}</div>
     <details v-if="baseOutlineVersionId" class="outline-base-preview">
       <summary>查看第 {{ selectedBase?.generationNumber ?? '…' }} 版历史大纲</summary>
@@ -255,8 +265,6 @@ function formatWords(value: number) {
         </section>
       </div>
     </details>
-    <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
-    <div v-if="outlineQuery.data.value" class="style-actions"><button type="button" class="button secondary" @click="emit('choose-style')"><Sparkles :size="16" />选择风格并试写</button></div>
     <p v-if="outlineQuery.data.value" class="generator-note">本版本由 {{ outlineQuery.data.value.generatorType }} 生成<span v-if="currentBaseNumber"> · 基于第 {{ currentBaseNumber }} 版调整</span></p>
   </div>
 </template>

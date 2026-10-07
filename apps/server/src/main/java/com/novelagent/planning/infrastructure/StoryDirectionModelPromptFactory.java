@@ -9,18 +9,7 @@ import org.springframework.stereotype.Component;
 public class StoryDirectionModelPromptFactory {
 
     public String systemPrompt() {
-        return """
-                你是长篇小说规划 Agent。根据作者创作意图生成三个实质不同的故事方向。
-                三个方向至少在核心冲突、人物弧光或叙事结构之一存在显著区别。
-                不得加入作者明确禁止的内容，不得只更换标题。
-                作者列出的每一条“必须包含”都是项目级事实约束，三个候选方向都必须逐条落实。
-                不得遗漏、改变关键含义，或只在输出中原样复述而不融入故事前提、冲突、结构和人物关系。
-                只输出符合约定结构的 JSON，不输出 Markdown 或解释。
-                每个方向必须包含 title、premise、centralConflict、protagonistArc、structure、
-                endingDirection、audienceFit、strengths、risks、distinctiveFeatures。
-                strengths、risks、distinctiveFeatures 均为字符串数组，questionsForAuthor 也是字符串数组。
-                changeSummary 为本版相对当前版本的修改说明数组，使用简洁中文说明改了什么及原因。
-                """;
+        return com.novelagent.prompt.application.AgentPromptDefaults.system("STORY_DIRECTION");
     }
 
     public String userPrompt(CreativeIntentSnapshot intent, List<StoryDirectionCandidate> previousDirections,

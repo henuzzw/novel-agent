@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { navigateWorkspaceButtons } from '@/lib/workspace-keyboard'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
 import GenerationStatusPanel from '@/components/GenerationStatusPanel.vue'
+import GenerationModeControl from '@/components/GenerationModeControl.vue'
+import { planningViews, useWorkspaceChapter, useWorkspaceChoice, workspaceSections, writingViews } from '@/composables/useWorkspaceLocation'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
@@ -49,15 +52,16 @@ import type { AutomationChapterTarget } from '@/api/automation'
 const props = defineProps<{ projectId: string }>()
 const generationBusy = ref(false)
 const queryClient = useQueryClient()
-const automationTarget = ref<AutomationChapterTarget | null>(null)
-watch(() => props.projectId, () => { automationTarget.value = null })
+const targetChapter = useWorkspaceChapter()
+const targetWritingView = useWorkspaceChoice('writing', writingViews, 'contract')
 function openAutomationChapter(target: AutomationChapterTarget) {
-  automationTarget.value = target
+  targetChapter.value = target.chapter
+  targetWritingView.value = target.mode
   activeSection.value = 'writing'
 }
-const activeSection = ref<'writing' | 'outline' | 'materials' | 'experience' | 'relations' | 'imports' | 'runs' | 'settings'>('outline')
-const sectionInitialized = ref(false)
-const planningView = ref<'directions' | 'bible' | 'outline' | 'style' | 'preparation'>('directions')
+const defaultSection = ref<(typeof workspaceSections)[number]>('outline')
+const activeSection = useWorkspaceChoice('section', workspaceSections, () => defaultSection.value)
+const planningView = useWorkspaceChoice('planning', planningViews, 'directions')
 const selectedCandidateId = ref<string | null>(null)
 const instruction = ref('')
 const { provider: modelProvider } = useGlobalModelSettings()
@@ -97,10 +101,7 @@ const projectQuery = useQuery({
 })
 
 watch(() => projectQuery.data.value, (project) => {
-  if (!sectionInitialized.value && project) {
-    if (project.entryMode === 'MANUSCRIPT') activeSection.value = 'imports'
-    sectionInitialized.value = true
-  }
+  defaultSection.value = project?.entryMode === 'MANUSCRIPT' ? 'imports' : 'outline'
 
   if (project?.creativeIntent && intentLoadedProjectId.value !== project.id) {
     loadIntent(project)
@@ -316,6 +317,7 @@ const selectMutation = useMutation({
         :key="item.value"
         type="button"
         :class="{ active: activeSection === item.value }"
+        :aria-current="activeSection === item.value ? 'page' : undefined"
         :disabled="item.disabled"
         @click="!item.disabled && (activeSection = item.value)"
       >
@@ -340,7 +342,7 @@ const selectMutation = useMutation({
 
       <GenerationStatusPanel :key="projectId" :project-id="projectId" @busy="generationBusy = $event" @open-tasks="activeSection = 'runs'" />
 
-      <WritingWorkbench v-if="activeSection === 'writing'" :project-id="projectId" :initial-target="automationTarget" />
+      <WritingWorkbench v-if="activeSection === 'writing'" :key="projectId" :project-id="projectId" />
       <StoryMaterialsPanel v-else-if="activeSection === 'materials'" :key="projectId" :project-id="projectId" @open-bible="activeSection = 'outline'; planningView = 'bible'" />
       <div v-else-if="activeSection === 'experience'" :key="projectId">
         <ReaderExperiencePanel :project-id="projectId" />
@@ -352,12 +354,12 @@ const selectMutation = useMutation({
       <ProjectSettingsPanel v-else-if="activeSection === 'settings'" :project-id="projectId" />
 
       <div v-else class="direction-workbench">
-        <div class="planning-tabs" role="tablist" aria-label="故事规划步骤">
-          <button type="button" :class="{ active: planningView === 'directions' }" @click="planningView = 'directions'"><ListTree :size="16" />故事方向</button>
-          <button type="button" :class="{ active: planningView === 'bible' }" @click="planningView = 'bible'"><ScrollText :size="16" />故事圣经</button>
-          <button type="button" :class="{ active: planningView === 'outline' }" @click="planningView = 'outline'"><GitBranch :size="16" />分层大纲</button>
-          <button type="button" :class="{ active: planningView === 'style' }" @click="planningView = 'style'"><PenLine :size="16" />风格试写</button>
-          <button type="button" :class="{ active: planningView === 'preparation' }" @click="planningView = 'preparation'"><Sparkles :size="16" />创作准备</button>
+        <div class="planning-tabs" role="group" @keydown="navigateWorkspaceButtons" aria-label="故事规划步骤">
+          <button type="button" :aria-pressed="planningView === 'directions'" :class="{ active: planningView === 'directions' }" @click="planningView = 'directions'"><ListTree :size="16" />故事方向</button>
+          <button type="button" :aria-pressed="planningView === 'bible'" :class="{ active: planningView === 'bible' }" @click="planningView = 'bible'"><ScrollText :size="16" />故事圣经</button>
+          <button type="button" :aria-pressed="planningView === 'outline'" :class="{ active: planningView === 'outline' }" @click="planningView = 'outline'"><GitBranch :size="16" />分层大纲</button>
+          <button type="button" :aria-pressed="planningView === 'style'" :class="{ active: planningView === 'style' }" @click="planningView = 'style'"><PenLine :size="16" />风格试写</button>
+          <button type="button" :aria-pressed="planningView === 'preparation'" :class="{ active: planningView === 'preparation' }" @click="planningView = 'preparation'"><Sparkles :size="16" />创作准备</button>
         </div>
         <div v-if="planningView === 'directions'">
         <div class="section-heading">
@@ -379,6 +381,69 @@ const selectMutation = useMutation({
           </div>
         </div>
 
+        <div v-if="projectQuery.data.value?.creativeIntent && !isEditingIntent" class="direction-actions generation-toolbar">
+          <details class="must-have-details">
+            <summary>必须保留的信息 · {{ splitRequirements(intentForm.mustHaveText).length }} 条</summary>
+          <label class="instruction-field must-have-field">
+            <span>必须保留的信息（每行一条）</span>
+            <textarea
+              v-model="intentForm.mustHaveText"
+              rows="5"
+              maxlength="9000"
+              placeholder="填写不可遗漏的时间顺序、人物关系、空间布局等事实"
+            ></textarea>
+            <small>会保存到项目创作意图，并约束每个候选方向及后续故事圣经。</small>
+          </label>
+          </details>
+          <label class="instruction-field">
+            <span>本次调整要求</span>
+            <textarea
+              v-model="instruction"
+              rows="2"
+              maxlength="1000"
+              placeholder="可选，例如：减少悬疑，更突出女性成长"
+            ></textarea>
+          </label>
+          <GenerationModeControl v-if="directionsQuery.data.value" v-model="generationMode" :disabled="generateMutation.isPending.value || selectMutation.isPending.value" />
+          <label class="provider-field">
+            <span>生成模型</span>
+            <GlobalModelBadge />
+          </label>
+          <div class="direction-action-buttons">
+            <button
+              v-if="directionsQuery.data.value"
+              class="button secondary"
+              type="button"
+              :disabled="generateMutation.isPending.value || selectMutation.isPending.value"
+              @click="generateMutation.mutate()"
+            >
+              <RefreshCw :size="16" />
+              {{ generateMutation.isPending.value ? '正在生成…' : generationMode === 'REVISE' ? '按要求调整' : '重新生成' }}
+            </button>
+            <button
+              v-else
+              class="button primary"
+              type="button"
+              :disabled="generateMutation.isPending.value"
+              @click="generateMutation.mutate()"
+            >
+              <Sparkles :size="16" />
+              {{ generateMutation.isPending.value ? '正在生成…' : '生成故事方向' }}
+            </button>
+            <button
+              v-if="directionsQuery.data.value"
+              class="button primary"
+              type="button"
+              :disabled="!selectedCandidateId || selectMutation.isPending.value || generateMutation.isPending.value"
+              @click="selectMutation.mutate()"
+            >
+              <Check :size="16" />
+              {{ selectMutation.isPending.value ? '正在确认…' : '确认所选方向' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
         <div v-if="directionsQuery.isPending.value" class="direction-loading">正在读取故事方向…</div>
         <div v-else-if="directionsQuery.isError.value" class="status-panel error-panel">
           <strong>故事方向加载失败</strong>
@@ -495,73 +560,8 @@ const selectMutation = useMutation({
           </div>
         </form>
 
-        <div v-if="projectQuery.data.value?.creativeIntent && !isEditingIntent" class="direction-actions">
-          <label class="instruction-field must-have-field">
-            <span>必须保留的信息（每行一条）</span>
-            <textarea
-              v-model="intentForm.mustHaveText"
-              rows="5"
-              maxlength="9000"
-              placeholder="填写不可遗漏的时间顺序、人物关系、空间布局等事实"
-            ></textarea>
-            <small>会保存到项目创作意图，并约束每个候选方向及后续故事圣经。</small>
-          </label>
-          <label class="instruction-field">
-            <span>本次调整要求</span>
-            <textarea
-              v-model="instruction"
-              rows="2"
-              maxlength="1000"
-              placeholder="可选，例如：减少悬疑，更突出女性成长"
-            ></textarea>
-          </label>
-          <label class="provider-field">
-            <span>生成方式</span>
-            <select v-model="generationMode" :disabled="!directionsQuery.data.value">
-              <option value="REVISE">基于当前版本调整</option>
-              <option value="REGENERATE">重新生成</option>
-            </select>
-          </label>
-          <label class="provider-field">
-            <span>生成模型</span>
-            <GlobalModelBadge />
-          </label>
-          <div class="direction-action-buttons">
-            <button
-              v-if="directionsQuery.data.value"
-              class="button secondary"
-              type="button"
-              :disabled="generateMutation.isPending.value"
-              @click="generateMutation.mutate()"
-            >
-              <RefreshCw :size="16" />
-              {{ generateMutation.isPending.value ? '正在生成…' : generationMode === 'REVISE' ? '按要求调整' : '重新生成' }}
-            </button>
-            <button
-              v-else
-              class="button primary"
-              type="button"
-              :disabled="generateMutation.isPending.value"
-              @click="generateMutation.mutate()"
-            >
-              <Sparkles :size="16" />
-              {{ generateMutation.isPending.value ? '正在生成…' : '生成故事方向' }}
-            </button>
-            <button
-              v-if="directionsQuery.data.value"
-              class="button primary"
-              type="button"
-              :disabled="!selectedCandidateId || selectMutation.isPending.value"
-              @click="selectMutation.mutate()"
-            >
-              <Check :size="16" />
-              {{ selectMutation.isPending.value ? '正在确认…' : '确认所选方向' }}
-            </button>
-          </div>
-        </div>
 
         <div v-if="intentNotice" class="selection-notice"><Check :size="17" />{{ intentNotice }}</div>
-        <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
         <p v-if="directionsQuery.data.value" class="generator-note">
           本版本由 {{ directionsQuery.data.value.generatorType }} 生成
         </p>

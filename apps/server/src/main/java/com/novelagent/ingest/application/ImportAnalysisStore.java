@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.ingest.api.ImportedChapterResponse;
 import com.novelagent.ingest.domain.ImportAnalysis;
 import com.novelagent.ingest.domain.ImportPlanningMode;
@@ -12,10 +13,7 @@ import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -246,8 +244,7 @@ public class ImportAnalysisStore {
                 rs.getString("confirmed_mode") == null ? null : ImportPlanningMode.valueOf(rs.getString("confirmed_mode")), rs.getString("error_message"), rs.getLong("row_version"), rs.getTimestamp("updated_at").toInstant());
     }
     private String fingerprint(Object value) {
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json(value).getBytes(StandardCharsets.UTF_8))); }
-        catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+        return Sha256.ofUtf8(json(value));
     }
     /**
      * 序列化解析报告、来源或逐项作者决定，保存准确快照供后续指纹复核。

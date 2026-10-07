@@ -21,6 +21,7 @@ import com.novelagent.planning.infrastructure.StoryDirectionSetRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.planning.infrastructure.StoryDirectionSetRepository;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
@@ -41,7 +42,7 @@ class StoryBibleServiceManualRevisionTest {
     private final CurrentActorProvider actor = mock(CurrentActorProvider.class);
     private final CharacterNameService names = mock(CharacterNameService.class);
     private final StoryBibleService service = new StoryBibleService(projects,
-            directions, bibles, workflow, actor, names, mock(PlanningMaterialSyncService.class));
+            directions, bibles, workflow, new ProjectAccessService(projects, actor), names, mock(PlanningMaterialSyncService.class));
     private final NovelProject project = mock(NovelProject.class);
 
     @BeforeEach

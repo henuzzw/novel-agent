@@ -1,4 +1,8 @@
 :root {
+  --border: #d7dde3;
+  --surface: #fff;
+  --text-secondary: #66717d;
+  --accent: #176b63;
   color: #1c232b;
   background: #f7f8fa;
   font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
@@ -19,6 +23,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -37,6 +42,11 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
+  outline: 3px solid rgba(23, 107, 99, 0.2);
+  outline-offset: 2px;
+}
+
+select:focus-visible {
   outline: 3px solid rgba(23, 107, 99, 0.2);
   outline-offset: 2px;
 }
@@ -2856,4 +2866,185 @@ textarea:disabled {
 .project-model-settings-note {
   color: var(--text-muted, #64748b);
   margin-top: 16px;
+}
+
+/* Workspace navigation and shared generation controls. */
+.workspace-nav {
+  position: sticky;
+  top: 48px;
+  height: calc(100dvh - 48px);
+  align-self: start;
+  overflow-y: auto;
+}
+
+.workspace-content {
+  width: 100%;
+  max-width: 1600px;
+  padding: 22px 24px 40px;
+}
+
+.workspace-header {
+  gap: 16px;
+}
+
+.workspace-header > div {
+  min-width: 0;
+}
+
+.workspace-header h1 {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.workspace-header .save-status {
+  flex-shrink: 0;
+}
+
+.planning-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  margin-bottom: 18px;
+}
+
+.direction-workbench > .planning-tabs {
+  flex-wrap: nowrap;
+}
+
+.planning-tabs button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.section-heading {
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.generation-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: flex-start;
+  gap: 12px 16px;
+  margin: 0 0 20px;
+  padding: 14px 0 18px;
+  border-block: 1px solid #d7dde3;
+}
+
+.generation-toolbar > .instruction-field {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.generation-toolbar .direction-action-buttons {
+  width: 100%;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid #e3e7eb;
+}
+
+.generation-mode-control {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: 0 1 auto;
+}
+
+.generation-mode-control legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: #46515d;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.generation-mode-options {
+  display: flex;
+  gap: 0;
+  min-height: 38px;
+}
+
+.generation-mode-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #cbd2d9;
+  color: #53606c;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.generation-mode-options label:first-child { border-radius: 6px 0 0 6px; }
+.generation-mode-options label:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.generation-mode-options label.selected { position: relative; border-color: #176b63; color: #12574f; background: #eef7f5; }
+.generation-mode-options label:focus-within { outline: 2px solid #176b63; outline-offset: 2px; }
+.generation-mode-options input { flex-shrink: 0; width: 14px; height: 14px; margin: 0; accent-color: #176b63; }
+.generation-mode-control:disabled label { opacity: 0.55; cursor: not-allowed; }
+
+.provider-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  max-width: 100%;
+  padding-block: 7px;
+  text-overflow: ellipsis;
+}
+
+.direction-action-buttons { flex-wrap: wrap; }
+.direction-action-buttons .button { min-width: 0; }
+.generation-toolbar .must-have-details { width: 100%; }
+.must-have-details summary { cursor: pointer; color: #53606c; font-size: 13px; font-weight: 650; }
+.must-have-details[open] .must-have-field { margin-top: 10px; }
+
+.chapter-workflow-top {
+  position: relative;
+  top: auto;
+}
+
+.chapter-rail {
+  max-height: calc(100dvh - 100px);
+  position: sticky;
+  top: 60px;
+  align-self: start;
+}
+
+.chapter-flow { flex-wrap: wrap; overflow: visible; }
+.chapter-flow button { flex-basis: 130px; min-height: 48px; border-bottom: 1px solid #d7dde3; }
+.chapter-workflow-top .writing-actions { gap: 12px 16px; }
+.chapter-workflow-top .writing-actions > .direction-action-buttons { width: 100%; justify-content: flex-end; }
+.run-workbench { padding: 12px 0 32px; }
+.icon-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .topbar { padding: 0 10px; }
+  .brand { flex-shrink: 0; gap: 6px; white-space: nowrap; font-size: 14px; }
+  .topbar-actions { min-width: 0; gap: 4px; }
+  .topbar .global-model-button span { max-width: 100px; }
+  .topbar .avatar { display: none; }
+}
+
+@media (max-width: 800px) {
+  .workspace-nav { position: relative; top: auto; height: auto; padding: 8px; }
+  .workspace-content { padding: 18px 12px 28px; }
+  .workspace-header { align-items: flex-start; }
+  .workspace-header h1 { font-size: 20px; }
+  .workspace-header .save-status { font-size: 12px; }
+  .generation-toolbar { align-items: stretch; gap: 12px; }
+  .generation-toolbar > .instruction-field { flex-basis: auto; }
+  .generation-toolbar .provider-field, .generation-mode-control { width: 100%; }
+  .generation-mode-options label { flex: 1; justify-content: center; }
+  .generation-toolbar .direction-action-buttons,
+  .outline-panel .generation-toolbar .direction-action-buttons { display: flex; }
+  .generation-toolbar .direction-action-buttons .button { flex: 1 1 140px; white-space: normal; }
+  .chapter-rail { position: relative; top: auto; max-height: 160px; }
+  .chapter-editor { padding: 14px; }
+  .chapter-workflow-top { margin: -14px -14px 14px; padding: 12px 14px; }
+  .chapter-workflow-top .direction-action-buttons .button { flex: 1 1 130px; }
+  .chapter-flow button { flex-basis: 120px; }
+  .run-workbench { padding: 12px 0 28px; }
 }

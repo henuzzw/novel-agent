@@ -2,8 +2,7 @@ package com.novelagent.writing.application;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
@@ -23,14 +22,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class WritingStyleService {
     private final NovelProjectRepository projects;
-    private final CurrentActorProvider actors;
+    private final ProjectAccessService access;
     private final ObjectMapper mapper;
     private final WritingStylePresetCatalog catalog;
 
-    public WritingStyleService(NovelProjectRepository projects, CurrentActorProvider actors, ObjectMapper mapper,
+    public WritingStyleService(
+            NovelProjectRepository projects,
+            ProjectAccessService access,
+            ObjectMapper mapper,
             WritingStylePresetCatalog catalog) {
         this.projects = projects;
-        this.actors = actors;
+        this.access = access;
         this.mapper = mapper;
         this.catalog = catalog;
     }
@@ -44,7 +46,7 @@ public class WritingStyleService {
      */
     @Transactional(readOnly = true)
     public StyleState get(UUID projectId) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         Object value = project.getSetting("writingStyle");
         return new StyleState(value == null ? null : catalog.resolve(mapper.convertValue(value, WritingStyleProfile.class)), project.getRowVersion());
     }
@@ -57,7 +59,7 @@ public class WritingStyleService {
      */
     @Transactional(readOnly = true)
     public List<WritingStyleProfile> presets(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return catalog.active();
     }
 
@@ -70,7 +72,7 @@ public class WritingStyleService {
      */
     @Transactional
     public StyleState apply(UUID projectId, WritingStyleProfile profile, long expectedVersion) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         if (project.getRowVersion() != expectedVersion) throw new ResourceVersionConflictException(expectedVersion, project.getRowVersion());
         profile = catalog.resolve(profile);
         Map<String, Object> value = profile == null ? null : mapper.convertValue(profile, new TypeReference<Map<String, Object>>() { });
@@ -100,8 +102,4 @@ public class WritingStyleService {
         return catalog.resolve(profile);
     }
 
-    private NovelProject requireOwnedProject(UUID projectId) {
-        return projects.findById(projectId).filter(project -> project.getOwnerId().equals(actors.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 }

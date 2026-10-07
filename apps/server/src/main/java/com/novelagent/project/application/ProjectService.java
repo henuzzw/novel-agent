@@ -25,14 +25,17 @@ public class ProjectService {
     private final NovelProjectRepository projectRepository;
     private final CreativeIntentRepository creativeIntentRepository;
     private final CurrentActorProvider actorProvider;
+    private final ProjectAccessService access;
 
     public ProjectService(
             NovelProjectRepository projectRepository,
             CreativeIntentRepository creativeIntentRepository,
-            CurrentActorProvider actorProvider) {
+            CurrentActorProvider actorProvider,
+            ProjectAccessService access) {
         this.projectRepository = projectRepository;
         this.creativeIntentRepository = creativeIntentRepository;
         this.actorProvider = actorProvider;
+        this.access = access;
     }
 
     /**
@@ -85,7 +88,7 @@ public class ProjectService {
      */
     @Transactional(readOnly = true)
     public ProjectResponse get(UUID projectId) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         CreativeIntent intent = creativeIntentRepository.findById(projectId).orElse(null);
         return ProjectResponse.from(project, intent);
     }
@@ -99,7 +102,7 @@ public class ProjectService {
      */
     @Transactional
     public ProjectResponse updateCreativeIntent(UUID projectId, long expectedVersion, CreativeIntentRequest request) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         CreativeIntent intent = creativeIntentRepository.findById(projectId)
                 .orElseGet(() -> new CreativeIntent(projectId));
 
@@ -110,12 +113,6 @@ public class ProjectService {
         apply(intent, request);
         creativeIntentRepository.saveAndFlush(intent);
         return ProjectResponse.from(project, intent);
-    }
-
-    private NovelProject requireOwnedProject(UUID projectId) {
-        return projectRepository.findById(projectId)
-                .filter(project -> project.getOwnerId().equals(actorProvider.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
     }
 
     private static void validateIdeaRequest(EntryMode entryMode, CreativeIntentRequest intent) {

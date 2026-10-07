@@ -16,6 +16,7 @@ import com.novelagent.canon.domain.OutboxEvent;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
 import com.novelagent.canon.infrastructure.OutboxEventRepository;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
@@ -53,7 +54,7 @@ class CanonCommitServiceTest {
         outbox = mock(OutboxEventRepository.class);
         typedCanon = mock(TypedCanonMaterializer.class);
         actor = mock(CurrentActorProvider.class);
-        service = new CanonCommitService(projects, reviews, manuscripts, commits, outbox, typedCanon, actor,
+        service = new CanonCommitService(projects, reviews, manuscripts, commits, outbox, typedCanon, new ProjectAccessService(projects, actor),
                 new ObjectMapper(), "novel.canon.committed.v1");
     }
 

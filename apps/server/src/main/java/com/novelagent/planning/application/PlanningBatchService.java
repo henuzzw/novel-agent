@@ -2,6 +2,7 @@ package com.novelagent.planning.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.api.OutlineResponse;
 import com.novelagent.planning.domain.ChapterPlanStatus;
@@ -24,11 +25,8 @@ import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -355,8 +353,8 @@ public class PlanningBatchService {
                 intent.getRowVersion(), CreativeStrategyPolicy.from(project), project.getCurrentOutlineVersionId(),
                 project.getCurrentCanonVersion(), source);
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(mapper.writeValueAsBytes(basis)));
-        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+            return Sha256.ofBytes(mapper.writeValueAsBytes(basis));
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("规划批次来源不能生成指纹", exception);
         }
     }

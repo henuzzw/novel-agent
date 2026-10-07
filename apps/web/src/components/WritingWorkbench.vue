@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import { navigateWorkspaceButtons } from '@/lib/workspace-keyboard'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
+import GenerationModeControl from '@/components/GenerationModeControl.vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
+import { useWorkspaceChapter, useWorkspaceChoice, writingViews } from '@/composables/useWorkspaceLocation'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { BrainCircuit, Check, Download, FileSearch, FileText, RefreshCw, Save, ScrollText } from 'lucide-vue-next'
@@ -26,8 +30,13 @@ import {
 
 const props = defineProps<{ projectId: string; initialTarget?: AutomationChapterTarget | null }>()
 const queryClient = useQueryClient()
-const selectedChapter = ref(props.initialTarget?.chapter ?? 1)
-const mode = ref<'contract' | 'contractReview' | 'manuscript' | 'quality' | 'opening' | 'review' | 'memory'>(props.initialTarget?.mode ?? 'contract')
+const selectedChapter = useWorkspaceChapter()
+const mode = useWorkspaceChoice('writing', writingViews, 'contract')
+watch(() => props.initialTarget, target => {
+  if (!target) return
+  selectedChapter.value = target.chapter
+  mode.value = target.mode
+}, { immediate: true })
 const { provider: provider } = useGlobalModelSettings()
 const contractGenerationMode = ref<GenerationMode>('REVISE')
 const baseContractVersionId = ref('')
@@ -137,6 +146,13 @@ const canonStatusQuery = useQuery({
 })
 const reviewMatchesCurrentManuscript = computed(() => !!reviewQuery.data.value && !!manuscriptQuery.data.value
   && reviewQuery.data.value.sourceManuscriptVersionId === manuscriptQuery.data.value.id)
+useUnsavedChanges(computed(() => contractHasUnsavedChanges.value
+  || (!!manuscriptDraft.value && !!manuscriptQuery.data.value
+    && JSON.stringify(manuscriptDraft.value) !== JSON.stringify(manuscriptQuery.data.value.content))
+  || (!!reviewDraft.value && reviewQuery.data.value?.status === 'DRAFT'
+    && JSON.stringify(reviewDraft.value) !== JSON.stringify(reviewQuery.data.value.content))
+  || (!!contractReviewDraft.value && contractReviewQuery.data.value?.status === 'DRAFT'
+    && JSON.stringify(contractReviewDraft.value) !== JSON.stringify(contractReviewQuery.data.value.content))), ['section', 'chapter'])
 const openingRefreshKey = computed(() => JSON.stringify([
   outlineQuery.data.value?.id, outlineQuery.data.value?.version, projectQuery.data.value?.version,
   projectQuery.data.value?.currentCanonVersion, manuscriptQuery.data.value?.id, manuscriptQuery.data.value?.version,
@@ -398,7 +414,7 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
 
     <main class="chapter-editor">
       <div class="chapter-workflow-top">
-        <div class="chapter-workflow-heading"><strong>第 {{ selectedChapter }} 章写作流程</strong><span>流程状态随章节保存，切换页面不重置</span></div>
+        <div class="chapter-workflow-heading"><strong>第 {{ selectedChapter }} 章 · {{ currentChapter?.title }}</strong></div>
         <nav class="chapter-flow" aria-label="章节写作进度">
           <button type="button" :class="{ active: mode === 'contract', done: !!contractQuery.data.value }" @click="mode = 'contract'"><span>01</span>章节合同<small>{{ contractQuery.data.value ? contractQuery.data.value.status === 'APPROVED' ? '已确认' : '草稿' : '未开始' }}</small></button>
           <button type="button" :class="{ active: mode === 'contractReview', done: contractReviewMatches && contractReviewQuery.data.value?.status === 'APPROVED' }" @click="mode = 'contractReview'"><span>02</span>合同审阅<small>{{ contractReviewMatches ? contractReviewQuery.data.value?.status === 'APPROVED' ? '已通过' : '待确认' : contractReviewQuery.data.value ? '需重审' : '未开始' }}</small></button>
@@ -411,9 +427,9 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
         </nav>
         <div v-if="mode !== 'memory' && mode !== 'opening'" class="writing-actions">
           <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" :maxlength="mode === 'quality' ? 2000 : undefined" placeholder="可选，例如：增强对话张力，减少解释" /></label>
-          <label v-if="mode === 'contract' && contractQuery.data.value" class="provider-field"><span>生成方式</span><select v-model="contractGenerationMode"><option value="REVISE">基于选定版本调整</option><option value="REGENERATE">重新生成</option></select></label>
+          <GenerationModeControl v-if="mode === 'contract' && contractQuery.data.value" v-model="contractGenerationMode" revise-label="基于选定版本调整" :disabled="busy" />
           <label v-if="mode === 'contract' && contractQuery.data.value && contractGenerationMode === 'REVISE'" class="provider-field outline-base-field"><span>基准合同</span><select v-model="baseContractVersionId"><option value="">最新保存版本（第 {{ contractQuery.data.value.versionNumber }} 版）</option><option v-for="item in contractVersionsQuery.data.value?.filter((version) => version.id !== contractQuery.data.value?.id) ?? []" :key="item.id" :value="item.id">第 {{ item.versionNumber }} 版 · {{ item.status === 'APPROVED' ? '已确认' : '草稿' }} · {{ item.chapterTitle }}</option></select></label>
-          <label v-if="mode === 'manuscript' && manuscriptQuery.data.value" class="provider-field"><span>生成方式</span><select v-model="manuscriptGenerationMode"><option value="REVISE">基于选定版本调整</option><option value="REGENERATE">重新创作一版</option></select></label>
+          <GenerationModeControl v-if="mode === 'manuscript' && manuscriptQuery.data.value" v-model="manuscriptGenerationMode" revise-label="基于选定版本调整" regenerate-label="重新创作一版" :disabled="busy" />
           <label v-if="mode === 'manuscript' && manuscriptQuery.data.value && manuscriptGenerationMode === 'REVISE'" class="provider-field outline-base-field"><span>基准正文</span><select v-model="baseManuscriptVersionId"><option value="">最新保存版本（第 {{ manuscriptQuery.data.value.versionNumber }} 版）</option><option v-for="item in manuscriptVersionsQuery.data.value?.filter((version) => version.id !== manuscriptQuery.data.value?.id) ?? []" :key="item.id" :value="item.id">第 {{ item.versionNumber }} 版 · {{ item.status === 'AUTHOR_ACCEPTED' ? '已确认' : '草稿' }} · {{ item.title }}</option></select></label>
           <GlobalModelBadge />
           <div class="direction-action-buttons" v-if="mode === 'contract'">
@@ -432,7 +448,7 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
             <button v-if="manuscriptQuery.data.value?.status === 'DRAFT'" class="button primary" type="button" :disabled="busy" @click="acceptManuscriptMutation.mutate()"><Check :size="16" />作者确认</button>
           </div>
           <div class="direction-action-buttons" v-else-if="mode === 'review'">
-            <label v-if="reviewQuery.data.value?.status === 'DRAFT'" class="provider-field"><span>打回方式</span><select v-model="returnMode"><option value="REVISE">按原稿修订</option><option value="REGENERATE">重写整章</option></select></label>
+            <GenerationModeControl v-if="reviewQuery.data.value?.status === 'DRAFT'" v-model="returnMode" label="打回方式" revise-label="按原稿修订" regenerate-label="重写整章" :disabled="busy" />
             <button class="button secondary" type="button" :disabled="busy || manuscriptQuery.data.value?.status !== 'AUTHOR_ACCEPTED'" @click="generateReviewMutation.mutate()"><RefreshCw :size="16" />{{ reviewQuery.data.value ? '重新审稿' : '开始审稿' }}</button>
             <button v-if="reviewQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript || !selectedReviewIssueIds.length || manuscriptQuery.data.value?.status !== 'AUTHOR_ACCEPTED'" @click="returnReviewMutation.mutate()"><RefreshCw :size="16" />{{ returnReviewMutation.isPending.value ? '正在生成新稿…' : '打回并生成新稿' }}</button>
             <button v-if="reviewQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript" @click="saveReviewMutation.mutate()"><Save :size="16" />保存处理</button>
@@ -446,14 +462,14 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
         <div v-if="mode === 'contractReview' && contractReviewQuery.isError.value" class="form-error" role="alert">合同审阅读取失败：{{ contractReviewQuery.error.value?.message }}</div>
       </div>
       <div class="writing-toolbar">
-        <div class="planning-tabs" role="tablist">
-          <button type="button" :class="{ active: mode === 'contract' }" @click="mode = 'contract'"><ScrollText :size="16" />章节合同</button>
-          <button type="button" :class="{ active: mode === 'contractReview' }" @click="mode = 'contractReview'"><FileSearch :size="16" />合同审阅</button>
-          <button type="button" :class="{ active: mode === 'manuscript' }" @click="mode = 'manuscript'"><FileText :size="16" />正文草稿</button>
-          <button type="button" :class="{ active: mode === 'quality' }" @click="mode = 'quality'"><FileSearch :size="16" />检查与润色</button>
-          <button type="button" :class="{ active: mode === 'opening' }" @click="mode = 'opening'"><FileSearch :size="16" />前三章连读<small v-if="openingBusy"> · 正在通读</small></button>
-          <button type="button" :class="{ active: mode === 'review' }" @click="mode = 'review'"><FileSearch :size="16" />审稿与记忆</button>
-          <button type="button" :class="{ active: mode === 'memory' }" @click="mode = 'memory'"><BrainCircuit :size="16" />长期记忆</button>
+        <div class="planning-tabs" role="group" aria-label="写作视图" @keydown="navigateWorkspaceButtons">
+          <button type="button" :aria-pressed="mode === 'contract'" :class="{ active: mode === 'contract' }" @click="mode = 'contract'"><ScrollText :size="16" />章节合同</button>
+          <button type="button" :aria-pressed="mode === 'contractReview'" :class="{ active: mode === 'contractReview' }" @click="mode = 'contractReview'"><FileSearch :size="16" />合同审阅</button>
+          <button type="button" :aria-pressed="mode === 'manuscript'" :class="{ active: mode === 'manuscript' }" @click="mode = 'manuscript'"><FileText :size="16" />正文草稿</button>
+          <button type="button" :aria-pressed="mode === 'quality'" :class="{ active: mode === 'quality' }" @click="mode = 'quality'"><FileSearch :size="16" />检查与润色</button>
+          <button type="button" :aria-pressed="mode === 'opening'" :class="{ active: mode === 'opening' }" @click="mode = 'opening'"><FileSearch :size="16" />前三章连读<small v-if="openingBusy"> · 正在通读</small></button>
+          <button type="button" :aria-pressed="mode === 'review'" :class="{ active: mode === 'review' }" @click="mode = 'review'"><FileSearch :size="16" />审稿与记忆</button>
+          <button type="button" :aria-pressed="mode === 'memory'" :class="{ active: mode === 'memory' }" @click="mode = 'memory'"><BrainCircuit :size="16" />长期记忆</button>
         </div>
         <span>第 {{ selectedChapter }} 章</span>
       </div>
@@ -504,8 +520,8 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
             <ul><li v-for="item in manuscriptQuery.data.value.changeSummary" :key="item">{{ item }}</li></ul>
           </section>
           <p v-if="manuscriptQuery.data.value?.sourceReviewVersionId" class="acceptance-note"><FileSearch :size="16" />本稿根据审稿意见打回生成。作者确认后需重新审稿。</p>
-          <input v-model="manuscriptDraft.title" class="manuscript-title" :disabled="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" />
-          <textarea v-model="manuscriptDraft.body" class="manuscript-body" :disabled="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" />
+          <input v-model="manuscriptDraft.title" class="manuscript-title" aria-label="正文标题" :disabled="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" />
+          <textarea v-model="manuscriptDraft.body" class="manuscript-body" aria-label="正文" :disabled="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" />
           <label><span>章节摘要</span><textarea v-model="manuscriptDraft.summary" rows="3" :disabled="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" /></label>
           <label><span>连续性备注</span><textarea :value="joined(manuscriptDraft.continuityNotes)" rows="3" :disabled="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" @input="updateNotes" /></label>
           <p v-if="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" class="acceptance-note"><Check :size="16" />作者已确认。复制修订不会自动替换已提交的正史与长期记忆。</p>

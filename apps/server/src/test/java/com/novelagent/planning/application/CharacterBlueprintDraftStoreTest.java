@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doAnswer;
 
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.CharacterBlueprintFixtures;
@@ -16,6 +17,7 @@ import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
@@ -37,7 +39,7 @@ class CharacterBlueprintDraftStoreTest {
     private final CharacterNameService names = mock(CharacterNameService.class);
     private final EntityManager entities = mock(EntityManager.class);
     private final NovelProject project = mock(NovelProject.class);
-    private final CharacterBlueprintDraftStore store = new CharacterBlueprintDraftStore(projects, bibles, actor, names, entities);
+    private final CharacterBlueprintDraftStore store = new CharacterBlueprintDraftStore(bibles, new ProjectAccessService(projects, actor), names, entities);
 
     @BeforeEach void setUp() {
         when(actor.currentUserId()).thenReturn(ownerId);
@@ -91,6 +93,23 @@ class CharacterBlueprintDraftStoreTest {
         var source = store.load(projectId, bible.getId(), 0);
         assertThatThrownBy(() -> store.save(source, List.of(character), ModelProvider.LOCAL_CODEX, null))
                 .hasMessageContaining("未创建新版本");
+        verify(bibles, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rechecksOwnershipAfterProjectRefreshBeforeTouchingTheBible() {
+        var source = new CharacterBlueprintDraftStore.Source(
+                projectId, UUID.randomUUID(), 0,
+                CharacterBlueprintFixtures.bible(List.of()), CharacterBlueprintFixtures.bible(List.of()));
+        doAnswer(call -> {
+            when(project.getOwnerId()).thenReturn(UUID.randomUUID());
+            return null;
+        }).when(entities).refresh(project, LockModeType.PESSIMISTIC_WRITE);
+
+        assertThatThrownBy(() -> store.save(source,
+                List.of(CharacterBlueprintFixtures.character("江澈")), ModelProvider.DEEPSEEK, null))
+                .isInstanceOf(ProjectNotFoundException.class);
+        verify(bibles, never()).findByIdAndProjectId(any(), any());
         verify(bibles, never()).saveAndFlush(any());
     }
 

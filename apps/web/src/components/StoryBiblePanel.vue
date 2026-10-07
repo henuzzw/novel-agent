@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
+import GenerationModeControl from '@/components/GenerationModeControl.vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import CharacterBlueprintEditor from '@/components/CharacterBlueprintEditor.vue'
 import ReaderExperienceSeedEditor from './ReaderExperienceSeedEditor.vue'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
@@ -170,6 +172,7 @@ const draftCharacters = computed<CharacterBlueprint[]>({
 })
 const hasUnsavedChanges = computed(() => !!draft.value && !!bibleQuery.data.value &&
   JSON.stringify(draft.value) !== JSON.stringify(copyContent(bibleQuery.data.value.content)))
+useUnsavedChanges(hasUnsavedChanges, ['section', 'planning'])
 const characterError = computed(() => {
   const characters = draft.value?.characterBlueprints ?? []
   if (characters.length > 12) return '人物底稿最多 12 人。'
@@ -204,6 +207,22 @@ function generate() {
       </span>
     </div>
 
+    <div class="direction-actions generation-toolbar">
+      <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" maxlength="1000" placeholder="可选，例如：让配角动机更具体" /></label>
+      <GenerationModeControl v-if="bibleQuery.data.value" v-model="generationMode" :disabled="busy" />
+      <label v-if="bibleQuery.data.value && generationMode === 'REVISE'" class="provider-field outline-base-field"><span>基准故事圣经</span><select v-model="baseBibleVersionId"><option value="">最新保存版本（第 {{ bibleQuery.data.value.generationNumber }} 版）</option><option v-for="version in versionsQuery.data.value?.filter((item) => item.id !== bibleQuery.data.value?.id) ?? []" :key="version.id" :value="version.id">第 {{ version.generationNumber }} 版 · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.logline }}</option></select></label>
+      <GlobalModelBadge />
+      <div class="direction-action-buttons">
+        <button class="button secondary" type="button" :disabled="busy" @click="generate()"><RefreshCw :size="16" />{{ generateMutation.isPending.value ? '正在生成…' : bibleQuery.data.value ? generationMode === 'REVISE' ? '按要求调整' : '重新生成' : '生成故事圣经' }}</button>
+        <button v-if="draft" class="button secondary" type="button" :disabled="busy || hasUnsavedChanges || provider === 'LOCAL_TEMPLATE'" @click="completeCharactersMutation.mutate()"><Sparkles :size="16" />{{ completeCharactersMutation.isPending.value ? '正在补全人物…' : '补全人物底稿' }}</button>
+        <button v-if="draft && bibleQuery.data.value?.status === 'PUBLISHED'" class="button secondary" type="button" :disabled="busy || !!characterError" @click="createRevisionMutation.mutate()"><Save :size="16" />{{ createRevisionMutation.isPending.value ? '正在保存…' : '保存为修订草稿' }}</button>
+        <button v-if="draft && bibleQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy || !!characterError" @click="saveMutation.mutate()"><Save :size="16" />{{ saveMutation.isPending.value ? '正在保存…' : '保存修改' }}</button>
+        <button v-if="draft && bibleQuery.data.value?.status === 'DRAFT'" class="button primary" type="button" :disabled="busy || hasUnsavedChanges || !!characterError" @click="publishMutation.mutate()"><Check :size="16" />{{ publishMutation.isPending.value ? '正在发布…' : '确认并发布' }}</button>
+      </div>
+    </div>
+
+    <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
+    <p v-if="hasUnsavedChanges" class="acceptance-note" role="status">故事圣经有未保存修改。</p>
     <div v-if="bibleQuery.isPending.value" class="direction-loading">正在读取故事圣经…</div>
     <div v-else-if="bibleQuery.isError.value" class="status-panel error-panel">
       <strong>故事圣经加载失败</strong><span>{{ bibleQuery.error.value?.message }}</span>
@@ -244,19 +263,6 @@ function generate() {
       <p>系统会补齐人物、世界规则、关系、冲突代价和结局约束。</p>
     </div>
 
-    <div class="direction-actions">
-      <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" maxlength="1000" placeholder="可选，例如：让配角动机更具体" /></label>
-      <label v-if="bibleQuery.data.value" class="provider-field"><span>生成方式</span><select v-model="generationMode"><option value="REVISE">基于当前版本调整</option><option value="REGENERATE">重新生成</option></select></label>
-      <label v-if="bibleQuery.data.value && generationMode === 'REVISE'" class="provider-field outline-base-field"><span>基准故事圣经</span><select v-model="baseBibleVersionId"><option value="">最新保存版本（第 {{ bibleQuery.data.value.generationNumber }} 版）</option><option v-for="version in versionsQuery.data.value?.filter((item) => item.id !== bibleQuery.data.value?.id) ?? []" :key="version.id" :value="version.id">第 {{ version.generationNumber }} 版 · {{ version.status === 'PUBLISHED' ? '已发布' : '草稿' }} · {{ version.logline }}</option></select></label>
-      <GlobalModelBadge />
-      <div class="direction-action-buttons">
-        <button class="button secondary" type="button" :disabled="busy" @click="generate()"><RefreshCw :size="16" />{{ generateMutation.isPending.value ? '正在生成…' : bibleQuery.data.value ? generationMode === 'REVISE' ? '按要求调整' : '重新生成' : '生成故事圣经' }}</button>
-        <button v-if="draft" class="button secondary" type="button" :disabled="busy || hasUnsavedChanges || provider === 'LOCAL_TEMPLATE'" @click="completeCharactersMutation.mutate()"><Sparkles :size="16" />{{ completeCharactersMutation.isPending.value ? '正在补全人物…' : '补全人物底稿' }}</button>
-        <button v-if="draft && bibleQuery.data.value?.status === 'PUBLISHED'" class="button secondary" type="button" :disabled="busy || !!characterError" @click="createRevisionMutation.mutate()"><Save :size="16" />{{ createRevisionMutation.isPending.value ? '正在保存…' : '保存为修订草稿' }}</button>
-        <button v-if="draft && bibleQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy || !!characterError" @click="saveMutation.mutate()"><Save :size="16" />{{ saveMutation.isPending.value ? '正在保存…' : '保存修改' }}</button>
-        <button v-if="draft && bibleQuery.data.value?.status === 'DRAFT'" class="button primary" type="button" :disabled="busy || hasUnsavedChanges || !!characterError" @click="publishMutation.mutate()"><Check :size="16" />{{ publishMutation.isPending.value ? '正在发布…' : '确认并发布' }}</button>
-      </div>
-    </div>
     <div v-if="versionsQuery.isError.value && bibleQuery.data.value" class="form-error" role="alert">历史故事圣经加载失败：{{ versionsQuery.error.value?.message }}</div>
     <details v-if="generationMode === 'REVISE' && baseBibleVersionId" class="outline-base-preview">
       <summary>查看第 {{ selectedBase?.generationNumber ?? '…' }} 版基准故事圣经</summary>
@@ -282,7 +288,6 @@ function generate() {
         <ReaderExperienceSeedEditor :model-value="basePreviewQuery.data.value.content.readerExperiencePlans ?? []" disabled />
       </div>
     </details>
-    <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
     <p v-if="bibleQuery.data.value" class="generator-note">本版本由 {{ bibleQuery.data.value.generatorType === 'AUTHOR_EDIT' ? '作者手动修订' : bibleQuery.data.value.generatorType }} 生成</p>
   </div>
 </template>

@@ -81,10 +81,10 @@ class ReaderExperienceJdbcStoreTest {
         jdbc.execute(resource("V039__reader_experience_ledger.sql"));
         transaction = new TransactionTemplate(new DataSourceTransactionManager(datasource));
         var actor = new CurrentActorProvider(owner);
-        var names = new CharacterNameService(projects, actor, mock(StoryBibleVersionRepository.class), jdbc, mapper);
+        var names = new CharacterNameService(new ProjectAccessService(projects, actor), mock(StoryBibleVersionRepository.class), jdbc, mapper);
         store = new ReaderExperienceJdbcStore(jdbc, mapper, names);
         service = new ReaderExperienceService(new ProjectAccessService(projects, actor), actor, store, mapper);
-        profiles = new CharacterProfileService(projects, actor, jdbc);
+        profiles = new CharacterProfileService(new ProjectAccessService(projects, actor), jdbc);
     }
 
     @BeforeEach void fixture() throws Exception {

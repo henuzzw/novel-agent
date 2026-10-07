@@ -29,18 +29,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 class ArchitectureTest {
     private static Map<String, Set<String>> dependencies;
+    private static Map<String, Set<String>> methodCalls;
 
     @BeforeAll static void scanCompiledApplication() throws Exception {
         Path root = Path.of(WritingService.class.getProtectionDomain().getCodeSource().getLocation().toURI());
         dependencies = new LinkedHashMap<>();
+        methodCalls = new LinkedHashMap<>();
         try (var files = Files.walk(root.resolve("com/novelagent"))) {
             for (Path file : files.filter(path -> path.toString().endsWith(".class")).sorted().toList()) {
                 var reader = new ClassReader(Files.readAllBytes(file));
                 var references = new HashSet<String>();
-                reader.accept(new DependencyVisitor(references), ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                var calls = new HashSet<String>();
+                reader.accept(new DependencyVisitor(references, calls), ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                 String name = reader.getClassName().replace('/', '.');
                 references.remove(name);
                 dependencies.put(name, Set.copyOf(references));
+                methodCalls.put(name, Set.copyOf(calls));
             }
         }
         assertThat(dependencies).isNotEmpty();
@@ -61,6 +65,54 @@ class ArchitectureTest {
             assertThat(references).as(name).noneMatch(type -> type.startsWith("com.novelagent.")
                     && (type.contains(".api.") || type.contains(".infrastructure.")));
         });
+    }
+
+    @Test void projectOwnershipChecksUseOneAccessPolicy() {
+        List<String> readers = methodCalls.entrySet().stream()
+                .filter(entry -> entry.getValue().contains("com.novelagent.project.domain.NovelProject#getOwnerId"))
+                .map(Map.Entry::getKey)
+                .toList();
+        assertThat(readers).containsExactly("com.novelagent.project.application.ProjectAccessService");
+        for (String type : List.of(
+                "project.application.ProjectService",
+                "planning.application.StoryDirectionService",
+                "planning.application.StoryBibleService",
+                "planning.application.OutlineService",
+                "planning.application.CharacterBlueprintDraftStore",
+                "agent.application.AutomationRunStore",
+                "ingest.application.WorkImportService",
+                "canon.application.CanonCommitService",
+                "canon.application.CharacterNameService",
+                "canon.application.CharacterProfileService",
+                "canon.application.TypedCanonQueryService",
+                "writing.application.WritingStyleService",
+                "writing.application.QualityReviewStore")) {
+            assertThat(dependencies.get("com.novelagent." + type)).as(type)
+                    .contains("com.novelagent.project.application.ProjectAccessService");
+        }
+    }
+
+    @Test void sourceFingerprintsUseTheSharedDigestImplementation() {
+        assertThat(methodCalls.entrySet().stream()
+                .filter(entry -> entry.getValue().contains("java.security.MessageDigest#getInstance"))
+                .map(Map.Entry::getKey).toList())
+                .containsExactly("com.novelagent.platform.support.Sha256");
+        assertThat(dependencies.get("com.novelagent.platform.support.Sha256"))
+                .noneMatch(type -> type.startsWith("com.novelagent.") || type.startsWith("org.springframework."));
+    }
+
+    @Test void modelGatewayDelegatesSessionAndBudgetPolicies() {
+        var gateway = dependencies.get("com.novelagent.planning.infrastructure.StructuredModelGateway");
+        assertThat(gateway).contains(
+                "com.novelagent.planning.infrastructure.CodexSessionManager",
+                "com.novelagent.planning.infrastructure.StructuredRequestBudget");
+        assertThat(methodCalls.get("com.novelagent.planning.infrastructure.StructuredModelGateway"))
+                .doesNotContain(
+                        "com.novelagent.planning.infrastructure.CodexAppServerClient#startThread",
+                        "com.novelagent.planning.infrastructure.CodexAppServerClient#resumeThread",
+                        "com.novelagent.planning.infrastructure.CodexAgentSessionRepository#saveAndFlush");
+        assertThat(dependencies.get("com.novelagent.planning.infrastructure.CodexSessionManager"))
+                .doesNotContain("com.novelagent.prompt.application.AgentPromptService");
     }
 
     @Test void writingFacadeOnlyCoordinatesThreeUseCaseServices() {
@@ -165,7 +217,12 @@ class ArchitectureTest {
     // Inspect bytecode so method-local persistence access is covered, not just injected fields.
     private static final class DependencyVisitor extends ClassVisitor {
         private final Set<String> references;
-        DependencyVisitor(Set<String> references) { super(Opcodes.ASM9); this.references = references; }
+        private final Set<String> calls;
+        DependencyVisitor(Set<String> references, Set<String> calls) {
+            super(Opcodes.ASM9);
+            this.references = references;
+            this.calls = calls;
+        }
 
         private void addName(String name) { if (name != null) references.add(name.replace('/', '.')); }
         private void addType(Type type) {
@@ -194,6 +251,7 @@ class ArchitectureTest {
                 }
                 @Override public void visitMethodInsn(int opcode, String owner, String method, String descriptor, boolean isInterface) {
                     addName(owner); addType(Type.getMethodType(descriptor));
+                    calls.add(owner.replace('/', '.') + "#" + method);
                 }
                 @Override public void visitLdcInsn(Object value) { if (value instanceof Type type) addType(type); }
             };

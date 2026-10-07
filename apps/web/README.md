@@ -1,5 +1,39 @@
 # web
 
+## Prompt Settings
+
+`/settings/prompts?template=MANUSCRIPT` opens the global prompt editor. The top bar and project settings link to it.
+System instructions and optional stage guidance are persisted through `/api/v1/settings/prompts` with optimistic versions.
+Import adaptation and continuation have separate templates. Project inputs and output schemas are not editable here.
+Saving affects future model requests only; reset records a new version. Historical versions can be loaded as an unsaved draft.
+Run `npx playwright test --config playwright.ux.config.ts prompt-settings.spec.ts` for mocked browser regression tests.
+Backend restart/Flyway V049 is required. See `../../NOVEL_AGENT_PROMPT_MANAGEMENT.md`.
+
+## Workspace Interaction
+
+The workspace stores navigation in the URL, not in project data:
+
+- `section`: main navigation (`writing`, `outline`, `materials`, `experience`, `relations`, `imports`, `runs`, `settings`).
+- `planning`: planning view (`directions`, `bible`, `outline`, `style`, `preparation`).
+- `writing`: chapter view (`contract`, `contractReview`, `manuscript`, `quality`, `opening`, `review`, `memory`).
+- `chapter`: a positive chapter number.
+- `materials`: materials view (`profiles`, `entities`, `timeline`, `foreshadows`, `style`).
+
+Example: `/projects/<projectId>?section=writing&chapter=2&writing=manuscript`.
+Refresh and browser history restore the selected views. Invalid query values fall back safely.
+Navigation never generates content. Unsaved bible, outline, manuscript, review and character edits prompt before leaving their work area; a browser refresh also warns about unsaved edits.
+
+Generation controls use native radio groups; long lists such as historical versions remain selects.
+Generation status starts compact, retaining running/failed stages and stop controls; expand it to see all stages.
+
+Run the interaction regression tests with an installed Google Chrome:
+
+```sh
+npm run test:e2e:ux
+```
+
+The suite mocks backend/model requests, verifies navigation and edit protection, and captures desktop/mobile screenshots. It does not call a model or write project data.
+
 This template should help get you started developing with Vue 3 in Vite.
 
 ## Recommended IDE Setup

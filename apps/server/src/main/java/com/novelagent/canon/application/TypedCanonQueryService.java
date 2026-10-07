@@ -11,9 +11,7 @@ import com.novelagent.canon.api.ForeshadowResponse;
 import com.novelagent.canon.api.StoryEntityResponse;
 import com.novelagent.canon.api.StoryEventResponse;
 import com.novelagent.canon.api.StoryRelationshipResponse;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import java.util.List;
 import java.util.Locale;
@@ -29,15 +27,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class TypedCanonQueryService {
-    private final NovelProjectRepository projects;
-    private final CurrentActorProvider actor;
+    private final ProjectAccessService access;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
 
-    public TypedCanonQueryService(NovelProjectRepository projects, CurrentActorProvider actor,
-            JdbcTemplate jdbc, ObjectMapper mapper) {
-        this.projects = projects;
-        this.actor = actor;
+    public TypedCanonQueryService(
+            ProjectAccessService access,
+            JdbcTemplate jdbc,
+            ObjectMapper mapper) {
+        this.access = access;
         this.jdbc = jdbc;
         this.mapper = mapper;
     }
@@ -51,7 +49,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<StoryEntityResponse> entities(UUID projectId, String type) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         if (type == null || type.isBlank()) {
             return jdbc.query("""
                     SELECT id, entity_type, canonical_name, status, canon_version_from
@@ -81,7 +79,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<StoryEventResponse> timeline(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.query("""
                 SELECT id, title, summary, story_time_text, narrative_chapter, importance,
                        canon_version_from, evidence_ref
@@ -103,7 +101,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<EntityStateResponse> entityState(UUID projectId, UUID entityId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.query("""
                 SELECT DISTINCT ON (field_key)
                        id, field_key, after_value, narrative_chapter, canon_version_from, evidence_ref
@@ -124,7 +122,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<ForeshadowResponse> foreshadows(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.query("""
                 SELECT id, title, target_effect, current_status, planned_resolve_chapter,
                        canon_version_from, evidence_ref
@@ -146,7 +144,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<StoryRelationshipResponse> relationships(UUID projectId, UUID entityId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         String sql = """
                 SELECT r.id, r.source_entity_id, source.canonical_name AS source_name,
                        r.target_entity_id, target.canonical_name AS target_name,
@@ -185,7 +183,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<CharacterKnowledgeResponse> knowledge(UUID projectId, UUID characterId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         String sql = """
                 SELECT knowledge.id, knowledge.character_id, entity.canonical_name AS character_name,
                        knowledge.fact_id, fact.subject_text, fact.predicate, fact.object_text,
@@ -229,7 +227,7 @@ public class TypedCanonQueryService {
      */
     @Transactional
     public EntityAliasResponse addAlias(UUID projectId, UUID entityId, String alias, String aliasType) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         String value = alias == null ? "" : alias.trim();
         if (value.isBlank()) throw new IllegalArgumentException("实体别名不能为空");
         if (List.of("他", "她", "它", "他们", "她们", "它们", "自己", "对方").contains(value)) {
@@ -263,7 +261,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<EntityAliasResponse> aliases(UUID projectId, UUID entityId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.query("""
                 SELECT id, entity_id, alias, alias_type, canon_version_from
                 FROM entity_alias
@@ -283,7 +281,7 @@ public class TypedCanonQueryService {
      */
     @Transactional(readOnly = true)
     public List<EntityMentionResponse> mentions(UUID projectId, UUID entityId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.query("""
                 SELECT id, proposal_id, mention_role, mention_text, resolved_entity_id,
                        resolution_method, confidence, evidence_ref
@@ -297,11 +295,6 @@ public class TypedCanonQueryService {
                 rs.getString("evidence_ref")), projectId, entityId);
     }
 
-    private NovelProject requireOwnedProject(UUID projectId) {
-        return projects.findById(projectId)
-                .filter(project -> project.getOwnerId().equals(actor.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private JsonNode json(String value) {
         try {

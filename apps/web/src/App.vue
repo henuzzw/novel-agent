@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { Activity, BookOpenText, Cpu, RefreshCw } from 'lucide-vue-next'
-import { onMounted, ref } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { Activity, BookOpenText, Cpu, RefreshCw, FilePenLine } from 'lucide-vue-next'
+import { inject, onMounted, ref } from 'vue'
+import { RouterLink, RouterView, routeLocationKey, routerKey } from 'vue-router'
 import GlobalModelSettingsPanel from '@/components/GlobalModelSettingsPanel.vue'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 const { settings, label, loading, loadError, load } = useGlobalModelSettings()
 const showSettings = ref(false)
+const route = inject(routeLocationKey, null)
+const router = inject(routerKey, null)
+function openTasks() {
+  if (route?.params.projectId) void router?.push({ path: route.path, query: { ...route.query, section: 'runs' } })
+}
 onMounted(load)
 </script>
 
@@ -18,7 +23,8 @@ onMounted(load)
       </RouterLink>
       <div class="topbar-actions">
         <button class="global-model-button" type="button" title="全局模型设置" aria-label="全局模型设置" :aria-expanded="showSettings" @click="showSettings = !showSettings"><Cpu :size="18" /><span>{{ label }}</span></button>
-        <button class="icon-button" type="button" title="任务中心" aria-label="任务中心">
+        <RouterLink class="icon-button" to="/settings/prompts" title="提示词管理" aria-label="提示词管理"><FilePenLine :size="18" /></RouterLink>
+        <button class="icon-button" type="button" title="任务中心" aria-label="任务中心" :disabled="!route?.params.projectId" @click="openTasks">
           <Activity :size="18" aria-hidden="true" />
         </button>
         <div class="avatar" title="当前为本地开发用户">作</div>
@@ -28,7 +34,9 @@ onMounted(load)
     <main class="app-main">
       <p v-if="loading && !settings" role="status">正在读取模型设置…</p>
       <p v-else-if="loadError" class="form-error" role="alert">{{ loadError }}<button type="button" class="icon-button" title="重新读取设置" aria-label="重新读取设置" @click="load"><RefreshCw :size="18" /></button></p>
-      <RouterView v-else-if="settings" />
+      <RouterView v-else-if="settings" v-slot="{ Component, route: pageRoute }">
+        <component :is="Component" :key="String(pageRoute.params.projectId ?? pageRoute.path)" />
+      </RouterView>
     </main>
   </div>
 </template>

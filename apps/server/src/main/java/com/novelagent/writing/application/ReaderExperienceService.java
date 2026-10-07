@@ -2,6 +2,7 @@ package com.novelagent.writing.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
@@ -15,12 +16,8 @@ import com.novelagent.writing.domain.ReaderExperiencePlanInput;
 import com.novelagent.writing.domain.ReaderExperienceSource;
 import com.novelagent.writing.domain.ReaderExperienceState;
 import com.novelagent.writing.domain.ReaderExperienceSubmission;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -243,8 +240,8 @@ public class ReaderExperienceService {
     private String hash(String operation, UUID resourceId, Object input) {
         try {
             String text = mapper.writeValueAsString(List.of(operation, resourceId, input));
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
-        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+            return Sha256.ofUtf8(text);
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("台账请求无法生成指纹", exception);
         }
     }

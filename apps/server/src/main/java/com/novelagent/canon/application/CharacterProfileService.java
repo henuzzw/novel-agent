@@ -2,10 +2,8 @@ package com.novelagent.canon.application;
 
 import com.novelagent.canon.api.CharacterProfileResponse;
 import com.novelagent.canon.api.UpdateCharacterProfileRequest;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.domain.ChapterContractContent;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,13 +29,13 @@ public class CharacterProfileService {
     private static final String KNOWLEDGE_BOUNDARY = "人物档案是作者侧设定参考，不代表视角人物已知信息；"
             + "秘密、内在动机和人物弧光不得直接当作本章已发生事实或允许揭示的信息。"
             + "叙述、对白与检查结论仍须遵守本章视角、正文证据及已提供的知识边界。\n";
-    private final NovelProjectRepository projects;
-    private final CurrentActorProvider actor;
+    private final ProjectAccessService access;
     private final JdbcTemplate jdbc;
 
-    public CharacterProfileService(NovelProjectRepository projects, CurrentActorProvider actor, JdbcTemplate jdbc) {
-        this.projects = projects;
-        this.actor = actor;
+    public CharacterProfileService(
+            ProjectAccessService access,
+            JdbcTemplate jdbc) {
+        this.access = access;
         this.jdbc = jdbc;
     }
 
@@ -49,7 +47,7 @@ public class CharacterProfileService {
      */
     @Transactional
     public List<CharacterProfileResponse> list(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         jdbc.update("""
                 INSERT INTO character_profile(character_id, project_id)
                 SELECT id, project_id FROM story_entity
@@ -70,7 +68,7 @@ public class CharacterProfileService {
     @Transactional
     public CharacterProfileResponse update(UUID projectId, UUID characterId, long expectedVersion,
             UpdateCharacterProfileRequest value) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         ensureCharacter(projectId, characterId);
         jdbc.update("""
                 INSERT INTO character_profile(character_id, project_id) VALUES (?, ?)
@@ -144,7 +142,7 @@ public class CharacterProfileService {
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
             Collection<UUID> relatedCharacterIds, Collection<String> relatedReferences) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         Set<UUID> ids = new LinkedHashSet<>();
         if (relatedCharacterIds != null) {
             relatedCharacterIds.stream().filter(java.util.Objects::nonNull).forEach(ids::add);
@@ -325,10 +323,6 @@ public class CharacterProfileService {
         if (count == null || count == 0) throw new IllegalArgumentException("人物不存在");
     }
 
-    private void requireOwnedProject(UUID projectId) {
-        projects.findById(projectId).filter(project -> project.getOwnerId().equals(actor.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private static void append(StringBuilder target, String label, String value) {
         if (hasText(value)) target.append("；").append(label).append("：").append(value.trim());

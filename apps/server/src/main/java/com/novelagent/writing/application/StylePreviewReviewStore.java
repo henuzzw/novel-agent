@@ -2,6 +2,7 @@ package com.novelagent.writing.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
@@ -11,10 +12,6 @@ import com.novelagent.writing.domain.StylePreviewSource;
 import com.novelagent.writing.infrastructure.StylePreviewReviewRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -138,10 +135,9 @@ public class StylePreviewReviewStore {
                     profiles.promptContext(projectId), WritingStyleGuide.render(source.profile()),
                     CreativeStrategyPolicy.from(contexts.requireOwnedProject(projectId))));
             String rendered = names.render(projectId, json);
-            String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(rendered.getBytes(StandardCharsets.UTF_8)));
+            String hash = Sha256.ofUtf8(rendered);
             return new Snapshot(context, source, hash);
-        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("不能校验试写检查依据", exception);
         }
     }

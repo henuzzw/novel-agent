@@ -7,12 +7,10 @@ import com.novelagent.planning.domain.OutlineWordBudgetPolicy;
 import com.novelagent.planning.domain.StoryDirectionSet;
 import com.novelagent.planning.domain.StoryDirectionCandidate;
 import com.novelagent.planning.infrastructure.StoryDirectionSetRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
@@ -27,26 +25,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StoryDirectionService {
 
-    private final NovelProjectRepository projectRepository;
     private final CreativeIntentRepository creativeIntentRepository;
     private final StoryDirectionSetRepository directionSetRepository;
     private final StoryDirectionGenerationWorkflow generationWorkflow;
     private final OutlineWordBudgetPolicy wordBudgetPolicy;
-    private final CurrentActorProvider actorProvider;
+    private final ProjectAccessService access;
 
     public StoryDirectionService(
-            NovelProjectRepository projectRepository,
             CreativeIntentRepository creativeIntentRepository,
             StoryDirectionSetRepository directionSetRepository,
             StoryDirectionGenerationWorkflow generationWorkflow,
             OutlineWordBudgetPolicy wordBudgetPolicy,
-            CurrentActorProvider actorProvider) {
-        this.projectRepository = projectRepository;
+            ProjectAccessService access) {
         this.creativeIntentRepository = creativeIntentRepository;
         this.directionSetRepository = directionSetRepository;
         this.generationWorkflow = generationWorkflow;
         this.wordBudgetPolicy = wordBudgetPolicy;
-        this.actorProvider = actorProvider;
+        this.access = access;
     }
 
     /**
@@ -56,7 +51,7 @@ public class StoryDirectionService {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     public StoryDirectionSetResponse generate(UUID projectId, GenerateStoryDirectionsRequest request) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         CreativeIntent intent = creativeIntentRepository.findById(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("请先完善创作意图，再生成故事方向"));
         CreativeIntentSnapshot snapshot = CreativeIntentSnapshot.from(intent);
@@ -96,7 +91,7 @@ public class StoryDirectionService {
      */
     @Transactional(readOnly = true)
     public Optional<StoryDirectionSetResponse> latest(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return directionSetRepository.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
                 .map(this::toResponse);
     }
@@ -111,7 +106,7 @@ public class StoryDirectionService {
      */
     @Transactional
     public StoryDirectionSetResponse select(UUID projectId, UUID setId, long expectedVersion, UUID candidateId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         StoryDirectionSet set = directionSetRepository.findByIdAndProjectId(setId, projectId)
                 .orElseThrow(() -> new StoryDirectionSetNotFoundException(setId));
         if (set.getRowVersion() != expectedVersion) {
@@ -121,14 +116,6 @@ public class StoryDirectionService {
         return toResponse(directionSetRepository.saveAndFlush(set));
     }
 
-    private void requireOwnedProject(UUID projectId) {
-        boolean owned = projectRepository.findById(projectId)
-                .filter(project -> project.getOwnerId().equals(actorProvider.currentUserId()))
-                .isPresent();
-        if (!owned) {
-            throw new ProjectNotFoundException(projectId);
-        }
-    }
 
     private static String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();

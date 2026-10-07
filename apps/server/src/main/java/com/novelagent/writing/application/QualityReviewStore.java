@@ -1,5 +1,6 @@
 package com.novelagent.writing.application;
 
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.planning.domain.OutlineStatus;
@@ -7,13 +8,11 @@ import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.writing.domain.ManuscriptStatus;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.QualityReviewResponse;
 import com.novelagent.writing.domain.ChapterContractVersion;
@@ -26,10 +25,6 @@ import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import com.novelagent.writing.infrastructure.QualityReviewVersionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -42,39 +37,51 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class QualityReviewStore {
-    private final NovelProjectRepository projects;
     private final OutlineVersionRepository outlines;
     private final StoryBibleVersionRepository bibles;
     private final ChapterContractVersionRepository contracts;
     private final ManuscriptVersionRepository manuscripts;
     private final QualityReviewVersionRepository reports;
-    private final CurrentActorProvider actors;
+    private final ProjectAccessService access;
     private final CharacterNameService names;
     private final CharacterProfileService profiles;
     private final WritingStyleService styles;
     private final EntityManager entityManager;
     private final com.novelagent.planning.application.CreationPreparationContextService preparation;
 
-    public QualityReviewStore(NovelProjectRepository projects, OutlineVersionRepository outlines,
-            StoryBibleVersionRepository bibles, ChapterContractVersionRepository contracts,
-            ManuscriptVersionRepository manuscripts, QualityReviewVersionRepository reports, CurrentActorProvider actors,
-            CharacterNameService names, CharacterProfileService profiles, WritingStyleService styles, EntityManager entityManager) {
-        this(projects, outlines, bibles, contracts, manuscripts, reports, actors, names, profiles, styles, entityManager, null);
+    public QualityReviewStore(
+            OutlineVersionRepository outlines,
+            StoryBibleVersionRepository bibles,
+            ChapterContractVersionRepository contracts,
+            ManuscriptVersionRepository manuscripts,
+            QualityReviewVersionRepository reports,
+            ProjectAccessService access,
+            CharacterNameService names,
+            CharacterProfileService profiles,
+            WritingStyleService styles,
+            EntityManager entityManager) {
+        this(outlines, bibles, contracts, manuscripts, reports, access, names, profiles, styles, entityManager, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public QualityReviewStore(NovelProjectRepository projects, OutlineVersionRepository outlines,
-            StoryBibleVersionRepository bibles, ChapterContractVersionRepository contracts,
-            ManuscriptVersionRepository manuscripts, QualityReviewVersionRepository reports, CurrentActorProvider actors,
-            CharacterNameService names, CharacterProfileService profiles, WritingStyleService styles, EntityManager entityManager,
+    public QualityReviewStore(
+            OutlineVersionRepository outlines,
+            StoryBibleVersionRepository bibles,
+            ChapterContractVersionRepository contracts,
+            ManuscriptVersionRepository manuscripts,
+            QualityReviewVersionRepository reports,
+            ProjectAccessService access,
+            CharacterNameService names,
+            CharacterProfileService profiles,
+            WritingStyleService styles,
+            EntityManager entityManager,
             com.novelagent.planning.application.CreationPreparationContextService preparation) {
-        this.projects = projects;
         this.outlines = outlines;
         this.bibles = bibles;
         this.contracts = contracts;
         this.manuscripts = manuscripts;
         this.reports = reports;
-        this.actors = actors;
+        this.access = access;
         this.names = names;
         this.profiles = profiles;
         this.styles = styles;
@@ -99,7 +106,7 @@ public class QualityReviewStore {
      */
     @Transactional(readOnly = true)
     public Snapshot snapshot(UUID projectId, int chapter) {
-        NovelProject project = owned(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         ManuscriptVersion manuscript = manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapter)
                 .orElseThrow(() -> new IllegalArgumentException("请先保存本章正文"));
         ChapterContractVersion contract = contracts.findByIdAndProjectId(manuscript.getSourceContractVersionId(), projectId).orElseThrow();
@@ -147,7 +154,7 @@ public class QualityReviewStore {
      */
     @Transactional(readOnly = true)
     public Optional<QualityReviewResponse> latest(UUID projectId, int chapter) {
-        owned(projectId);
+        access.requireOwnedProject(projectId);
         return reports.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapter)
                 .map(report -> QualityReviewResponse.from(report, isCurrent(report)));
     }
@@ -161,7 +168,7 @@ public class QualityReviewStore {
      */
     @Transactional(readOnly = true)
     public QualityReviewVersion get(UUID projectId, int chapter, UUID id) {
-        owned(projectId);
+        access.requireOwnedProject(projectId);
         return reports.findByIdAndProjectIdAndChapterNumber(id, projectId, chapter)
                 .orElseThrow(() -> new WritingResourceNotFoundException("质量报告", id));
     }
@@ -220,7 +227,7 @@ public class QualityReviewStore {
      * @param chapter 当前处理章号，从 1 开始。
      */
     private Snapshot lockedSnapshot(UUID projectId, int chapter) {
-        NovelProject project = owned(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
         Snapshot current = snapshot(projectId, chapter);
         entityManager.refresh(current.manuscript(), LockModeType.PESSIMISTIC_WRITE);
@@ -252,10 +259,6 @@ public class QualityReviewStore {
                 && expected.fingerprint().equals(current.fingerprint());
     }
 
-    private NovelProject owned(UUID projectId) {
-        return projects.findById(projectId).filter(project -> project.getOwnerId().equals(actors.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private String previousSources(UUID projectId, int chapter) {
         StringBuilder source = new StringBuilder();
@@ -277,7 +280,6 @@ public class QualityReviewStore {
      * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
      */
     private static String fingerprint(String value) {
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
-        catch (NoSuchAlgorithmException exception) { throw new IllegalStateException("SHA-256 不可用", exception); }
+        return Sha256.ofUtf8(value);
     }
 }

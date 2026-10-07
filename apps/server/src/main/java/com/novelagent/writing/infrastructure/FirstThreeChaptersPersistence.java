@@ -2,6 +2,7 @@ package com.novelagent.writing.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.planning.domain.OutlineContent;
@@ -25,12 +26,8 @@ import com.novelagent.writing.domain.FirstThreeChaptersReport;
 import com.novelagent.writing.domain.FirstThreeChaptersSource;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -214,7 +211,6 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
         catch (JsonProcessingException e) { throw new IllegalStateException("无法序列化通读依据", e); }
     }
     private static String hash(String value) {
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
-        catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
+        return Sha256.ofUtf8(value);
     }
 }

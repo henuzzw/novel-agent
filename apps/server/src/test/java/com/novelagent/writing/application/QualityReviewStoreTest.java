@@ -15,6 +15,7 @@ import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
@@ -50,8 +51,8 @@ class QualityReviewStoreTest {
     private final StoryBibleVersion bible = mock(StoryBibleVersion.class);
     private final ChapterContractVersion contract = mock(ChapterContractVersion.class);
     private final ManuscriptVersion manuscript = mock(ManuscriptVersion.class);
-    private final QualityReviewStore store = new QualityReviewStore(projects, outlines, bibles, contracts, manuscripts,
-            mock(QualityReviewVersionRepository.class), new CurrentActorProvider(owner), names, profiles, styles, mock(EntityManager.class));
+    private final QualityReviewStore store = new QualityReviewStore(outlines, bibles, contracts, manuscripts,
+            mock(QualityReviewVersionRepository.class), new ProjectAccessService(projects, new CurrentActorProvider(owner)), names, profiles, styles, mock(EntityManager.class));
 
     @BeforeEach
     void setUp() {

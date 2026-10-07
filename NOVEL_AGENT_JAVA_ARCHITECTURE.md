@@ -1,6 +1,6 @@
 # Java 服务端当前架构
 
-最后更新：2026-10-05。
+最后更新：2026-10-07。
 
 本文描述已实现的职责划分。业务能力与后续路线仍以 `apps/server/AGENTS.md` 和自动化待办为准。
 
@@ -11,6 +11,7 @@
 | 模块 | 负责内容 |
 | --- | --- |
 | project | 项目、当前作者、创作意图、项目访问权限 |
+| prompt | 全局阶段提示词、默认目录、用户配置与版本历史 |
 | planning | 故事方向、圣经、大纲及相关模型适配 |
 | writing | 合同、合同审阅、正文版本、正史审稿、质量检查、风格 |
 | writing 风格试写 | WritingStylePreviewService 读取同项目已保存大纲第一章，WritingGenerationWorkflow 的独立 STYLE_PREVIEW Graph 生成临时样例；不通过 ManuscriptService 保存、不修改风格和正史 |
@@ -34,6 +35,23 @@ Prompt、Schema、解析器及 Codex 会话策略；公共网关负责 Codex / D
 `AgentRun` 记录、Codex thread 新建或恢复、失效 thread 重建和 turn 回写。新增模型阶段不得
 在业务生成器中再次复制这套生命周期。前端 API 则统一经过 `src/api/http.ts`，集中处理
 `no-store`、JSON 请求头、FormData 边界、204 响应和 Problem Details 错误。
+
+公共网关内部也按职责分开，避免新增阶段时扩展同一个大类：
+
+```text
+业务 Prompt / Schema / 输出解析器
+    -> StructuredModelGateway：冻结配置、路由供应商、记录实际请求与结果
+        -> AgentPromptService：解析当前用户的阶段提示词版本
+        -> StructuredRequestBudget：校验最终 Prompt + Schema + 输出预留 + 安全余量
+        -> CodexSessionManager：新建/恢复 thread、版本换会话、缺失恢复、完成后回写 turn
+            -> CodexAppServerClient / CodexAgentSessionRepository
+        -> DeepSeekStructuredOutputClient：无状态供应商请求
+```
+
+会话与预算协作者是包内实现，由网关构造并独立测试，不新增 Spring Bean 或外部依赖。
+网关原有公共调用入口保持兼容，业务生成器不接触内部协作者。
+提示词、Schema、令牌上限、解析方式和调用记录内的校验回调不变；
+鉴权错误及普通网络错误仍不自动重试，只有已确认的失效 thread 可重建。
 
 ## 2. 写作职责
 
@@ -73,12 +91,24 @@ MemoryController -> MemoryPreviewService -> 预算与只读记忆召回
 以上查询服务及 WritingContextService -> ProjectAccessService
 ```
 
-- `ProjectAccessService.requireOwnedProject` 统一这些用例的作者权限校验；不存在与不属于当前作者的项目均为原有 `ProjectNotFoundException`。
+- `ProjectAccessService.requireOwnedProject` 统一作者权限校验；不存在与不属于当前作者的项目均为原有 `ProjectNotFoundException`。
 - 查询仓库只封装 SQL，不承担授权；查询服务必须先验证项目再调用仓库。
-- 原有其他业务服务的权限检查暂时保留，未一次性改动所有领域服务。
+- 项目、方向、圣经、大纲、人物补全、导入、自动任务、正史提交、人物命名、人物档案、正史查询、风格及质量报告的 13 处重复归属校验已统一接入。服务仅因实际创建、列表或保存需要保留项目 Repository / 当前作者依赖，不为权限校验重复注入。
+- 保存用例仍自行掌握事务、悲观锁及来源版本复核；`requireOwnedProject(NovelProject)` 可在锁后 refresh 时重新检查已加载实体，不发起额外查询。权限读取不冻结后续模型调用依据，也不替代业务版本校验。
 - Agent Run 的列表限制、排序、估算汇总和按项目查询 Prompt 的 SQL 保持不变。
 - 完整 Prompt 仍只按需读取，成功响应保持 `Cache-Control: no-store`，缺失运行记录返回 404。
 - 投影状态字段、记忆预览参数默认值及全部业务 API 地址保持不变。
+
+### 公共指纹
+
+`platform.support.Sha256` 只依赖 JDK，提供 UTF-8 文本和原始字节的 SHA-256 小写十六进制编码。
+12 个类、13 处原有算法实现统一复用它，覆盖任务请求、记忆上下文、导入、规划批次与分块、
+质量/试写报告、前三章复核、全书扫描和伏笔承诺台账。
+
+序列化及“哪些字段构成依据”仍由各业务模块决定。公共工具不排序 JSON、裁剪空白、
+归一化换行或改变 null 规则；原有请求快照的 null 转空串仍在原调用方执行。
+每次调用使用独立 MessageDigest，防止并发请求共享可变算法状态。
+既有数据库中的指纹仍然有效，不需要数据回填或迁移。
 
 ## 4. 事务规则
 
@@ -110,6 +140,9 @@ MemoryController -> MemoryPreviewService -> 预算与只读记忆召回
 6. 写作与质量的模型生成入口不声明长数据库事务。
 7. 作者编辑和确认入口保留写事务声明。
 8. 规划生成器、导入网关和写作路由只依赖统一结构化模型网关，不直接依赖供应商客户端、Codex 会话仓库或运行记录器。
+9. 业务归属校验只通过 ProjectAccessService；字节码中的 NovelProject.getOwnerId 调用只允许该公共策略持有。
+10. 生产代码只在 Sha256 中直接调用 MessageDigest.getInstance，且工具不依赖业务模块或 Spring。
+11. 公共网关委托会话与预算策略，不直接新建/恢复 thread 或保存会话。
 
 该测试不是完整 Spring Bean 图验证，也不覆盖反射、运行时动态依赖或所有跨模块循环。真实 Spring 上下文与 PostgreSQL 回归用于补充验证装配和事务行为。
 
@@ -120,6 +153,14 @@ cd apps/server
 .\mvnw.cmd test
 ```
 
+2026-10-07 本轮验证：完整测试 598 项，默认 548 通过、50 环境条件跳过；
+另外启用四个隔离数据库测试类，49 项全部通过，合计 597 通过，
+1 项真实模型质量评测因未启用仍跳过，无失败。
+覆盖权限隔离、锁后复核、规划资料发布同步、正史原子提交、来源指纹、
+提示词保存与实际网关记录、会话恢复/版本轮转/失败回写及流式输出回调。
+测试没有使用付费模型，也没有修改现有小说数据。本轮没有新增迁移或依赖。
+当前正在运行的后端未自动重启，需要重启后才加载新实现。
+
 隔离数据库测试沿用 `NOVEL_AUTOMATION_DB_TEST=true` 和已有数据库配置；使用随机测试 Schema，关闭消息消费并替换后台发布 / 回填，结束时只清理该 Schema。新增验证审稿保存失败的原子回滚及运行查询权限，既有作者门禁与有限润色链路继续覆盖。
 
 ## 6. 后续优化
@@ -128,5 +169,5 @@ cd apps/server
 - 通用模型网关及底层客户端暂时位于 `planning.infrastructure`；若供应商继续增加，再迁入独立
   platform / model infrastructure 包。本轮为控制改动面，不做纯包移动。
 - 部分领域对象仍引用 application 枚举，且应用层使用 API DTO；进一步解耦应另行评估迁移成本。
-- 可以逐步让其余业务用例复用 ProjectAccessService，但权限规则不能因机械替换改变。
+- 人物资料、创作准备等服务的复杂 SQL 与业务编排还可继续按真实职责拆分；不引入万能 CRUD 基类，不混用读取、锁定、作者确认和正史状态规则。
 - 普通生成的并发版本 / 来源校验、长期调用即时取消和真实 usage 仍属于后续业务完善，不混入纯架构调整。

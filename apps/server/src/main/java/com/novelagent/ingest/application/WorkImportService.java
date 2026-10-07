@@ -3,19 +3,15 @@ package com.novelagent.ingest.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.ingest.api.ImportedChapterResponse;
 import com.novelagent.ingest.api.WorkImportResponse;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.project.application.ProjectAccessService;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -44,16 +40,17 @@ public class WorkImportService {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final List<String> ALLOWED_EXTENSIONS = List.of("txt", "md", "docx", "pdf");
 
-    private final NovelProjectRepository projects;
-    private final CurrentActorProvider actor;
+    private final ProjectAccessService access;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final long maxFileBytes;
 
-    public WorkImportService(NovelProjectRepository projects, CurrentActorProvider actor, JdbcTemplate jdbc,
-            ObjectMapper mapper, @Value("${app.import.max-file-bytes:20971520}") long maxFileBytes) {
-        this.projects = projects;
-        this.actor = actor;
+    public WorkImportService(
+            ProjectAccessService access,
+            JdbcTemplate jdbc,
+            ObjectMapper mapper,
+            @Value("${app.import.max-file-bytes:20971520}") long maxFileBytes) {
+        this.access = access;
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.maxFileBytes = maxFileBytes;
@@ -67,7 +64,7 @@ public class WorkImportService {
      */
     @Transactional
     public WorkImportResponse upload(UUID projectId, MultipartFile file) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         if (file == null || file.isEmpty()) throw new IllegalArgumentException("请选择需要导入的文件");
         if (file.getSize() > maxFileBytes) throw new IllegalArgumentException("导入文件不能超过 20 MB");
         String filename = safeFilename(file.getOriginalFilename());
@@ -118,7 +115,7 @@ public class WorkImportService {
      */
     @Transactional(readOnly = true)
     public List<WorkImportResponse> list(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.query("SELECT id FROM work_import WHERE project_id = ? ORDER BY created_at DESC",
                 (rs, row) -> get(projectId, rs.getObject("id", UUID.class)), projectId);
     }
@@ -131,7 +128,7 @@ public class WorkImportService {
      */
     @Transactional(readOnly = true)
     public WorkImportResponse get(UUID projectId, UUID importId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.queryForObject("""
                 SELECT id, project_id, original_filename, media_type, size_bytes, sha256, parser_version,
                        detected_content_type, status, planning_status, planning_mode, generated_bible_version_id,
@@ -156,7 +153,7 @@ public class WorkImportService {
      */
     @Transactional
     public WorkImportResponse confirm(UUID projectId, UUID importId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         int updated = jdbc.update("""
                 UPDATE work_import SET status = 'CONFIRMED', confirmed_at = COALESCE(confirmed_at, now())
                 WHERE id = ? AND project_id = ?
@@ -173,7 +170,7 @@ public class WorkImportService {
      */
     @Transactional(readOnly = true)
     public SourceFile source(UUID projectId, UUID importId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return jdbc.queryForObject("""
                 SELECT original_filename, COALESCE(media_type, 'application/octet-stream') AS media_type, original_content
                 FROM work_import WHERE id = ? AND project_id = ?
@@ -189,7 +186,7 @@ public class WorkImportService {
      */
     @Transactional(readOnly = true)
     public PlanningSource planningSource(UUID projectId, UUID importId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         String status = jdbc.queryForObject(
                 "SELECT status FROM work_import WHERE id = ? AND project_id = ?", String.class, importId, projectId);
         if (!"CONFIRMED".equals(status)) throw new IllegalArgumentException("请先确认导入结果，再反推规划");
@@ -271,11 +268,6 @@ public class WorkImportService {
                 rs.getInt("character_count"), rs.getString("content_type"), rs.getBoolean("selected")), importId);
     }
 
-    private void requireOwnedProject(UUID projectId) {
-        projects.findById(projectId)
-                .filter(project -> project.getOwnerId().equals(actor.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private List<String> warnings(String json) {
         try {
@@ -307,11 +299,7 @@ public class WorkImportService {
     }
 
     private static String sha256(byte[] content) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("运行环境不支持 SHA-256", exception);
-        }
+        return Sha256.ofBytes(content);
     }
 
     private static Instant instant(Timestamp value) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
@@ -13,6 +14,21 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ProjectAccessServiceTest {
+    @Test
+    void verifiesARefreshedEntityWithoutReloadingItAndRechecksTheCurrentActor() {
+        var owner = UUID.randomUUID();
+        var project = NovelProject.create(UUID.randomUUID(), owner, "测试项目", EntryMode.IDEA);
+        var projects = mock(NovelProjectRepository.class);
+        var actors = mock(CurrentActorProvider.class);
+        when(actors.currentUserId()).thenReturn(owner, UUID.randomUUID());
+        var service = new ProjectAccessService(projects, actors);
+
+        assertThat(service.requireOwnedProject(project)).isSameAs(project);
+        assertThatThrownBy(() -> service.requireOwnedProject(project))
+                .isInstanceOf(ProjectNotFoundException.class);
+        verifyNoInteractions(projects);
+    }
+
     @Test void returnsOwnedProjectAndTreatsMissingOrForeignProjectAsNotFound() {
         UUID owner = UUID.randomUUID();
         var project = NovelProject.create(UUID.randomUUID(), owner, "测试项目", EntryMode.IDEA);

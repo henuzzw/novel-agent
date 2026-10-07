@@ -28,7 +28,23 @@ public class ProjectAccessService {
      */
     @Transactional(readOnly = true)
     public NovelProject requireOwnedProject(UUID projectId) {
-        return projects.findById(projectId).filter(project -> project.getOwnerId().equals(actors.currentUserId()))
+        NovelProject project = projects.findById(projectId)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
+        return verifyOwner(project, projectId);
+    }
+
+    /**
+     * Recheck the already loaded entity, including after a pessimistic refresh.
+     * The caller retains control of locks and transaction boundaries; no second read is performed.
+     */
+    public NovelProject requireOwnedProject(NovelProject project) {
+        return verifyOwner(project, project.getId());
+    }
+
+    private NovelProject verifyOwner(NovelProject project, UUID projectId) {
+        if (!project.getOwnerId().equals(actors.currentUserId())) {
+            throw new ProjectNotFoundException(projectId);
+        }
+        return project;
     }
 }

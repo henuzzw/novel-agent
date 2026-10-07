@@ -8,6 +8,12 @@ import org.junit.jupiter.api.Test;
 
 class HttpLogSanitizerTest {
     private final HttpLogSanitizer sanitizer = new HttpLogSanitizer(new ObjectMapper());
+    @Test void hidesPromptEditorFieldsWithoutDroppingVersionMetadata() {
+        String log = sanitizer.summarize(Map.of("guidance", "私有规则", "defaultSystemPrompt", "默认全文",
+                "protectedRules", "边界全文", "systemPrompt", "私有角色", "key", "MANUSCRIPT", "version", 3));
+        assertThat(log).contains("MANUSCRIPT", "version", "TEXT chars=")
+                .doesNotContain("私有规则", "默认全文", "边界全文", "私有角色");
+    }
     @Test void keepsUsefulParametersAndMasksNestedSecretsAndManuscripts() {
         String log = sanitizer.summarize(Map.of("provider", "LOCAL_CODEX", "analysisVersion", 2,
                 "body", "private manuscript", "content", Map.of("chapterId", "chapter", "text", "private source"),

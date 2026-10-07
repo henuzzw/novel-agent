@@ -9,10 +9,8 @@ import com.novelagent.canon.api.CharacterNameResponse;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.domain.ManuscriptContent;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,16 +34,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class CharacterNameService {
     private static final Pattern REFERENCE = Pattern.compile(
             "\\{\\{entity:([0-9a-fA-F-]{36}):(CANONICAL|NICKNAME|TITLE)}}");
-    private final NovelProjectRepository projects;
-    private final CurrentActorProvider actor;
+    private final ProjectAccessService access;
     private final StoryBibleVersionRepository bibles;
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
-    public CharacterNameService(NovelProjectRepository projects, CurrentActorProvider actor,
-            StoryBibleVersionRepository bibles, JdbcTemplate jdbc, ObjectMapper objectMapper) {
-        this.projects = projects;
-        this.actor = actor;
+    public CharacterNameService(
+            ProjectAccessService access,
+            StoryBibleVersionRepository bibles,
+            JdbcTemplate jdbc,
+            ObjectMapper objectMapper) {
+        this.access = access;
         this.bibles = bibles;
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
@@ -59,7 +58,7 @@ public class CharacterNameService {
      */
     @Transactional(readOnly = true)
     public List<CharacterNameResponse> list(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return rows(projectId);
     }
 
@@ -71,7 +70,7 @@ public class CharacterNameService {
      */
     @Transactional
     public List<CharacterNameResponse> initializeFromStoryBible(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         StoryBibleVersion bible = bibles.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
                 .orElseThrow(() -> new IllegalArgumentException("请先生成故事圣经"));
         return initializeFromStoryBible(projectId, bible);
@@ -86,7 +85,7 @@ public class CharacterNameService {
      */
     @Transactional
     public List<CharacterNameResponse> initializeFromStoryBible(UUID projectId, StoryBibleVersion bible) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         if (!projectId.equals(bible.getProjectId())) throw new IllegalArgumentException("故事圣经不属于本项目");
         StoryBibleContent content = bible.getContent();
         Map<String, String> names = new LinkedHashMap<>();
@@ -111,7 +110,7 @@ public class CharacterNameService {
      */
     @Transactional
     public void initializeFromBlueprints(UUID projectId, UUID taskId, List<com.novelagent.planning.domain.CharacterBlueprint> blueprints) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         Map<String, String> names = new LinkedHashMap<>();
         for (var blueprint : blueprints) {
             putName(names, "PROTAGONIST".equals(blueprint.role()) ? "PROTAGONIST"
@@ -162,7 +161,7 @@ public class CharacterNameService {
     @Transactional
     public CharacterNameResponse update(UUID projectId, UUID entityId, long expectedVersion,
             String canonicalName, String nickname, String title) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         CharacterNameResponse before = row(projectId, entityId);
         if (before.version() != expectedVersion) {
             throw new ResourceVersionConflictException(expectedVersion, before.version());
@@ -398,10 +397,6 @@ public class CharacterNameService {
                 .sorted(Comparator.comparingInt((NameForm value) -> value.text().length()).reversed()).toList();
     }
 
-    private void requireOwnedProject(UUID projectId) {
-        projects.findById(projectId).filter(project -> project.getOwnerId().equals(actor.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private static String extractName(String value) {
         if (value == null) return null;

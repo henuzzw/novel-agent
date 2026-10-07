@@ -14,8 +14,7 @@ import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.NovelProject;
@@ -41,16 +40,27 @@ public class OutlineService {
     private final OutlineVersionRepository outlines;
     private final OutlineWordBudgetPolicy budgetPolicy;
     private final OutlineGenerationWorkflow workflow;
-    private final CurrentActorProvider actorProvider;
+    private final ProjectAccessService access;
     private final CharacterNameService characterNames;
     private final PlanningMaterialSyncService materials;
 
-    public OutlineService(NovelProjectRepository projects, CreativeIntentRepository intents,
-            StoryBibleVersionRepository bibles, OutlineVersionRepository outlines,
-            OutlineWordBudgetPolicy budgetPolicy, OutlineGenerationWorkflow workflow,
-            CurrentActorProvider actorProvider, CharacterNameService characterNames, PlanningMaterialSyncService materials) {
-        this.projects = projects; this.intents = intents; this.bibles = bibles; this.outlines = outlines;
-        this.budgetPolicy = budgetPolicy; this.workflow = workflow; this.actorProvider = actorProvider;
+    public OutlineService(
+            NovelProjectRepository projects,
+            CreativeIntentRepository intents,
+            StoryBibleVersionRepository bibles,
+            OutlineVersionRepository outlines,
+            OutlineWordBudgetPolicy budgetPolicy,
+            OutlineGenerationWorkflow workflow,
+            ProjectAccessService access,
+            CharacterNameService characterNames,
+            PlanningMaterialSyncService materials) {
+        this.projects = projects;
+        this.intents = intents;
+        this.bibles = bibles;
+        this.outlines = outlines;
+        this.budgetPolicy = budgetPolicy;
+        this.workflow = workflow;
+        this.access = access;
         this.characterNames = characterNames;
         this.materials = materials;
     }
@@ -62,7 +72,7 @@ public class OutlineService {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     public OutlineResponse generate(UUID projectId, GenerateOutlineRequest request) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         UUID bibleId = project.getCurrentBibleVersionId();
         if (bibleId == null) throw new IllegalArgumentException("请先发布故事圣经，再生成分层大纲");
         StoryBibleVersion bible = bibles.findByIdAndProjectId(bibleId, projectId)
@@ -100,7 +110,7 @@ public class OutlineService {
      */
     @Transactional(readOnly = true)
     public List<OutlineVersionSummaryResponse> versions(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return outlines.findAllByProjectIdOrderByGenerationNumberDesc(projectId).stream()
                 .map(value -> OutlineVersionSummaryResponse.from(value,
                         characterNames.render(projectId, value.getContent().title())))
@@ -115,7 +125,7 @@ public class OutlineService {
      */
     @Transactional(readOnly = true)
     public OutlineResponse version(UUID projectId, UUID outlineId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return response(requireVersion(projectId, outlineId));
     }
 
@@ -127,7 +137,7 @@ public class OutlineService {
      */
     @Transactional(readOnly = true)
     public Optional<OutlineResponse> latest(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId).map(this::response);
     }
 
@@ -139,7 +149,7 @@ public class OutlineService {
      */
     @Transactional(readOnly = true)
     public Optional<OutlineResponse> current(UUID projectId) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         UUID currentId = project.getCurrentOutlineVersionId();
         if (currentId == null) return Optional.empty();
         return Optional.of(response(requireVersion(projectId, currentId)));
@@ -155,7 +165,7 @@ public class OutlineService {
      */
     @Transactional
     public OutlineResponse update(UUID projectId, UUID outlineId, long expectedVersion, OutlineContent content) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         OutlineVersion version = requireVersion(projectId, outlineId);
         checkVersion(version, expectedVersion);
         if (version.getStatus() == OutlineStatus.PUBLISHED)
@@ -173,7 +183,7 @@ public class OutlineService {
      */
     @Transactional
     public OutlineResponse publish(UUID projectId, UUID outlineId, long expectedVersion) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         OutlineVersion version = requireVersion(projectId, outlineId);
         checkVersion(version, expectedVersion);
         version.publish();
@@ -189,10 +199,6 @@ public class OutlineService {
     private OutlineResponse response(OutlineVersion value) {
         OutlineContent content = characterNames.render(value.getProjectId(), value.getContent(), OutlineContent.class);
         return OutlineResponse.from(value, content);
-    }
-    private NovelProject requireOwnedProject(UUID id) {
-        return projects.findById(id).filter(value -> value.getOwnerId().equals(actorProvider.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(id));
     }
     private static void checkVersion(OutlineVersion value, long expected) {
         if (value.getRowVersion() != expected) throw new ResourceVersionConflictException(expected, value.getRowVersion());

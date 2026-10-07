@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
@@ -30,7 +31,7 @@ class CharacterProfileServiceTest {
     private final UUID owner = UUID.randomUUID();
     private final NovelProjectRepository projects = mock(NovelProjectRepository.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final CharacterProfileService service = new CharacterProfileService(projects, new CurrentActorProvider(owner), jdbc);
+    private final CharacterProfileService service = new CharacterProfileService(new ProjectAccessService(projects, new CurrentActorProvider(owner)), jdbc);
     private final List<String> queries = new ArrayList<>();
     private final List<UUID> selected = new ArrayList<>();
     private final Character lin = new Character(UUID.randomUUID(), "PROTAGONIST", "林安", "旧名", "小林", "林老师", List.of("阿林"), true);

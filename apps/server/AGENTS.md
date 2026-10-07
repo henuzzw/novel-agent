@@ -50,6 +50,7 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 - `../../NOVEL_AGENT_WORKFLOW_DESIGN.md`
 - `../../NOVEL_AGENT_AI_SPEC.md`
 - `../../NOVEL_AGENT_STAGES_AND_PROMPTS.md`
+- `../../NOVEL_AGENT_AGENT_TOPOLOGY.md`：23 种实际模型工作流的前向总图、作者门禁和分支回路；另有可放大的 SVG 总图。
 - `../../NOVEL_AGENT_API_DESIGN.md`
 - `../../NOVEL_AGENT_TEST_PLAN.md`
 
@@ -57,9 +58,14 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 ## 4. 当前完成度
 
-最后更新：2026-10-06。
+最后更新：2026-10-07。
 
 ### 4.1 已完成
+
+- 公共能力重构（2026-10-07）：13 个业务服务的重复项目归属校验统一调用 ProjectAccessService；保留原服务写事务、锁、来源版本及作者确认门禁，锁后实体可用 requireOwnedProject(NovelProject) 重新检查权限而不额外查询。StructuredModelGateway 拆出包内 CodexSessionManager（会话策略/版本轮转/缺失恢复/完成回写）和 StructuredRequestBudget（最终上下文容量校验），入口及默认 Prompt/Schema/输出上限/解析回调保持不变，不新增 Spring Bean。platform.support.Sha256 统一 12 个类的 13 处指纹算法，文本 UTF-8、原始字节、小写 hex、序列化内容及调用方 null 规则不变，不需要数据回填。ArchitectureTest 新增权限/指纹/网关委托三条字节码约束；新增并发哈希、预算边界、失败 turn 不回写、progress 透传和锁后归属复核测试。完整测试 598 项：默认 548 通过、50 环境门禁跳过；另外 49 项隔离数据库/完整 Spring 装配测试全部通过，合计 597 通过、1 项真实模型评测未启用、无失败。本轮无新依赖、接口变化或迁移，不操作现有项目或调用付费模型；后端尚未重启加载本轮改动。详细当前结构见 ../../NOVEL_AGENT_JAVA_ARCHITECTURE.md。
+
+- V049 全局提示词管理：新增 prompt 模块，AgentPromptDefaults 与原生成器共用默认系统指令；AgentPromptCatalog 覆盖 23 个工作流、25 份模板（导入反推圣经/大纲各分改编和续写）。当前用户配置与不可变历史保存在 user_agent_prompt/user_agent_prompt_revision，GET/PUT /settings/prompts、POST /{key}/reset、GET /{key}/history；两个文本各限 40000 字符，更新带 version，过期 409，读取不写入。StructuredModelGateway 在预算/记录/供应商请求前读取并冻结配置，支持系统指令替换和阶段规则；未编辑请求文本不变，动态项目资料、作者要求、Schema/令牌预留/解析/门禁不改。自定义文本追加固定事实/知识/作者优先级/候选输出边界，任务保存实际文本与配置版本，不改历史结果。codex_agent_session.prompt_revision 变化（包括 RESET）时换新会话，同版沿用旧策略；DeepSeek 无状态。前端 /settings/prompts 支持搜索、URL阶段恢复、保存、默认/边界查看、最近50版载入、并发冲突与未保存保护；不是修改风格预设目录或运行第三方 skill。无新增依赖、无真实模型调用；需要重启后端加载，详细范围与验证见 ../../NOVEL_AGENT_PROMPT_MANAGEMENT.md。
+  验证：全量 584 项（534 通过、50 环境门禁跳过），另外隔离 PostgreSQL/完整 Spring 装配 4 项通过，实际 API 保存后的文本由网关发送到模型替身并记录，RESET 不回填历史或写正史；前端 211 单元/23 相关浏览器测试通过，构建/类型/ESLint/格式检查通过。新提示词字段在 HTTP 日志仅记录字符数与版本。自动重启被环境限制拦截，当前旧后端未停止，现有项目 schema 尚未加载 V049，需手动重启；不将隔离测试迁移当成生产部署成功。
 
 - 作者要求与策略分离：大纲生成不再将系统策略拼入作者 instruction，OutlineService、Graph 和三种生成器分别传递作者原文与 CreativeStrategyPolicy；Codex/DeepSeek 共用 Prompt 工厂，作者要求前置，策略独立标注系统来源。有效上游约束、OCCURRED 和已确认事实仍不可越过；在边界内作者明确开场、回忆框架与节奏优先于通用策略，空要求不授权整体重写，不能从作者原文猜测项目策略。调整冲突在既有 changeSummary 说明，上游变更仍需作者操作；共享策略指南补充相同边界，不新增模型步骤、Schema、接口或迁移，不追溯修改任务 Prompt 和旧稿。全量 562 项：516 通过、46 环境门禁跳过、无失败；覆盖作者开头保留、空要求、策略独立传递及两个供应商入口，均用模型测试替身，未对真实文学质量作保证。后端需重启加载。实际模型工作流仍为 23 种，记忆预算的 AgentStage 六项不是完整清单，详见 ../../NOVEL_AGENT_STAGES_AND_PROMPTS.md。
 
@@ -159,6 +165,7 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 src/main/java/com/novelagent
 ├── agent         Agent 阶段定义、只读 Tool、白名单与工具编排
 ├── project       项目、创作入口、创作意图和当前版本指针
+├── prompt        全局阶段指令、默认目录、配置版本和历史
 ├── planning      故事方向、故事圣经、大纲、模型生成适配
 ├── writing       章节合同、正文、审稿和候选事实
 ├── memory        pgvector 召回、图谱查询、Embedding、Token 预算
@@ -311,7 +318,9 @@ Codex 使用后端主机上的 `codex app-server`，不是前端浏览器或用�
 - 本地 Codex 长文本任务默认最多等待 600 秒；运行后端的系统用户必须能够读写自己的 `.codex` 状态目录，否则 App Server 无法初始化。
 - `CodexAgentSession`：项目与工作流对应的持久化会话。
 - `CodexAgentSessionRepository`：恢复 thread。
-- `StructuredModelGateway`：统一 Codex / DeepSeek 结构化调用、AgentRun 记录、Codex 会话持久化及失效 thread 重建。
+- `StructuredModelGateway`：冻结提示词与模型配置，统一供应商路由和 AgentRun 记录；会话操作委托 CodexSessionManager，最终输入及预留校验委托 StructuredRequestBudget。
+- `CodexSessionManager`：新建/恢复会话、提示词版本轮转、缺失 thread 重建和完成 turn 回写；模型失败不写完成标记，普通网络及鉴权错误不重试。
+- `StructuredRequestBudget`：基于最终 Prompt 与 Schema 校验输入、输出预留和安全余量，不截断输入。
 - `CodexSessionPolicy`：业务阶段显式选择新 thread 或复用 thread；大纲、正文及独立检查等阶段新建，连续审阅类阶段按既有规则恢复。
 - 各 `CodexAppServer*Generator`：领域生成适配。
 
@@ -395,6 +404,8 @@ src/main/resources/db/migration
 | V045 | 已发布人物完整底稿与规划关系快照、读者台账来源与版本内幂等标识；不迁移未来规划为正史 |
 | V046 | 创作准备任务、当前确认指针、PREPARATION 台账来源、正文事实与计划关联；规划不写实际状态/关系/知识 |
 | V047 | 原文解析任务、完整分段范围、逐字证据、作者逐项决定、确认与生成来源版本；不创建正史 |
+| V048 | 校园关系：清爽叙事数据库风格预设 |
+| V049 | 用户全局 Agent 提示词、不可变版本历史、Codex 会话提示词版本 |
 
 人物引用规则：
 
@@ -441,6 +452,7 @@ src/main/resources/db/migration
 | --- | --- |
 | `ProjectController` | 项目创建、列表、详情、创作意图 |
 | `GlobalModelSettingsController` | 当前用户全局模型设置、乐观版本更新、ChatGPT 运行时模型与强度目录 |
+| `AgentPromptController` | 当前用户全局提示词目录、版本保存、恢复默认、最近50版历史 |
 | `AutomationController` | 章节范围任务创建、查询、继续、显式重试和取消 |
 | `WritingStyleController` | 项目风格、预设、版本守卫的应用/清除、样本分析与上传、第一章试写和圣经风格推荐 |
 | `StylePreviewEditingController` | POST writing-style/actions/check-preview 检查样例；POST writing-style/preview-reviews/{id}/actions/revise 按服务端报告选中问题修订 |
@@ -592,7 +604,7 @@ app.memory.*
 ## 15. 已知技术债
 
 - `CodexAppServerClient` 负责较多协议与进程细节，需要在补足回归测试后再拆，不要无测试重写。
-- 写作用例已拆分，供应商调用生命周期已统一，但公共网关和客户端仍位于 planning infrastructure；部分领域对象仍依赖 application 枚举、应用用例沿用 API DTO。本轮未进行全模块纯领域化或公共模型包迁移。ProjectAccessService 已用于写作上下文与三个读取用例，其余权限检查逐步迁移，不做无差别替换。
+- 写作用例已拆分，供应商调用生命周期已统一并拆分预算/会话策略，但公共网关和客户端仍位于 planning infrastructure；部分领域对象仍依赖 application 枚举、应用用例沿用 API DTO。本轮未进行全模块纯领域化或公共模型包迁移。重复项目归属校验已统一到 ProjectAccessService；锁定、来源复核、编辑版本和作者门禁仍由各业务用例管理，不统一成通用 CRUD。
 - 新提交已开始物化类型化正史，但模型候选仍是扁平结构，旧 JSONB 事实尚未批量回填。
 - 当前运行环境仍使用开发用特征哈希；正式适配器已完成，但未配置独立 Embedding 密钥和召回评测集。
 - `AgentRun` 可记录供应商提供的真实 usage，缺失保持未知，旧字段仍为估算；自动任务缺任务级配置冻结、真实费用归集、即时中断与费用硬上限。

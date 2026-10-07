@@ -24,6 +24,7 @@ import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.domain.CreativeStrategy;
@@ -50,7 +51,7 @@ class OutlineServiceVersionSelectionTest {
     private final CurrentActorProvider actor = mock(CurrentActorProvider.class);
     private final CharacterNameService characterNames = mock(CharacterNameService.class);
     private final OutlineService service = new OutlineService(
-            projects, intents, bibles, outlines, budgetPolicy, workflow, actor, characterNames, mock(PlanningMaterialSyncService.class));
+            projects, intents, bibles, outlines, budgetPolicy, workflow, new ProjectAccessService(projects, actor), characterNames, mock(PlanningMaterialSyncService.class));
 
     @BeforeEach
     void setUp() {

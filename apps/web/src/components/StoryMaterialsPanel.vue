@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { navigateWorkspaceButtons } from '@/lib/workspace-keyboard'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { BookUser, Clock3, ContactRound, Flag, Save, Search, WandSparkles } from 'lucide-vue-next'
 import { computed, reactive, ref, watch } from 'vue'
@@ -10,6 +11,8 @@ import EntityFactsPanel from './EntityFactsPanel.vue'
 import CharacterRelationsPanel from './CharacterRelationsPanel.vue'
 import { completeStoryBibleCharacters, getLatestStoryBible } from '@/api/planning'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
+import { materialViews, useWorkspaceChoice } from '@/composables/useWorkspaceLocation'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 
 import {
   initializeCharacterNames,
@@ -27,7 +30,7 @@ const props = defineProps<{ projectId: string }>()
 const emit = defineEmits<{ openBible: [] }>()
 const { provider } = useGlobalModelSettings()
 const queryClient = useQueryClient()
-const view = ref<'profiles' | 'entities' | 'timeline' | 'foreshadows' | 'style'>('profiles')
+const view = useWorkspaceChoice('materials', materialViews, 'profiles')
 const entityType = ref('ALL')
 const search = ref('')
 const selectedEntityId = ref<string | null>(null)
@@ -114,6 +117,7 @@ const selectedName = computed(() => characterNamesQuery.data.value?.find(item =>
 const profileDirty = computed(() => (characterProfilesQuery.data.value ?? []).some(profile =>
   JSON.stringify(profileDraft(profile)) !== JSON.stringify(profileInput(profile)))
   || (characterNamesQuery.data.value ?? []).some(name => JSON.stringify(nameDraft(name)) !== JSON.stringify(nameInput(name))))
+useUnsavedChanges(profileDirty, ['section'])
 const missingProfileFields = computed(() => {
   if (!selectedProfile.value) return []
   const draft = profileDraft(selectedProfile.value)
@@ -244,12 +248,12 @@ function entityTypeLabel(value: string) {
 
 <template>
   <div class="materials-workbench">
-    <div class="planning-tabs" role="tablist" aria-label="故事资料分类">
-      <button type="button" :class="{ active: view === 'profiles' }" @click="view = 'profiles'"><ContactRound :size="16" />人物档案</button>
-      <button type="button" :class="{ active: view === 'entities' }" @click="view = 'entities'"><BookUser :size="16" />非人物实体</button>
-      <button type="button" :class="{ active: view === 'timeline' }" @click="view = 'timeline'"><Clock3 :size="16" />事件时间线</button>
-      <button type="button" :class="{ active: view === 'foreshadows' }" @click="view = 'foreshadows'"><Flag :size="16" />伏笔</button>
-      <button type="button" :class="{ active: view === 'style' }" @click="view = 'style'"><WandSparkles :size="16" />写作风格</button>
+    <div class="planning-tabs" role="group" @keydown="navigateWorkspaceButtons" aria-label="故事资料分类">
+      <button type="button" :aria-pressed="view === 'profiles'" :class="{ active: view === 'profiles' }" @click="view = 'profiles'"><ContactRound :size="16" />人物档案</button>
+      <button type="button" :aria-pressed="view === 'entities'" :class="{ active: view === 'entities' }" @click="view = 'entities'"><BookUser :size="16" />非人物实体</button>
+      <button type="button" :aria-pressed="view === 'timeline'" :class="{ active: view === 'timeline' }" @click="view = 'timeline'"><Clock3 :size="16" />事件时间线</button>
+      <button type="button" :aria-pressed="view === 'foreshadows'" :class="{ active: view === 'foreshadows' }" @click="view = 'foreshadows'"><Flag :size="16" />伏笔</button>
+      <button type="button" :aria-pressed="view === 'style'" :class="{ active: view === 'style' }" @click="view = 'style'"><WandSparkles :size="16" />写作风格</button>
     </div>
 
     <WritingStylePanel v-if="view === 'style'" :project-id="projectId" />

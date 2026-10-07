@@ -1,10 +1,7 @@
 package com.novelagent.memory.application;
 
+import com.novelagent.platform.support.Sha256;
 import java.util.List;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
 public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<GraphFact> graphFacts,
         MemoryUsage usage, List<SemanticMemory> futureContext, List<String> trimmedSources,
@@ -90,11 +87,6 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
     }
 
     public static String fingerprint(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 不可用", exception);
-        }
+        return Sha256.ofUtf8(value);
     }
 }

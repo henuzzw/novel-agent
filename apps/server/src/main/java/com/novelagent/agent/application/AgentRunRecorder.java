@@ -3,16 +3,13 @@ package com.novelagent.agent.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.planning.application.ModelProvider;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -193,12 +190,7 @@ public class AgentRunRecorder {
         }
 
         private static String hash(String text) {
-            try {
-                return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                        .digest((text == null ? "" : text).getBytes(StandardCharsets.UTF_8)));
-            } catch (NoSuchAlgorithmException exception) {
-                throw new IllegalStateException("SHA-256 is unavailable", exception);
-            }
+            return Sha256.ofUtf8(text == null ? "" : text);
         }
     }
 

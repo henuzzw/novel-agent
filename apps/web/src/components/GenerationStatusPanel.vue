@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
-import { CheckCircle2, CircleAlert, Clock3, LoaderCircle, RefreshCw, Square } from 'lucide-vue-next'
+import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, Clock3, LoaderCircle, RefreshCw, Square } from 'lucide-vue-next'
 import { listAgentRuns, stopGeneration } from '@/api/agentRuns'
 import { generationRows, markGenerationStopping, type GenerationActivity } from '@/lib/generation-activity'
 
@@ -12,6 +12,10 @@ const query = useQuery({
   queryFn: () => listAgentRuns(props.projectId), refetchInterval: 5000, retry: false,
 })
 const rows = computed(() => generationRows(props.projectId, query.data.value ?? []))
+const collapsed = ref(true)
+const gridId = useId()
+const activeCount = computed(() => rows.value.filter(row => row.activity?.status === 'RUNNING').length)
+const failureCount = computed(() => rows.value.filter(row => row.activity?.status === 'FAILED').length)
 const stopping = ref<Record<string, boolean>>({})
 const stopErrors = ref<Record<string, string>>({})
 watch(() => props.projectId, () => { stopping.value = {}; stopErrors.value = {} })
@@ -56,13 +60,15 @@ function status(activity: GenerationActivity | null) {
   <section class="generation-status" aria-label="生成状态">
     <header>
       <strong>生成状态</strong>
-      <span v-if="busy" class="generation-current"><LoaderCircle :size="14" class="generation-spin" />请求中</span>
+      <span v-if="busy" class="generation-current"><LoaderCircle :size="14" class="generation-spin" />{{ activeCount }} 项请求中</span>
+      <span v-if="failureCount" class="generation-error">{{ failureCount }} 项失败</span>
       <button type="button" class="generation-tasks" @click="emit('openTasks')">查看任务</button>
       <button type="button" class="icon-button" title="刷新生成状态" aria-label="刷新生成状态" :disabled="query.isFetching.value" @click="query.refetch()"><RefreshCw :size="15" /></button>
+      <button type="button" class="icon-button" :title="collapsed ? '展开生成状态' : '收起生成状态'" :aria-label="collapsed ? '展开生成状态' : '收起生成状态'" :aria-expanded="!collapsed" :aria-controls="gridId" @click="collapsed = !collapsed"><component :is="collapsed ? ChevronDown : ChevronUp" :size="16" /></button>
     </header>
     <p v-if="query.isError.value" class="generation-error" role="alert">任务状态读取失败：{{ query.error.value?.message }}</p>
-    <div class="generation-grid">
-      <div v-for="row in rows" :key="row.stage" class="generation-stage" :data-stage="row.stage" :aria-busy="row.activity?.status === 'RUNNING'">
+    <div :id="gridId" class="generation-grid">
+      <div v-for="row in rows" v-show="!collapsed || row.activity?.status === 'RUNNING' || row.activity?.status === 'FAILED'" :key="row.stage" class="generation-stage" :data-stage="row.stage" :aria-busy="row.activity?.status === 'RUNNING'">
         <strong>{{ row.label }}<small v-if="row.activity?.chapter"> · 第 {{ row.activity.chapter }} 章</small></strong>
         <div :class="['generation-result', row.activity?.status.toLowerCase()]">
           <LoaderCircle v-if="row.activity?.status === 'RUNNING'" :size="14" class="generation-spin" />
@@ -87,7 +93,7 @@ function status(activity: GenerationActivity | null) {
 
 <style scoped>
 .generation-status { border-bottom: 1px solid #dde2e5; padding: 12px 0 16px; margin-bottom: 20px; }
-.generation-status header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; font-size: 13px; }
+.generation-status header { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 10px; font-size: 13px; }
 .generation-current, .generation-result { display: flex; align-items: center; gap: 5px; }
 .generation-current { color: #326967; }
 .generation-tasks { margin-left: auto; background: none; border: 0; color: #326967; cursor: pointer; font-size: 12px; padding: 4px; }

@@ -2,6 +2,7 @@ package com.novelagent.planning.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
@@ -16,9 +17,6 @@ import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.NovelProject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -287,10 +285,10 @@ public class PlanningCheckpointService {
                 command.provider(), command.instruction(), command.chunkKey(),
                 command.chapterFrom(), command.chapterTo(), dependencies);
         try {
-            String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(mapper.writeValueAsBytes(basis)));
+            String hash = Sha256.ofBytes(mapper.writeValueAsBytes(basis));
             return new PlanningCheckpoint.Source(bible.getId(), bible.getRowVersion(), policy,
                     command.provider(), command.instruction(), hash, dependencies);
-        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("规划依据不能生成指纹", exception);
         }
     }
@@ -319,10 +317,9 @@ public class PlanningCheckpointService {
 
     private PlanningCheckpoint.Dependency dependency(PlanningCheckpoint value) {
         try {
-            String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(mapper.writeValueAsBytes(value.result())));
+            String hash = Sha256.ofBytes(mapper.writeValueAsBytes(value.result()));
             return new PlanningCheckpoint.Dependency(value.id(), value.attempt(), value.source().dependencyHash(), hash);
-        } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("前置规划不能生成指纹", exception);
         }
     }

@@ -9,15 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class StoryBibleModelPromptFactory {
     public String systemPrompt() {
-        return """
-                你是长篇小说规划 Agent。把作者已确认的故事方向扩展成可执行、可审查的故事圣经。
-                故事圣经必须能支撑目标篇幅，人物弧光、世界规则、关系变化和结局方向要互相一致。
-                不得加入作者明确禁止的内容，不得改变已确认方向的核心承诺。
-                作者列出的每条“必须包含”都要转化为明确的故事事实、人物关系、时序或空间规则，
-                并逐条写入 hardConstraints，供大纲和正文阶段继续执行。
-                输出对象包含 content 和 changeSummary；content 是完整故事圣经，changeSummary 是中文修改说明数组。
-                只输出符合约定结构的 JSON，不输出 Markdown 或解释。
-                """ + CharacterBlueprintGuide.boundaries();
+        return com.novelagent.prompt.application.AgentPromptDefaults.system("STORY_BIBLE");
     }
 
     public String userPrompt(CreativeIntentSnapshot intent, StoryDirectionCandidate direction,

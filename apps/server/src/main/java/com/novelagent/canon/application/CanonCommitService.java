@@ -9,8 +9,7 @@ import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.domain.OutboxEvent;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
 import com.novelagent.canon.infrastructure.OutboxEventRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.domain.ChapterReviewVersion;
@@ -40,7 +39,7 @@ public class CanonCommitService {
     private final CanonCommitRepository commits;
     private final OutboxEventRepository outbox;
     private final TypedCanonMaterializer typedCanon;
-    private final CurrentActorProvider actor;
+    private final ProjectAccessService access;
     private final ObjectMapper mapper;
     private final String topic;
 
@@ -51,7 +50,7 @@ public class CanonCommitService {
             CanonCommitRepository commits,
             OutboxEventRepository outbox,
             TypedCanonMaterializer typedCanon,
-            CurrentActorProvider actor,
+            ProjectAccessService access,
             ObjectMapper mapper,
             @Value("${app.kafka.canon-topic}") String topic) {
         this.projects = projects;
@@ -60,7 +59,7 @@ public class CanonCommitService {
         this.commits = commits;
         this.outbox = outbox;
         this.typedCanon = typedCanon;
-        this.actor = actor;
+        this.access = access;
         this.mapper = mapper;
         this.topic = topic;
     }
@@ -74,7 +73,7 @@ public class CanonCommitService {
      */
     @Transactional
     public CanonCommitResponse commit(UUID projectId, int chapterNumber, CommitCanonRequest request) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
 
         CanonCommit existing = commits.findByReviewVersionId(request.reviewVersionId()).orElse(null);
         if (existing != null) {
@@ -112,7 +111,7 @@ public class CanonCommitService {
      */
     @Transactional
     public CanonCommitResponse replace(UUID projectId, int chapterNumber, ReplaceCanonRequest request) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         CanonCommit existingReviewCommit = commits.findByReviewVersionId(request.reviewVersionId()).orElse(null);
         if (existingReviewCommit != null) {
             if (existingReviewCommit.isActive()
@@ -160,7 +159,7 @@ public class CanonCommitService {
      */
     @Transactional(readOnly = true)
     public boolean hasCommittedChapter(UUID projectId, int chapterNumber) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber);
     }
 
@@ -172,15 +171,10 @@ public class CanonCommitService {
      */
     @Transactional(readOnly = true)
     public CanonCommit currentCommit(UUID projectId, int chapterNumber) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber).orElse(null);
     }
 
-    private NovelProject requireOwnedProject(UUID projectId) {
-        return projects.findById(projectId)
-                .filter(project -> project.getOwnerId().equals(actor.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     /**
      * 限定项目与章号并要求审稿 APPROVED，不能以其他章或未确认报告提交事实。

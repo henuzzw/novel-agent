@@ -205,6 +205,65 @@ class StructuredModelGatewayTest {
     }
 
     @Test
+    void savedPromptIsFrozenOnceAndUsedForDeepSeekRecordingAndProviderDispatch() {
+        var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
+        when(prompts.resolve("MANUSCRIPT", "original"))
+                .thenReturn(new com.novelagent.prompt.application.AgentPromptService.Resolved("edited-v3", "MANUSCRIPT:v3"));
+        var editable = new StructuredModelGateway(codex, sessions, deepSeek, runs,
+                new com.novelagent.memory.application.ModelContextProperties(), prompts);
+        when(deepSeek.request("schema", "edited-v3", "project-data", schema, 4000, deepSeekSettings))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("output", null));
+        assertThat(editable.request(projectId, "MANUSCRIPT", ModelProvider.DEEPSEEK, "original", "project-data",
+                schema, "schema", 4000, CodexSessionPolicy.REUSE_THREAD)).isEqualTo("output");
+        var snapshot = org.mockito.ArgumentCaptor.forClass(RequestSnapshot.class);
+        verify(runs).record(eq(projectId), eq("MANUSCRIPT"), eq(ModelProvider.DEEPSEEK), eq("edited-v3"),
+                eq("project-data"), snapshot.capture(), any());
+        assertThat(snapshot.getValue().requestedMaxOutputTokens()).isEqualTo(4000);
+        verify(prompts, times(1)).resolve("MANUSCRIPT", "original");
+    }
+
+    @Test
+    void editedAndRestoredPromptRevisionsRotateCodexThreadsButSameRevisionCanReuse() {
+        var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
+        var custom = new com.novelagent.prompt.application.AgentPromptService.Resolved("custom-v1", "OUTLINE:v1");
+        var restored = new com.novelagent.prompt.application.AgentPromptService.Resolved("restored-v2", "OUTLINE:v2");
+        when(prompts.resolve("OUTLINE", "original")).thenReturn(custom, custom, restored);
+        var editable = new StructuredModelGateway(codex, sessions, deepSeek, runs,
+                new com.novelagent.memory.application.ModelContextProperties(), prompts);
+        var existing = CodexAgentSession.create(projectId, "OUTLINE", "old-default-thread");
+        when(sessions.findByProjectIdAndWorkflowType(projectId, "OUTLINE")).thenReturn(Optional.of(existing));
+        when(codex.startThread(projectId, "custom-v1", codexSettings)).thenReturn("custom-thread");
+        when(codex.startThread(projectId, "restored-v2", codexSettings)).thenReturn("restored-thread");
+        when(codex.runStructuredTurn(anyString(), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
+                .thenReturn(new CodexAppServerClient.TurnResult("turn", "output"));
+        for (int i = 0; i < 3; i++) {
+            assertThat(editable.request(projectId, "OUTLINE", ModelProvider.LOCAL_CODEX, "original", "user", schema,
+                    "schema", 4000, CodexSessionPolicy.REUSE_THREAD)).isEqualTo("output");
+        }
+        verify(codex).startThread(projectId, "custom-v1", codexSettings);
+        verify(codex).resumeThread("custom-thread", projectId, "custom-v1", codexSettings);
+        verify(codex).startThread(projectId, "restored-v2", codexSettings);
+        assertThat(existing.matchesPromptRevision("OUTLINE:v2")).isTrue();
+        assertThat(existing.getThreadId()).isEqualTo("restored-thread");
+    }
+
+    @Test
+    void configuredPromptIsIncludedInContextCapacityCheckBeforeAnyModelCall() {
+        var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
+        when(prompts.resolve("OUTLINE", "original")).thenReturn(
+                new com.novelagent.prompt.application.AgentPromptService.Resolved("x".repeat(40000), "OUTLINE:v1"));
+        var context = new com.novelagent.memory.application.ModelContextProperties();
+        context.getModels().put(ModelProvider.DEEPSEEK,
+                new com.novelagent.memory.application.ModelContextProperties.Capacity(1000, 100));
+        var editable = new StructuredModelGateway(codex, sessions, deepSeek, runs, context, prompts);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> editable.request(projectId, "OUTLINE", ModelProvider.DEEPSEEK,
+                "original", "user", schema, "schema", 100, CodexSessionPolicy.REUSE_THREAD))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("上下文容量");
+        verify(deepSeek, never()).request(anyString(), anyString(), anyString(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
+        org.mockito.Mockito.verifyNoInteractions(runs, sessions);
+    }
+
+    @Test
     void validationIsExecutedInsideRecordedActionForBothProviders() {
         when(runs.record(any(), anyString(), any(), anyString(), anyString(), any(RequestSnapshot.class), any(), any()))
                 .thenAnswer(call -> {

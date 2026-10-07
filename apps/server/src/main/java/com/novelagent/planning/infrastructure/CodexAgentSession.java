@@ -29,6 +29,9 @@ public class CodexAgentSession {
     @Column(name = "last_turn_id", length = 128)
     private String lastTurnId;
 
+    @Column(name = "prompt_revision", length = 100)
+    private String promptRevision;
+
     @Version
     @Column(name = "row_version", nullable = false)
     private long rowVersion;
@@ -63,6 +66,12 @@ public class CodexAgentSession {
     public void recordTurn(String turnId) {
         this.lastTurnId = turnId;
     }
+
+    public boolean matchesPromptRevision(String revision) {
+        return java.util.Objects.equals(promptRevision, revision);
+    }
+
+    public void usePromptRevision(String revision) { this.promptRevision = revision; }
 
     public String getThreadId() {
         return threadId;

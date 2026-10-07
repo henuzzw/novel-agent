@@ -7,10 +7,8 @@ import com.novelagent.agent.infrastructure.AutomationRunRepository;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -32,17 +30,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AutomationRunStore {
     private final AutomationRunRepository runs;
-    private final NovelProjectRepository projects;
     private final OutlineVersionRepository outlines;
-    private final CurrentActorProvider actors;
+    private final ProjectAccessService access;
     private final EntityManager entityManager;
 
-    public AutomationRunStore(AutomationRunRepository runs, NovelProjectRepository projects,
-            OutlineVersionRepository outlines, CurrentActorProvider actors, EntityManager entityManager) {
+    public AutomationRunStore(
+            AutomationRunRepository runs,
+            OutlineVersionRepository outlines,
+            ProjectAccessService access,
+            EntityManager entityManager) {
         this.runs = runs;
-        this.projects = projects;
         this.outlines = outlines;
-        this.actors = actors;
+        this.access = access;
         this.entityManager = entityManager;
     }
 
@@ -55,7 +54,7 @@ public class AutomationRunStore {
      */
     @Transactional
     public AutomationRun create(UUID projectId, UUID requestKey, CreateAutomationRunRequest request) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         entityManager.lock(project, LockModeType.PESSIMISTIC_WRITE);
         var existing = runs.findByProjectIdAndRequestKey(projectId, requestKey);
         if (existing.isPresent()) {
@@ -100,7 +99,7 @@ public class AutomationRunStore {
      */
     @Transactional(readOnly = true)
     public List<AutomationRun> list(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return runs.findTop50ByProjectIdOrderByCreatedAtDesc(projectId);
     }
 
@@ -112,7 +111,7 @@ public class AutomationRunStore {
      */
     @Transactional(readOnly = true)
     public AutomationRun get(UUID projectId, UUID id) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return runs.findById(id).filter(run -> run.getProjectId().equals(projectId))
                 .orElseThrow(() -> new WritingResourceNotFoundException("自动任务", id));
     }
@@ -125,7 +124,7 @@ public class AutomationRunStore {
      */
     @Transactional
     public AutomationRun claim(UUID projectId, UUID id) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         AutomationRun run = locked(projectId, id);
         run.start(Instant.now());
         return runs.saveAndFlush(run);
@@ -140,7 +139,7 @@ public class AutomationRunStore {
      */
     @Transactional
     public Optional<AutomationRun> claimPending(UUID projectId, UUID id) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         AutomationRun run = locked(projectId, id);
         if (run.getStatus() != AutomationStatus.PENDING) return Optional.empty();
         run.start(Instant.now());
@@ -155,7 +154,7 @@ public class AutomationRunStore {
      */
     @Transactional
     public AutomationRun cancel(UUID projectId, UUID id) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         AutomationRun run = locked(projectId, id);
         run.cancel();
         return runs.saveAndFlush(run);
@@ -185,7 +184,7 @@ public class AutomationRunStore {
      */
     @Transactional(readOnly = true)
     public boolean outlineUnchanged(AutomationRun run) {
-        return run.getOutlineId().equals(requireOwnedProject(run.getProjectId()).getCurrentOutlineVersionId());
+        return run.getOutlineId().equals(access.requireOwnedProject(run.getProjectId()).getCurrentOutlineVersionId());
     }
 
     /**
@@ -206,8 +205,4 @@ public class AutomationRunStore {
                 .orElseThrow(() -> new WritingResourceNotFoundException("自动任务", id));
     }
 
-    private NovelProject requireOwnedProject(UUID projectId) {
-        return projects.findById(projectId).filter(project -> project.getOwnerId().equals(actors.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 }

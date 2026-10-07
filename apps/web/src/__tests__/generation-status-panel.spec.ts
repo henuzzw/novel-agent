@@ -18,6 +18,17 @@ function run(stage: string, status: AgentRun['status']) {
   return { id: stage, stage, status, startedAt: new Date(Date.now() - 120_000).toISOString(), completedAt: null, errorMessage: status === 'FAILED' ? '模型额度不足' : null } as AgentRun
 }
 describe('project generation status', () => {
+  it('starts compact, retains running and failed rows, and expands the complete stage list', async () => {
+    vi.mocked(listAgentRuns).mockResolvedValue([run('MANUSCRIPT', 'RUNNING'), run('OUTLINE', 'FAILED'), run('STORY_BIBLE', 'SUCCEEDED')])
+    const wrapper = render()
+    await vi.waitFor(() => expect(wrapper.get('[data-stage="MANUSCRIPT"]').text()).toContain('请求中'))
+    expect(wrapper.get('[data-stage="MANUSCRIPT"]').attributes('style') ?? '').not.toContain('display: none')
+    expect(wrapper.get('[data-stage="OUTLINE"]').attributes('style') ?? '').not.toContain('display: none')
+    expect(wrapper.get('[data-stage="STORY_BIBLE"]').attributes('style')).toContain('display: none')
+    await wrapper.get('[aria-label="展开生成状态"]').trigger('click')
+    expect(wrapper.get('[data-stage="STORY_BIBLE"]').attributes('style') ?? '').not.toContain('display: none')
+    expect(wrapper.get('[aria-label="收起生成状态"]').attributes('aria-expanded')).toBe('true')
+  })
   it('recovers server states after page reload and distinguishes model success from saved requests', async () => {
     vi.mocked(listAgentRuns).mockResolvedValue([run('IMPORT_REVERSE_BIBLE', 'SUCCEEDED'), run('IMPORT_REVERSE_OUTLINE', 'RUNNING'), run('CHAPTER_REVIEW', 'FAILED')])
     const wrapper = render()

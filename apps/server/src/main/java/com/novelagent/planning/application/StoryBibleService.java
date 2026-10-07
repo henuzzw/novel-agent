@@ -12,8 +12,7 @@ import com.novelagent.planning.domain.StoryDirectionSet;
 import com.novelagent.planning.domain.StoryDirectionStatus;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.planning.infrastructure.StoryDirectionSetRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
@@ -34,18 +33,23 @@ public class StoryBibleService {
     private final StoryDirectionSetRepository directionRepository;
     private final StoryBibleVersionRepository bibleRepository;
     private final StoryBibleGenerationWorkflow workflow;
-    private final CurrentActorProvider actorProvider;
+    private final ProjectAccessService access;
     private final CharacterNameService characterNames;
     private final PlanningMaterialSyncService materials;
 
-    public StoryBibleService(NovelProjectRepository projectRepository, StoryDirectionSetRepository directionRepository,
-            StoryBibleVersionRepository bibleRepository, StoryBibleGenerationWorkflow workflow,
-            CurrentActorProvider actorProvider, CharacterNameService characterNames, PlanningMaterialSyncService materials) {
+    public StoryBibleService(
+            NovelProjectRepository projectRepository,
+            StoryDirectionSetRepository directionRepository,
+            StoryBibleVersionRepository bibleRepository,
+            StoryBibleGenerationWorkflow workflow,
+            ProjectAccessService access,
+            CharacterNameService characterNames,
+            PlanningMaterialSyncService materials) {
         this.projectRepository = projectRepository;
         this.directionRepository = directionRepository;
         this.bibleRepository = bibleRepository;
         this.workflow = workflow;
-        this.actorProvider = actorProvider;
+        this.access = access;
         this.characterNames = characterNames;
         this.materials = materials;
     }
@@ -57,7 +61,7 @@ public class StoryBibleService {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     public StoryBibleResponse generate(UUID projectId, GenerateStoryBibleRequest request) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         StoryDirectionSet source = directionRepository
                 .findFirstByProjectIdAndStatusOrderByGenerationNumberDesc(projectId, StoryDirectionStatus.SELECTED)
                 .orElseThrow(() -> new IllegalArgumentException("请先确认一个故事方向，再生成故事圣经"));
@@ -93,7 +97,7 @@ public class StoryBibleService {
      */
     @Transactional(readOnly = true)
     public Optional<StoryBibleResponse> latest(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return bibleRepository.findFirstByProjectIdOrderByGenerationNumberDesc(projectId).map(this::response);
     }
 
@@ -105,7 +109,7 @@ public class StoryBibleService {
      */
     @Transactional(readOnly = true)
     public Optional<StoryBibleResponse> current(UUID projectId) {
-        var project = requireOwnedProject(projectId);
+        var project = access.requireOwnedProject(projectId);
         if (project.getCurrentBibleVersionId() == null) return Optional.empty();
         var bible = requireVersion(projectId, project.getCurrentBibleVersionId());
         if (bible.getStatus() != StoryBibleStatus.PUBLISHED) {
@@ -122,7 +126,7 @@ public class StoryBibleService {
      */
     @Transactional(readOnly = true)
     public List<StoryBibleVersionSummaryResponse> versions(UUID projectId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return bibleRepository.findAllByProjectIdOrderByGenerationNumberDesc(projectId).stream()
                 .map(value -> StoryBibleVersionSummaryResponse.from(value,
                         characterNames.render(projectId, value.getContent().logline())))
@@ -137,7 +141,7 @@ public class StoryBibleService {
      */
     @Transactional(readOnly = true)
     public StoryBibleResponse version(UUID projectId, UUID versionId) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         return response(requireVersion(projectId, versionId));
     }
 
@@ -151,7 +155,7 @@ public class StoryBibleService {
      */
     @Transactional
     public StoryBibleResponse update(UUID projectId, UUID versionId, long expectedVersion, StoryBibleContent content) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         StoryBibleVersion version = requireVersion(projectId, versionId);
         checkVersion(version, expectedVersion);
         if (version.getStatus() == StoryBibleStatus.PUBLISHED) {
@@ -172,7 +176,7 @@ public class StoryBibleService {
     @Transactional
     public StoryBibleResponse createRevision(UUID projectId, UUID versionId, long expectedVersion,
             StoryBibleContent content) {
-        requireOwnedProject(projectId);
+        access.requireOwnedProject(projectId);
         StoryBibleVersion source = requireVersion(projectId, versionId);
         checkVersion(source, expectedVersion);
         if (source.getStatus() != StoryBibleStatus.PUBLISHED) {
@@ -197,7 +201,7 @@ public class StoryBibleService {
      */
     @Transactional
     public StoryBibleResponse publish(UUID projectId, UUID versionId, long expectedVersion) {
-        NovelProject project = requireOwnedProject(projectId);
+        NovelProject project = access.requireOwnedProject(projectId);
         StoryBibleVersion version = requireVersion(projectId, versionId);
         checkVersion(version, expectedVersion);
         version.publish();
@@ -217,11 +221,6 @@ public class StoryBibleService {
         return StoryBibleResponse.from(value, content);
     }
 
-    private NovelProject requireOwnedProject(UUID projectId) {
-        return projectRepository.findById(projectId)
-                .filter(project -> project.getOwnerId().equals(actorProvider.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private static void checkVersion(StoryBibleVersion value, long expected) {
         if (value.getRowVersion() != expected) throw new ResourceVersionConflictException(expected, value.getRowVersion());

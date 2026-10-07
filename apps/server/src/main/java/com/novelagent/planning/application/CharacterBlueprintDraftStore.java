@@ -7,11 +7,8 @@ import com.novelagent.planning.domain.CharacterBlueprintCompletion;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectNotFoundException;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.project.domain.NovelProject;
-import com.novelagent.project.infrastructure.NovelProjectRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -29,15 +26,20 @@ public class CharacterBlueprintDraftStore {
     public record Source(UUID projectId, UUID bibleId, long rowVersion,
             StoryBibleContent content, StoryBibleContent rendered) { }
 
-    private final NovelProjectRepository projects;
     private final StoryBibleVersionRepository bibles;
-    private final CurrentActorProvider actor;
+    private final ProjectAccessService access;
     private final CharacterNameService names;
     private final EntityManager entities;
 
-    public CharacterBlueprintDraftStore(NovelProjectRepository projects, StoryBibleVersionRepository bibles,
-            CurrentActorProvider actor, CharacterNameService names, EntityManager entities) {
-        this.projects = projects; this.bibles = bibles; this.actor = actor; this.names = names; this.entities = entities;
+    public CharacterBlueprintDraftStore(
+            StoryBibleVersionRepository bibles,
+            ProjectAccessService access,
+            CharacterNameService names,
+            EntityManager entities) {
+        this.bibles = bibles;
+        this.access = access;
+        this.names = names;
+        this.entities = entities;
     }
 
     /**
@@ -49,7 +51,7 @@ public class CharacterBlueprintDraftStore {
      */
     @Transactional(readOnly = true)
     public Source load(UUID projectId, UUID bibleId, long expectedVersion) {
-        owned(projectId);
+        access.requireOwnedProject(projectId);
         var bible = requireBible(projectId, bibleId);
         checkVersion(bible, expectedVersion);
         return new Source(projectId, bibleId, bible.getRowVersion(), bible.getContent(),
@@ -67,9 +69,9 @@ public class CharacterBlueprintDraftStore {
     @Transactional
     public StoryBibleResponse save(Source source, List<CharacterBlueprint> proposed, ModelProvider provider,
             String instruction) {
-        var project = owned(source.projectId());
+        var project = access.requireOwnedProject(source.projectId());
         entities.refresh(project, LockModeType.PESSIMISTIC_WRITE);
-        if (!project.getOwnerId().equals(actor.currentUserId())) throw new ProjectNotFoundException(source.projectId());
+        access.requireOwnedProject(project);
         var bible = requireBible(source.projectId(), source.bibleId());
         entities.refresh(bible, LockModeType.PESSIMISTIC_WRITE);
         checkVersion(bible, source.rowVersion());
@@ -91,10 +93,6 @@ public class CharacterBlueprintDraftStore {
         return StoryBibleResponse.from(draft, names.render(source.projectId(), merged, StoryBibleContent.class));
     }
 
-    private NovelProject owned(UUID projectId) {
-        return projects.findById(projectId).filter(value -> value.getOwnerId().equals(actor.currentUserId()))
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
-    }
 
     private StoryBibleVersion requireBible(UUID projectId, UUID bibleId) {
         return bibles.findByIdAndProjectId(bibleId, projectId)

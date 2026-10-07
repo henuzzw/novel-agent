@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.EntryMode;
@@ -27,7 +28,7 @@ class WritingStyleServiceTest {
         when(actors.currentUserId()).thenReturn(owner);
         var catalog = mock(com.novelagent.writing.infrastructure.WritingStylePresetCatalog.class);
         when(catalog.resolve(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
-        var service = new WritingStyleService(repo, actors, new ObjectMapper(), catalog);
+        var service = new WritingStyleService(repo, new ProjectAccessService(repo, actors), new ObjectMapper(), catalog);
         var profile = WritingStylePresets.all().getFirst();
         service.apply(id, profile, 0);
         assertThat(service.get(id).profile()).isEqualTo(profile);
