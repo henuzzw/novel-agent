@@ -28,16 +28,10 @@ class ChapterAutomationPlannerTest {
     private final ChapterAutomationPlanner planner = new ChapterAutomationPlanner();
 
     @Test
-    void generatesContractAndRequiresCurrentContractReview() {
-        assertThat(next(null, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.CONTRACT);
-        var draft = contract(ChapterContractStatus.DRAFT);
-        assertThat(next(draft, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.CONTRACT_REVIEW);
-        var review = contractReview(CONTRACT, 2);
-        assertThat(next(draft, review, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.WAIT);
-        assertThat(next(draft, contractReview(CONTRACT, 1), null, null).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.CONTRACT_REVIEW);
-        assertThat(next(draft, contractReview(UUID.randomUUID(), 2), null, null).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.CONTRACT_REVIEW);
+    void generatesManuscriptWithoutContractOrContractReview() {
+        assertThat(next(null, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
+        assertThat(next(contract(ChapterContractStatus.DRAFT), null, null, null).action())
+                .isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
     }
 
     @Test
@@ -49,7 +43,7 @@ class ChapterAutomationPlannerTest {
                 .isEqualTo(ChapterAutomationPlanner.Action.REVIEW);
         assertThat(next(approved, null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED), review(UUID.randomUUID(), List.of())).action())
                 .isEqualTo(ChapterAutomationPlanner.Action.REVIEW);
-        assertThat(planner.next(UUID.randomUUID(), approved, null, null, null, null).reason()).contains("旧大纲");
+        assertThat(planner.next(UUID.randomUUID(), approved, null, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
     }
 
     @Test

@@ -15,7 +15,9 @@ import org.hibernate.type.SqlTypes;
 public class ManuscriptVersion {
     @Id private UUID id;
     @Column(name = "project_id", nullable = false) private UUID projectId;
-    @Column(name = "source_contract_version_id", nullable = false) private UUID sourceContractVersionId;
+    @Column(name = "source_contract_version_id") private UUID sourceContractVersionId;
+    @JdbcTypeCode(SqlTypes.JSON) @Column(name = "writing_basis", columnDefinition = "jsonb")
+    private ManuscriptBasis writingBasis;
     @Column(name = "base_manuscript_version_id") private UUID baseManuscriptVersionId;
     @Column(name = "source_review_version_id") private UUID sourceReviewVersionId;
     @Column(name = "chapter_number", nullable = false) private int chapterNumber;
@@ -65,6 +67,16 @@ public class ManuscriptVersion {
         content = validate(value);
     }
     public void accept() { status = ManuscriptStatus.AUTHOR_ACCEPTED; }
+    /** New manuscripts persist their outline source; legacy versions retain their historical contract link. */
+    public ManuscriptVersion withWritingBasis(ManuscriptBasis basis) {
+        if (writingBasis != null) throw new IllegalStateException("写作依据不能覆盖");
+        writingBasis = java.util.Objects.requireNonNull(basis);
+        return this;
+    }
+    public ManuscriptVersion inheritWritingBasis(ManuscriptVersion source) {
+        if (source.writingBasis != null) withWritingBasis(source.writingBasis);
+        return this;
+    }
     public void linkReturnedReview(UUID reviewVersionId) {
         if (sourceReviewVersionId != null) throw new IllegalStateException("正文已关联打回审稿");
         sourceReviewVersionId = java.util.Objects.requireNonNull(reviewVersionId);
@@ -80,6 +92,7 @@ public class ManuscriptVersion {
     }
     public UUID getId() { return id; } public UUID getProjectId() { return projectId; }
     public UUID getSourceContractVersionId() { return sourceContractVersionId; }
+    public ManuscriptBasis getWritingBasis() { return writingBasis; }
     public UUID getBaseManuscriptVersionId() { return baseManuscriptVersionId; }
     public UUID getSourceReviewVersionId() { return sourceReviewVersionId; }
     public int getChapterNumber() { return chapterNumber; } public int getVersionNumber() { return versionNumber; }

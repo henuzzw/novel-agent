@@ -7,15 +7,15 @@ export const generationStages: Record<string, string> = {
   CHAPTER_REVIEW: '章节审稿', QUALITY_REVIEW: '质量检查', IMPORT_PLANNING: '导入规划',
   IMPORT_SOURCE_ANALYSIS: '原文解析', STYLE_ANALYSIS: '风格分析', STYLE_PREVIEW: '风格试写',
   STYLE_RECOMMENDATION: '风格推荐', STYLE_PREVIEW_REVIEW: '试写审阅', STYLE_PREVIEW_REVISION: '试写修订',
-  FIRST_THREE_CHAPTERS_REVIEW: '前三章审阅', MANUSCRIPT_LOCAL_EDIT: '局部改写',
-  CHARACTER_BLUEPRINT_COMPLETION: '人物补全', PLANNING_CHECKPOINT: '分块大纲',
+  FIRST_THREE_CHAPTERS_REVIEW: '前三章审阅', MANUSCRIPT_LOCAL_EDIT: '局部改写', DRAFT_JUDGE_REVISION: '自动裁决与修订',
+  SNOWFLAKE_PLANNING: '雪花渐进规划', CHARACTER_DESIGN: '统一人物设计', CHARACTER_BLUEPRINT_COMPLETION: '人物补全（历史）', PLANNING_CHECKPOINT: '分块大纲',
   CREATION_PREPARATION_WORLD: '人物与世界准备', CREATION_PREPARATION_PLOT: '剧情准备', CREATION_PREPARATION_REVIEW: '准备检查',
 }
 const aliases: Record<string, string> = { IMPORT_REVERSE_BIBLE: 'STORY_BIBLE', IMPORT_REVERSE_OUTLINE: 'OUTLINE' }
 const routes: [RegExp, string][] = [
   [/^story-directions\/actions\/generate$/, 'STORY_DIRECTION'],
   [/^story-bibles\/actions\/generate$/, 'STORY_BIBLE'],
-  [/^story-bibles\/[^/]+\/actions\/complete-characters$/, 'CHARACTER_BLUEPRINT_COMPLETION'],
+  [/^story-bibles\/[^/]+\/actions\/complete-characters$/, 'CHARACTER_DESIGN'],
   [/^outlines\/actions\/generate$/, 'OUTLINE'],
   [/^imports\/[^/]+\/actions\/reverse-plan$/, 'IMPORT_PLANNING'],
   [/^imports\/[^/]+\/analyses\/[^/]+\/actions\/run-next$/, 'IMPORT_SOURCE_ANALYSIS'],
@@ -82,8 +82,7 @@ export function generationRows(projectId: string, runs: AgentRun[]) {
     .map(run => ({ id: run.id, projectId, stage: aliases[run.stage] ?? run.stage, status: run.status,
       startedAt: run.startedAt, completedAt: run.completedAt, errorMessage: run.errorMessage, source: 'model', chapter: null }))
   const local = generationRequests.value.filter(item => item.projectId === projectId)
-  const core = ['STORY_DIRECTION', 'STORY_BIBLE', 'OUTLINE', 'CHAPTER_CONTRACT',
-    'CHAPTER_CONTRACT_REVIEW', 'MANUSCRIPT', 'CHAPTER_REVIEW', 'QUALITY_REVIEW']
+  const core = ['STORY_DIRECTION', 'CHARACTER_DESIGN', 'STORY_BIBLE', 'OUTLINE', 'MANUSCRIPT', 'CHAPTER_REVIEW', 'QUALITY_REVIEW']
   const stages = [...new Set([...core, ...[...local, ...models].map(item => item.stage)])]
   return stages.map(stage => {
     const newest = (items: GenerationActivity[]) => items.filter(item => item.stage === stage)

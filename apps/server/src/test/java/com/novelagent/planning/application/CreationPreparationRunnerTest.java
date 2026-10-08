@@ -19,7 +19,7 @@ class CreationPreparationRunnerTest {
     private final CreationPreparationStore store = mock(CreationPreparationStore.class);
     private final StructuredModelGateway models = mock(StructuredModelGateway.class);
     private final CreationPreparationSchema schema = new CreationPreparationSchema(mapper, new StoryBibleOutputSchema(mapper), new OutlineOutputSchema(mapper));
-    private final CreationPreparationRunner runner = new CreationPreparationRunner(store, models, schema);
+    private final CreationPreparationRunner runner = new CreationPreparationRunner(store, models, schema, new CharacterDesignService(models, mapper, new StoryBibleOutputSchema(mapper), new com.novelagent.planning.infrastructure.FreeTextPlanningRequest(models, mapper)));
     private final UUID project = UUID.randomUUID(), id = UUID.randomUUID();
     private CreationPreparationStore.Task task(int step, String status, long version) {
         return new CreationPreparationStore.Task(id, project, "PREPARE", ModelProvider.DEEPSEEK, "", UUID.randomUUID(), UUID.randomUUID(), "a".repeat(64), mapper.createObjectNode(), 1, 20, status, step, null, null, null, null, null, version, Instant.now());
@@ -35,7 +35,7 @@ class CreationPreparationRunnerTest {
         when(store.finish(eq(first), any())).thenReturn(ready1); when(store.finish(eq(second), any())).thenReturn(ready2); when(store.finish(eq(third), any())).thenReturn(complete);
         assertThat(runner.all(project, id, 0)).isSameAs(complete);
         var order = inOrder(store, models);
-        order.verify(store).claim(project, id, 0); order.verify(models).request(eq(project), eq("CREATION_PREPARATION_WORLD"), any(), anyString(), anyString(), any(), anyString(), eq(12000), any());
+        order.verify(store).claim(project, id, 0); order.verify(models).request(eq(project), eq("CHARACTER_DESIGN"), any(), anyString(), anyString(), any(), anyString(), eq(12000), any());
         order.verify(store).finish(eq(first), any()); order.verify(store).claim(project, id, 2);
         order.verify(models).request(eq(project), eq("CREATION_PREPARATION_PLOT"), any(), anyString(), anyString(), any(), anyString(), eq(12000), any());
         order.verify(store).finish(eq(second), any()); order.verify(store).claim(project, id, 4);

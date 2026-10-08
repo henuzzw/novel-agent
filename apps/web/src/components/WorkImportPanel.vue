@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SnowflakePlanningPanel from '@/components/SnowflakePlanningPanel.vue'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
 import ImportAnalysisPanel from '@/components/ImportAnalysisPanel.vue'
 import type { AnalysisProof } from '@/api/importAnalyses'
@@ -91,6 +92,7 @@ function contentTypeLabel(value: string) {
       <label class="button primary import-upload"><Upload :size="16" />{{ uploadMutation.isPending.value ? '正在解析…' : '选择文件' }}<input type="file" accept=".txt,.md,.docx,.pdf" :disabled="uploadMutation.isPending.value" @change="selectFile" /></label>
     </div>
     <p class="import-hint">支持 TXT、Markdown、DOCX 和文本型 PDF，单个文件不超过 20 MB。原文件会完整保留。</p>
+    <SnowflakePlanningPanel :project-id="projectId" />
     <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
 
     <div v-if="importsQuery.isPending.value" class="editor-empty">正在读取导入记录…</div>

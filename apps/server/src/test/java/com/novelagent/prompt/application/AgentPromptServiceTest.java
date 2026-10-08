@@ -20,9 +20,9 @@ class AgentPromptServiceTest {
     private final AgentPromptRepository repository = mock(AgentPromptRepository.class);
     private final AgentPromptService service = new AgentPromptService(catalog, repository, new CurrentActorProvider(user));
 
-    @Test void catalogCoversAll23WorkflowsAnd25RealDefaultTemplates() {
-        assertThat(catalog.all()).hasSize(25);
-        assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::workflow).distinct()).hasSize(23);
+    @Test void catalogCoversAll22WorkflowsAnd24RealDefaultTemplates() {
+        assertThat(catalog.all()).hasSize(24);
+        assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::workflow).distinct()).hasSize(22);
         assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::key)).doesNotHaveDuplicates();
         catalog.all().forEach(value -> assertThat(value.defaultSystemPrompt()).isNotBlank());
         assertThat(catalog.require("OUTLINE").defaultSystemPrompt()).contains("作者本轮明确要求优先");

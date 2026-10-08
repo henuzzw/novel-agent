@@ -41,8 +41,9 @@ class StoryBibleServiceManualRevisionTest {
     private final StoryBibleGenerationWorkflow workflow = mock(StoryBibleGenerationWorkflow.class);
     private final CurrentActorProvider actor = mock(CurrentActorProvider.class);
     private final CharacterNameService names = mock(CharacterNameService.class);
+    private final SnowflakePlanningService snowflake = mock(SnowflakePlanningService.class);
     private final StoryBibleService service = new StoryBibleService(projects,
-            directions, bibles, workflow, new ProjectAccessService(projects, actor), names, mock(PlanningMaterialSyncService.class));
+            directions, bibles, workflow, new ProjectAccessService(projects, actor), names, mock(PlanningMaterialSyncService.class), snowflake, new com.fasterxml.jackson.databind.ObjectMapper());
     private final NovelProject project = mock(NovelProject.class);
 
     @BeforeEach
@@ -116,6 +117,52 @@ class StoryBibleServiceManualRevisionTest {
         assertThat(result.generationNumber()).isEqualTo(4);
         assertThat(result.baseBibleVersionId()).isEqualTo(older.getId());
         assertThat(result.content().logline()).isEqualTo("基于旧版调整");
+    }
+
+    @Test
+    void newRealModelBibleReusesAndPersistsFreeTextPlanning() {
+        StoryDirectionSet source = selectedDirection();
+        var plan = new com.novelagent.planning.domain.SnowflakePlan(UUID.randomUUID(), projectId, "NEW_STORY",
+                ModelProvider.DEEPSEEK, "SUCCEEDED", "PLOT", "核心", "人物自由文本", "世界自由文本", "三幕自由文本", null,
+                java.time.Instant.now(), java.time.Instant.now());
+        when(snowflake.generate(eq(projectId), eq(ModelProvider.DEEPSEEK), any())).thenReturn(plan);
+        when(workflow.generate(eq(projectId), any(), any(), eq(ModelProvider.DEEPSEEK), eq(null), any()))
+                .thenReturn(new GeneratedStoryBible("DEEPSEEK", content("整合结果")));
+        var result = service.generate(projectId, new GenerateStoryBibleRequest(
+                ModelProvider.DEEPSEEK, "保留开场", GenerationMode.REGENERATE, null));
+        assertThat(result.content().developmentNotes()).isEqualTo(plan.context());
+        assertThat(result.authorInstruction()).isEqualTo("保留开场");
+        var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(workflow).generate(eq(projectId), any(), any(), eq(ModelProvider.DEEPSEEK), eq(null), prompt.capture());
+        assertThat(prompt.getValue()).contains("保留开场", "人物自由文本", "世界自由文本", "三幕自由文本");
+        assertThat(source.getSelectedCandidateId()).isEqualTo(candidateId);
+        verify(project, never()).publishStoryBible(any());
+    }
+
+    @Test
+    void realModelRevisionDoesNotRestartSnowflakeAndKeepsReferenceNotes() {
+        selectedDirection();
+        StoryBibleVersion base = StoryBibleVersion.create(UUID.randomUUID(), projectId, 1, "DEEPSEEK",
+                null, directionId, candidateId, null, content("原版").withDevelopmentNotes("已有自由文本底稿"), List.of());
+        when(bibles.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(base));
+        when(workflow.generate(eq(projectId), any(), any(), eq(ModelProvider.DEEPSEEK), eq(base.getContent()), any()))
+                .thenReturn(new GeneratedStoryBible("DEEPSEEK", content("仅修改结局")));
+        var result = service.generate(projectId, new GenerateStoryBibleRequest(
+                ModelProvider.DEEPSEEK, "仅修改结局", GenerationMode.REVISE, null));
+        org.mockito.Mockito.verifyNoInteractions(snowflake);
+        assertThat(result.content().developmentNotes()).isEqualTo("已有自由文本底稿");
+    }
+
+    private StoryDirectionSet selectedDirection() {
+        StoryDirectionSet source = mock(StoryDirectionSet.class);
+        StoryDirectionCandidate candidate = new StoryDirectionCandidate(candidateId, "方向", "前提", "冲突",
+                "弧光", "结构", "结局", "读者", List.of(), List.of(), List.of());
+        when(directions.findFirstByProjectIdAndStatusOrderByGenerationNumberDesc(projectId, StoryDirectionStatus.SELECTED))
+                .thenReturn(Optional.of(source));
+        when(source.getDirections()).thenReturn(List.of(candidate));
+        when(source.getSelectedCandidateId()).thenReturn(candidateId);
+        when(source.getId()).thenReturn(directionId);
+        return source;
     }
 
     @Test

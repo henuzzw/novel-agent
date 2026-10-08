@@ -39,12 +39,12 @@ class RecentChapterSummariesToolTest {
         assertThat(sql.getAllValues().getFirst()).contains("o.status = 'PUBLISHED'", "b.status = 'PUBLISHED'",
                 "b.id = p.current_bible_version_id", "o.project_id = p.id", "b.project_id = p.id");
         assertThat(sql.getAllValues().subList(1, 3)).allSatisfy(query -> assertThat(query)
-                .contains("c.active = TRUE", "m.status = 'AUTHOR_ACCEPTED'", "ct.status = 'APPROVED'",
+                .contains("c.active = TRUE", "m.status = 'AUTHOR_ACCEPTED'", "m.writing_basis->'plan'",
                         "c.accepted_facts::text",
-                        "ct.content::text AS contract_content", "m.content->>'body' AS body",
+                        "LEFT JOIN chapter_contract_version", "m.content->>'body' AS body",
                         "ORDER BY priority, version_number DESC", "m.project_id = c.project_id", "ct.project_id = m.project_id"));
-        assertThat(parameters.getAllValues().get(1)).containsExactly(projectId, 3, 8L, projectId, 3, projectId, 3);
-        assertThat(parameters.getAllValues().get(2)).containsExactly(projectId, 2, 8L, projectId, 2, projectId, 2);
+        assertThat(parameters.getAllValues().get(1)).containsExactly(projectId, 3, 8L, projectId, 3);
+        assertThat(parameters.getAllValues().get(2)).containsExactly(projectId, 2, 8L, projectId, 2);
     }
 
     @Test
@@ -93,7 +93,7 @@ class RecentChapterSummariesToolTest {
         assertThat(result.semanticMemories().getFirst().chapterBody()).isEqualTo("前章正文");
         assertThat(result.graphFacts()).hasSize(1);
         assertThat(result.graphFacts().getFirst().object()).isEqualTo("真相");
-        assertThat(result.semanticMemories().getFirst().summary()).contains("manuscript-2", "contract-2", "commit-2",
+        assertThat(result.semanticMemories().getFirst().summary()).contains("manuscript-2", "commit-2",
                 "正文版本=5", "正文行版本=7", "内容指纹=");
         var allocated = new MemoryBudgetAllocator().allocate(result.semanticMemories(), result.graphFacts(),
                 new MemoryBudgetPlan(AgentStage.CHAPTER_REVIEW, ModelProvider.LOCAL_TEMPLATE,

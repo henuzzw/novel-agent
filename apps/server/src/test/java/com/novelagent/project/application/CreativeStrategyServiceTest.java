@@ -82,6 +82,7 @@ class CreativeStrategyServiceTest {
         assertThat(CreativeStrategyPolicy.from(project)).isEqualTo(before);
         CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING).applyTo(project);
         assertThat(CreativeStrategyPolicy.from(project)).isNotEqualTo(before);
-        assertThat(CreativeStrategyGuide.render(before)).contains("标准创作", "不强制每章反转");
+        assertThat(CreativeStrategyGuide.render(before))
+                .contains("标准创作", "第一章仍执行大纲默认开篇要求", "不强制后续每章反转");
     }
 }

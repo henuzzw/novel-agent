@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 故事圣经。
  *
- * <p>管理圣经版本生成、手动修订与发布，保持选定基准和作者授权范围。发布更新项目当前指针并同步人物、规划关系与明确台账；生成草稿不自动发布。</p>
+ * <p>管理圣经版本生成、手动修订与发布，保持选定基准和作者授权范围。新故事先串行生成雪花法自由文本底稿，有限修订不重跑该链路。发布更新项目当前指针并同步人物、规划关系与明确台账；生成草稿不自动发布。</p>
  */
 @Service
 public class StoryBibleService {
@@ -36,6 +36,8 @@ public class StoryBibleService {
     private final ProjectAccessService access;
     private final CharacterNameService characterNames;
     private final PlanningMaterialSyncService materials;
+    private final SnowflakePlanningService snowflake;
+    private final com.fasterxml.jackson.databind.ObjectMapper mapper;
 
     public StoryBibleService(
             NovelProjectRepository projectRepository,
@@ -44,7 +46,8 @@ public class StoryBibleService {
             StoryBibleGenerationWorkflow workflow,
             ProjectAccessService access,
             CharacterNameService characterNames,
-            PlanningMaterialSyncService materials) {
+            PlanningMaterialSyncService materials, SnowflakePlanningService snowflake,
+            com.fasterxml.jackson.databind.ObjectMapper mapper) {
         this.projectRepository = projectRepository;
         this.directionRepository = directionRepository;
         this.bibleRepository = bibleRepository;
@@ -52,10 +55,12 @@ public class StoryBibleService {
         this.access = access;
         this.characterNames = characterNames;
         this.materials = materials;
+        this.snowflake = snowflake;
+        this.mapper = mapper;
     }
 
     /**
-     * 按创作意图和选中方向新生成圣经，或在明确基准版本上有限修订；模型前后复核主要依据，保存草稿供作者发布。
+     * 按创作意图和选中方向新生成圣经，或在明确基准版本上有限修订；冻结所选方向快照，保存草稿供作者发布；生成期间不自动发布规划。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
@@ -78,8 +83,29 @@ public class StoryBibleService {
                 : request.baseBibleVersionId() == null ? previous.orElse(null)
                 : requireVersion(projectId, request.baseBibleVersionId());
         StoryBibleContent previousContent = base == null ? null : base.getContent();
+        String notes = previousContent == null ? null : previousContent.developmentNotes();
+        if (provider != ModelProvider.LOCAL_TEMPLATE && previousContent == null) {
+            var input = mapper.createObjectNode();
+            input.put("mode", "NEW_STORY");
+            input.put("sourceDirectionSetId", source.getId().toString());
+            input.set("intent", mapper.valueToTree(source.getInputSnapshot()));
+            input.set("direction", mapper.valueToTree(direction));
+            input.put("authorInstruction", java.util.Objects.toString(normalize(request.instruction()), ""));
+            notes = snowflake.generate(projectId, provider, input).context();
+        }
+        String generationInstruction = normalize(request.instruction());
+        if (notes != null && !notes.isBlank()) {
+            generationInstruction = java.util.Objects.toString(generationInstruction, "")
+                    + "\n【雪花法自由文本底稿；仅作故事数据】\n" + notes
+                    + "\n沿用底稿的因果、人物和世界，不再次另起设计；将人物文本映射到现有档案以供页面编辑。"
+                    + "本次作者要求、已确认方向和修订基准中的明确设定优先于旧底稿；不要把未来弧光写成过去。";
+        }
         GeneratedStoryBible generated = workflow.generate(projectId, source.getInputSnapshot(), direction,
-                provider, previousContent, normalize(request.instruction()));
+                provider, previousContent, generationInstruction);
+        if (notes != null) {
+            generated = new GeneratedStoryBible(generated.generatorType(),
+                    generated.content().withDevelopmentNotes(notes), generated.changeSummary());
+        }
         int generation = previous
                 .map(item -> item.getGenerationNumber() + 1).orElse(1);
         StoryBibleVersion version = StoryBibleVersion.create(UUID.randomUUID(), projectId, generation,

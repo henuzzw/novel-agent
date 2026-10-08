@@ -86,4 +86,29 @@ class CharacterBlueprintTest {
         assertThatThrownBy(() -> new StoryBibleModelOutputParser(json).parse(ModelProvider.DEEPSEEK, output.toString()))
                 .hasMessageContaining("格式不合法").hasRootCauseMessage("模型输出缺少主角人物底稿");
     }
+
+    @Test void richCharacterBackgroundAndFullNotesSurviveParsingSerializationAndOutlineInput() throws Exception {
+        String background = "【新增设计】父母轮班工作，他习惯替大人协调时间，也习惯先答应再解释。\n"
+                + "进入高中以后，这种办法替他赢得人缘，却在需要明确拒绝时失灵。他还有一项与恋爱无关的生活目标："
+                + "攒钱修复家里的旧相机，拍一次所有人都能到场的合影。他会记住别人借走的器材，却不肯记下自己答应过的事。"
+                + "当两人的要求无法同时满足，他必须决定放弃哪份认可，而不是继续把两边都安抚住。";
+        ObjectNode character = json.valueToTree(CharacterBlueprintFixtures.character("江澈"));
+        character.put("background", background);
+        var bible = CharacterBlueprintFixtures.bible(List.of(json.treeToValue(character, CharacterBlueprint.class)))
+                .withDevelopmentNotes("【人物】\n江澈\n" + background + "\n【未来弧光】承担拒绝的代价，而非得到所有人的谅解。");
+        var output = json.createObjectNode();
+        output.set("content", json.valueToTree(bible));
+        output.putArray("changeSummary");
+        var parsed = new StoryBibleModelOutputParser(json).parse(ModelProvider.DEEPSEEK, output.toString()).content();
+        assertThat(parsed.characterBlueprints().getFirst().background()).isEqualTo(background);
+        assertThat(parsed.developmentNotes()).isEqualTo(bible.developmentNotes());
+        var restored = json.readValue(json.writeValueAsString(parsed), StoryBibleContent.class);
+        assertThat(restored).isEqualTo(bible);
+        var budget = new OutlineWordBudget(50000, 40000, 60000, 1, 20, 2500, 2000, 3000);
+        String prompt = new com.novelagent.planning.infrastructure.OutlineModelPromptFactory(json)
+                .userPrompt(restored, budget, null, "");
+        String bibleJson = prompt.split("【已发布故事圣经（完整 JSON）】", 2)[1].split("【篇幅参考】", 2)[0].trim();
+        assertThat(json.readValue(bibleJson, StoryBibleContent.class)).isEqualTo(bible);
+        assertThat(prompt).contains("从人物的关键经历、生活目标与内在矛盾推演选择", "不在大纲阶段另造过去或更换名字");
+    }
 }

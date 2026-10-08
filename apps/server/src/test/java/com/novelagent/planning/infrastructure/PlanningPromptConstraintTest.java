@@ -20,6 +20,31 @@ import org.junit.jupiter.api.Test;
 class PlanningPromptConstraintTest {
 
     @Test
+    void outlineSystemPromptsShareFirstChapterReversalAndPayoffGoals() {
+        for (String key : List.of("OUTLINE", "IMPORT_REVERSE_OUTLINE_ADAPT", "IMPORT_REVERSE_OUTLINE_CONTINUE", "PLANNING_CHECKPOINT")) {
+            assertThat(com.novelagent.prompt.application.AgentPromptDefaults.system(key))
+                    .contains("开头第一章一定要极其吸引眼球", "一定要制造反转", "充满爽点",
+                            "coreEvent 和 sceneOutline", "OCCURRED 章节只忠实概括", "调整其他章节或仅补场景底稿不授权");
+        }
+        assertThat(new OutlineModelPromptFactory(new ObjectMapper()).systemPrompt())
+                .contains("第一章读者吸引力", "不是为反转而反转");
+    }
+
+    @Test
+    void scenesAreFreeTextInsideTheExistingOutlineRequest() {
+        var mapper = new ObjectMapper();
+        var chapterSchema = new OutlineOutputSchema(mapper).value()
+                .at("/properties/content/properties/arcs/items/properties/chapters/items");
+        assertThat(chapterSchema.path("required").toString()).contains("sceneOutline");
+        assertThat(chapterSchema.at("/properties/sceneOutline/type").asText()).isEqualTo("string");
+        assertThat(chapterSchema.at("/properties/sceneOutline").size()).isEqualTo(1);
+        assertThat(chapterSchema.path("properties").has("sceneOutlineNeedsUpdate")).isFalse();
+        assertThat(new OutlineModelPromptFactory(mapper).userPrompt(craftBible(), craftBudget(), null, null))
+                .contains("与章节大纲在本次请求一起输出", "不固定每章场景数", "OCCURRED 章节只归纳原文已发生场景",
+                        "核心场景进一步说明冲突怎样由行动触发", "未受影响底稿保留");
+    }
+
+    @Test
     void selectedOutlineIsIncludedAsCompleteStructuredJson() throws Exception {
         ChapterPlan finalChapter = new ChapterPlan(40, "最后一章", "男主", "做出选择",
                 "最后一章独有事件", "真相揭示", "结局", 2400, 3600);
@@ -86,6 +111,19 @@ class PlanningPromptConstraintTest {
                 .contains("考试成绩公布前")
                 .contains("第二排从左到右")
                 .contains("不要合并到无法核对");
+    }
+
+    @Test
+    void bibleAssemblySeparatesNewDesignFromLimitedRevisionAndDoesNotCompressCharacters() {
+        var factory = new StoryBibleModelPromptFactory();
+        var direction = new StoryDirectionCandidate(UUID.randomUUID(), "校园", "前提", "冲突", "弧光",
+                "三幕", "结局", "读者", List.of(), List.of(), List.of());
+        String fresh = factory.userPrompt(intent, direction, null, "人物要有爱情之外的生活");
+        assertThat(fresh).contains("【当前任务模式】NEW_STORY", "不限制为一两句", "完整关键经历",
+                "不删除底稿已有的具体姓名", "不因没有原文证据而一律清空", "具体经历 → 形成的应对方式");
+        String revision = factory.userPrompt(intent, direction, craftBible(), "只调整主角生活目标");
+        assertThat(revision).contains("【当前任务模式】REVISE_AUTHORIZED", "只调整主角生活目标",
+                "只修改最新故事方向", "未受本次要求影响的字段");
     }
 
     @Test
@@ -227,10 +265,10 @@ class PlanningPromptConstraintTest {
             String prompt = factory.userPrompt(craftBible(), craftBudget(), null, instruction,
                     CreativeStrategyPolicy.of(CreativeStrategy.STANDARD));
             assertThat(prompt).contains(instruction, "STANDARD 或未明确提供 FANQIE_GRIPPING",
-                    "不强制爽点或前三章强开篇", "按题材与作者节奏", "作者明确选择慢热文学叙事时保留该选择",
+                    "不强制完整前三章短弧", "第一章同样执行系统默认", "作者明确的节奏选择仍优先", "作者明确选择慢热文学叙事时保留该选择",
                     "objective/coreEvent/reveal/endingHook", "承诺 / 铺垫依据 / 本章兑现 / 余波", "不增加输出字段",
                     "起点、意图、阻力或信息差、行动、结束变化与重要依据", "安静章、压抑章和悲剧章不强制正向快感",
-                    "不设置反转、回报或钩子的硬配额", "关系确认", "悬疑公平揭示", "成长的选择与代价", "日常理解",
+                    "不对所有章节设置反转、回报或钩子的硬配额", "关系确认", "悬疑公平揭示", "成长的选择与代价", "日常理解",
                     "不新编人物能力、道具权限、信息来源或帮助方向", "不靠围观夸赞、反派降智、临时能力或巧合救场",
                     "不连续重复同一铺垫、同型钩子或场景功能");
         }

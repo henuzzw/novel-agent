@@ -112,18 +112,18 @@ onUnmounted(() => { mounted = false; generation++; emit('busy-change', false) })
             <blockquote v-for="(evidence, index) in issue.evidence" :key="index"><cite>第 {{ evidence.chapterNumber }} 章</cite>{{ evidence.quote }}</blockquote><p>{{ issue.suggestion }}</p>
           </div>
           <p v-if="report.reviewMode === 'MODEL' && !report.content.issues.length">本次未提出修改建议，仍需作者判断。</p>
-          <details v-if="!current"><summary>报告对应的原正文与合同</summary><article v-for="c in report.source.chapters" :key="c.chapterNumber"><h5>第 {{ c.chapterNumber }} 章 · v{{ c.versionNumber }}</h5><div class="opening-body">{{ c.body }}</div><pre>{{ JSON.stringify(c.contract, null, 2) }}</pre></article></details>
+          <details v-if="!current"><summary>报告对应的原正文与写作计划</summary><article v-for="c in report.source.chapters" :key="c.chapterNumber"><h5>第 {{ c.chapterNumber }} 章 · v{{ c.versionNumber }}</h5><div class="opening-body">{{ c.body }}</div><pre>{{ JSON.stringify(c.contract, null, 2) }}</pre></article></details>
         </template>
       </section>
       <article v-for="chapter in view.source.chapters" :id="`opening-${projectId}-${chapter.chapterNumber}`" :key="chapter.chapterNumber" class="opening-chapter">
         <header><h4>第 {{ chapter.chapterNumber }} 章 · {{ chapter.title || '正文缺失' }}</h4>
           <label>第 {{ chapter.chapterNumber }} 章正文版本<select :value="chapter.manuscriptId ?? ''" :disabled="disabled || !chapter.versions.length" @change="choose(chapter.chapterNumber, $event)"><option v-if="!chapter.versions.length" value="">缺少正文</option><option v-for="version in chapter.versions" :key="version.id" :value="version.id">v{{ version.versionNumber }} · {{ version.status === 'AUTHOR_ACCEPTED' ? '作者已确认' : '草稿' }}</option></select></label>
         </header>
-        <p class="source-meta">正文 {{ chapter.manuscriptId ?? '缺失' }} · 行版本 {{ chapter.rowVersion }} · 合同 v{{ chapter.contractVersionNumber }} / 行版本 {{ chapter.contractRowVersion }} · {{ chapter.contractStatus === 'APPROVED' ? '已确认合同' : '合同未确认' }}</p>
-        <details v-if="chapter.contract"><summary>对应合同 · {{ chapter.contractId }}</summary><dl class="contract-fields"><template v-for="(value, field) in chapter.contract" :key="field"><dt>{{ ({ chapterTitle: '章名', pov: '视角', objective: '目标', storyTime: '故事时间', locations: '地点', requiredBeats: '必要节拍', requiredReveals: '必要揭示', forbiddenFacts: '禁止事实', expectedExitState: '出口状态', foreshadowActions: '伏笔动作', hook: '钩子', suggestedMinWords: '建议最小字数', suggestedMaxWords: '建议最大字数' } as Record<string, string>)[field] }}</dt><dd>{{ Array.isArray(value) ? value.join('\n') : value }}</dd></template></dl></details>
+        <p class="source-meta">正文 {{ chapter.manuscriptId ?? '缺失' }} · 行版本 {{ chapter.rowVersion }} · 来源大纲 {{ view.source.outlineId }}</p>
+        <details v-if="chapter.contract"><summary>本章大纲计划</summary><dl class="contract-fields"><template v-for="(value, field) in chapter.contract" :key="field"><dt>{{ ({ chapterTitle: '章名', pov: '视角', objective: '目标', storyTime: '故事时间', locations: '地点', requiredBeats: '必要节拍', requiredReveals: '必要揭示', forbiddenFacts: '禁止事实', expectedExitState: '出口状态', foreshadowActions: '伏笔动作', hook: '钩子', suggestedMinWords: '建议最小字数', suggestedMaxWords: '建议最大字数' } as Record<string, string>)[field] }}</dt><dd>{{ Array.isArray(value) ? value.join('\n') : value }}</dd></template></dl></details>
         <details v-if="chapter.qualityReview"><summary>已有单章质量问题 · {{ chapter.qualityReviewCurrent ? '当前有效' : '已过期或对应其他版本' }}</summary><p>{{ chapter.qualityReview.summary }}</p><div v-for="issue in chapter.qualityReview.issues" :key="issue.id"><h5>{{ issue.description }}</h5><blockquote>{{ issue.evidence }}</blockquote><p>{{ issue.suggestion }}</p></div></details>
         <p v-else class="source-meta">本章尚无质量报告</p>
-        <div class="opening-body">{{ chapter.body ?? '缺少正文，合同不代替正文。' }}</div>
+        <div class="opening-body">{{ chapter.body ?? '缺少正文，计划不代替正文。' }}</div>
       </article>
     </template>
   </section>

@@ -3,7 +3,7 @@ import { routeLocationKey, routerKey, type LocationQueryRaw, type Router } from 
 
 export const workspaceSections = ['writing', 'outline', 'materials', 'experience', 'relations', 'imports', 'runs', 'settings'] as const
 export const planningViews = ['directions', 'bible', 'outline', 'style', 'preparation'] as const
-export const writingViews = ['contract', 'contractReview', 'manuscript', 'quality', 'opening', 'review', 'memory'] as const
+export const writingViews = ['manuscript', 'quality', 'opening', 'review', 'memory'] as const
 export const materialViews = ['profiles', 'entities', 'timeline', 'foreshadows', 'style'] as const
 
 type PendingNavigation = { path: string; query: LocationQueryRaw; hash: string }

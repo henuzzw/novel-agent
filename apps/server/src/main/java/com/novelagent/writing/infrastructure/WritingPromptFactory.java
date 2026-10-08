@@ -52,7 +52,7 @@ class WritingPromptFactory {
             \n写作质感要求：
             以下规则用于避免无效表达，不是统一文风。表达取舍以选定风格执行指南为准；幽默、抒情、反讽或智性观察允许各自的修辞与评论方式，不把所有风格压成短句、少比喻、少议论的同一种声音。事实、人物和视角约束不受此例外影响。
             1. 以具体场景为基本单位，通过动作、对话、停顿、选择、物件和环境变化呈现人物关系；能让读者自行理解的内容，不再由叙述者解释一遍。
-            2. 已应用项目写作风格时，以该档案指导表达；未配置时沿用故事圣经的风格。视角、人物身份和事实始终服从章节合同与故事设定。不要擅自写成影评、人生感悟或案件复盘，也不要为了显得深刻频繁提炼主题。
+            2. 已应用项目写作风格时，以该档案指导表达；未配置时沿用故事圣经的风格。视角、人物身份和事实始终服从本章大纲计划与故事设定。不要擅自写成影评、人生感悟或案件复盘，也不要为了显得深刻频繁提炼主题。
             3. 控制“不是……而是……”“直到后来才明白”“真正……的是”“那一刻我才意识到”等总结句，以及连续反问、整齐排比、同义反复和独句成段；仅在人物语气和情境确实需要时使用。
             4. 比喻必须来自当前人物熟悉的生活经验，准确且有作用；密度与形式服从选定风格，不一律要求少比喻。避免无意义地连续使用“像、仿佛、似乎”，避免抽象、万能或只为华丽而存在的比喻。
             5. 对话要符合人物年龄、关系、性格和当时目的，允许口语、省略、答非所问、误解和停顿；不要让人物轮流完整表达观点或替作者总结主题。
@@ -93,13 +93,13 @@ class WritingPromptFactory {
             NovelMemoryContext memory, ChapterContractContent previousContract, String instruction) {
         String revisionContext = previousContract == null
                 ? "无。本次从当前故事圣经和章节计划重新制定合同。"
-                : "选定的基准章节合同（完整 JSON）：" + json(previousContract)
+                : "选定的基准本章大纲计划（完整 JSON）：" + json(previousContract)
                         + "\n以选定版本为底稿，只调整本次要求或当前圣经、章节计划确实影响的字段；"
                         + "未受影响的目标、场景、必写节拍、禁止事实、伏笔和结尾钩子保持原样。"
                         + "旧版若与当前上游约束冲突，以当前故事圣经和章节计划为准。";
         return rendered(projectId, new Prompt(
                 com.novelagent.prompt.application.AgentPromptDefaults.system("CHAPTER_CONTRACT"),
-                "请生成章节合同。字数是建议区间，不是硬性指标。\n故事圣经：" + json(bible)
+                "请生成本章大纲计划。字数是建议区间，不是硬性指标。\n故事圣经：" + json(bible)
                         + "\n人物档案：" + characterContext(projectId, chapter, previousContract, null, List.of())
                         + "\n所在卷：" + json(arc) + "\n章节计划：" + json(chapter)
                         + "\n长期记忆：" + memory.toPromptText()
@@ -111,7 +111,7 @@ class WritingPromptFactory {
             ChapterPlan chapter, ChapterContractContent contract, NovelMemoryContext memory, String instruction) {
         return rendered(projectId, new Prompt(
                 com.novelagent.prompt.application.AgentPromptDefaults.system("CHAPTER_CONTRACT_REVIEW"),
-                "请审阅当前章节合同。逐条指出明确问题、引用合同中的证据并给出可执行的修订建议；"
+                "请审阅当前本章大纲计划。逐条指出明确问题、引用合同中的证据并给出可执行的修订建议；"
                         + "不能确定的问题标为 WARNING，不要凭空编造冲突。若无问题，issues 返回空数组。"
                         + "每条问题的 resolved 必须为 false。"
                         + "\n故事圣经：" + json(bible)
@@ -135,7 +135,7 @@ class WritingPromptFactory {
                 ? "无。本次重新创作正文，changeSummary 必须返回空数组。"
                 : """
                   选定的基准正文版本（完整 JSON）：%s
-                  必须以这份基准正文为基础修改，不能改用其他版本。只改动作者要求、当前章节合同或上游设定真正影响的内容；
+                  必须以这份基准正文为基础修改，不能改用其他版本。只改动作者要求、当前本章大纲计划或上游设定真正影响的内容；
                   未受影响的叙述、场景顺序、对话、细节和文字表达尽量原样保留，不得借机整体重写。
                   先辨明本次要求属于因果结构、场景人物还是语言表达，只处理获授权的问题层次。
                   仅润色语句时保留事件及其先后、人物认知和关系；发现结构问题但未获授权时，不擅自删并场景或改变情节。
@@ -148,11 +148,12 @@ class WritingPromptFactory {
                         + "\n人物档案：" + characterContext(projectId, chapter, contract,
                                 previousManuscript == null ? null : previousManuscript.body(), List.of())
                         + "\n所在卷：" + json(arc) + "\n章节计划：" + json(chapter)
-                        + "\n章节合同：" + json(contract) + "\n长期记忆：" + memory.toPromptText()
+                        + "\n本章大纲计划：" + json(contract) + "\n长期记忆：" + memory.toPromptText()
                         + "\n正文版本参考：" + revisionContext
                         + "\n项目写作风格：" + styles.promptContext(projectId)
                         + "\n作者要求：" + value(instruction)
                         + MANUSCRIPT_STYLE_RULES
+                        + com.novelagent.planning.application.ScenePlanningGuide.writingRules()
                         + craft.manuscript()
                         + CreativeStrategyGuide.manuscriptRules()
                         + "\n返回格式：{\"content\":{...完整正文...},\"changeSummary\":[]}"));
@@ -176,9 +177,10 @@ class WritingPromptFactory {
                         + "\n本次试写风格（仅用于本次候选，不代表已经应用项目风格）：" + styleProfileSummaryJson(profile)
                         + "\n" + WritingStyleGuide.render(profile)
                         + "\n作者要求：" + value(instruction)
+                        + com.novelagent.planning.application.ScenePlanningGuide.writingRules()
                         + MANUSCRIPT_STYLE_RULES
                                 .replace("已应用项目写作风格时，以该档案指导表达；未配置时沿用故事圣经的风格。", "以本次试写风格档案指导表达。")
-                                .replace("章节合同", "第一章计划")
+                                .replace("本章大纲计划", "第一章计划")
                         + craft.preview() + CreativeStrategyGuide.previewRules()));
     }
 
@@ -217,14 +219,14 @@ class WritingPromptFactory {
                         + "候选事实必须选择 ENTITY_UPSERT、EVENT_CREATE、STATE_CHANGE、RELATION_CHANGE、KNOWLEDGE_CHANGE、FORESHADOW_CHANGE 之一，"
                         + "并填写该类型对应的 payload。payload 必须输出全部字段，只填写当前事实类型需要的字段，其余字段填 null；"
                         + "STATE_CHANGE 使用 stateEntityType（只能是 CHARACTER 或 ITEM），ENTITY_UPSERT 才使用 entityType；"
-                        + "事件和状态变化的 storyTime 只填写正文明确给出的故事时间；时间无法确定时填 null，不得据章节合同猜测日期。"
+                        + "事件和状态变化的 storyTime 只填写正文明确给出的故事时间；时间无法确定时填 null，不得据本章大纲计划猜测日期。"
                         + "事件参与者 participants 只填写正文明确出现的人物；没有可确认参与者时填空数组。"
                         + "不得根据常识补写正文没有明确成立的事实。\n故事圣经："
                         + json(bible) + "\n人物档案：" + characterContext(projectId, null, contract, manuscript.body(),
                                 entityCatalog.entities().stream()
                                         .filter(entity -> "CHARACTER".equals(entity.type()) && entity.chapterRelevant())
                                         .map(EntityCatalogContext.EntityCatalogEntry::id).toList())
-                        + "\n章节合同：" + json(contract) + "\n正文：" + json(manuscript)
+                        + "\n本章大纲计划：" + json(contract) + "\n正文：" + json(manuscript)
                         + "\n实体候选目录：" + json(entityCatalog)
                         + "\n实体消歧规则：优先使用章节相关、最近出现、标准名或别名匹配的实体 ID；"
                         + "确定性不足时 ID 填 null，不得编造目录中不存在的 UUID。"
@@ -246,7 +248,7 @@ class WritingPromptFactory {
                         + "SCENE：识别流水账和概述堆积，检查目标、阻力、互动和状态变化；"
                         + "必要的过渡概述、平静场景或刻意留白不能只因缺少冲突就被判错。"
                         + "issues 最多 20 条，按影响大小排序；severity 只能为 WARNING 或 INFO，resolved 必须为 false。"
-                        + "每条 evidence 必须是 body 中逐字存在的连续原文，不能拼接、改写、加省略号或引用合同充当正文。"
+                        + "每条 evidence 必须是 body 中逐字存在的连续原文，不能拼接、改写、加省略号或引用计划充当正文。"
                         + "suggestion 写明如何修改并保留哪些事实；不要凭空补出未提供的历史或人物动机。"
                         + "没有明确问题则 issues 返回空数组。不得把文学偏好当作阻断正史的硬规则。"
                         + "按因果与人物依据、场景作用、语言表达的层次定位问题，分别归入现有四类，不新增评分维度。"
@@ -256,7 +258,7 @@ class WritingPromptFactory {
                         + "\n故事圣经：" + json(bible) + "\n人物档案："
                         + characterContext(projectId, null, contract, manuscript.body(), List.of())
                         + "\n项目写作风格：" + styles.promptContext(projectId)
-                        + "\n章节合同：" + json(contract) + "\n正文：" + json(manuscript)
+                        + "\n本章大纲计划：" + json(contract) + "\n正文：" + json(manuscript)
                         + "\n前文与长期记忆：" + memory.toPromptText() + "\n作者要求：" + value(instruction)
                         + craft.qualityReview() + CreativeStrategyGuide.reviewRules()));
     }
@@ -296,7 +298,7 @@ class WritingPromptFactory {
                         + "避免模式说明应避免的失真写法，不把样本偶尔出现的句式当作全书硬性配额。"
                         + "只总结样本支持的特征；无法判断的维度明确写出需要沿用小说自己的设定。"
                         + "不要移植样本的视角、角色、人名、情节、世界观或事实，不复制样本原句，也不要猜测作者是谁。"
-                        + "描述可执行的表达规律，而不是要求复刻某个作者；小说合同与人物声线优先于风格。"
+                        + "描述可执行的表达规律，而不是要求复刻某个作者；本章计划与人物声线优先于风格。"
                         + "basePresetId 与 basePresetVersion 必须为 null，不按名称或作者猜测基础预设。"
                         + "同时生成 craft 深层技法档案，每个文字字段最多 1000 字符："
                         + "narratorPosition 说明叙述距离和评论边界；paragraphMoves 说明段落起笔、展开、转折和收束；"
@@ -334,6 +336,7 @@ class WritingPromptFactory {
             references.add(chapter.coreEvent());
             references.add(chapter.reveal());
             references.add(chapter.endingHook());
+            if (!chapter.sceneOutlineNeedsUpdate()) references.add(chapter.sceneOutline());
         }
         references.add(body);
         return profiles.promptContext(projectId, chapter == null ? contract.pov() : chapter.pov(),

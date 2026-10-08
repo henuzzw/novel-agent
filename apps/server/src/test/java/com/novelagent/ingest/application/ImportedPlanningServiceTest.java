@@ -56,9 +56,14 @@ class ImportedPlanningServiceTest {
         var analyses = mock(ImportAnalysisStore.class);
         var strategies = mock(CreativeStrategyService.class);
         var drafts = mock(ImportedPlanningDraftStore.class);
+        var characters = mock(com.novelagent.planning.application.SnowflakePlanningService.class);
+        var plan = new com.novelagent.planning.domain.SnowflakePlan(UUID.randomUUID(), project, mode.name(),
+                ModelProvider.DEEPSEEK, "SUCCEEDED", "PLOT", "核心", "江澈自由文本人物设计", "世界", "三幕自由文本", null,
+                java.time.Instant.now(), java.time.Instant.now());
+        when(characters.generate(eq(project), any(), any())).thenReturn(plan);
         var service = new ImportedPlanningService(imports, models, new StoryBibleOutputSchema(mapper), bibleParser,
                 new OutlineOutputSchema(mapper), outlineParser, new OutlineWordBudgetPolicy(), intents, drafts,
-                mock(JdbcTemplate.class), mapper, analyses, strategies);
+                mock(JdbcTemplate.class), mapper, analyses, strategies, characters);
         String guide = CreativeStrategyGuide.render(CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING));
         when(strategies.promptContext(project)).thenReturn(guide);
         when(analyses.requireConfirmed(project, importId, analysisId, 1L, mode)).thenReturn(mapper.createObjectNode());
@@ -81,13 +86,45 @@ class ImportedPlanningServiceTest {
                 anyString(), biblePrompt.capture(), any(), eq("imported_story_bible"), eq(10000));
         verify(models).request(eq(project), eq("IMPORT_REVERSE_OUTLINE"), eq(ModelProvider.DEEPSEEK),
                 anyString(), outlinePrompt.capture(), any(), eq("imported_outline"), eq(16000));
-        assertThat(biblePrompt.getValue()).contains(guide);
-        assertThat(outlinePrompt.getValue()).contains(guide, CreativeStrategyGuide.outlineRules());
+        var order = org.mockito.Mockito.inOrder(characters, models);
+        order.verify(characters).generate(eq(project), eq(ModelProvider.DEEPSEEK), any());
+        order.verify(models).request(eq(project), eq("IMPORT_REVERSE_BIBLE"), any(), anyString(), anyString(), any(), anyString(), eq(10000));
+        order.verify(models).request(eq(project), eq("IMPORT_REVERSE_OUTLINE"), any(), anyString(), anyString(), any(), anyString(), eq(16000));
+        assertThat(biblePrompt.getValue()).contains(guide, "雪花法自由文本底稿", "【当前任务模式】" + mode.name(),
+                "完整保留前置人物底稿的具体姓名", "新增设计与原文事实的区别也保留",
+                "续写提炼时缺少依据的既往信息留空", "素材改编模式允许设计新的底稿");
+        assertThat(outlinePrompt.getValue()).contains(guide, CreativeStrategyGuide.outlineRules(), "江澈",
+                "与章节大纲在本次请求一起输出", "OCCURRED 章节只归纳原文已发生场景");
         var saved = ArgumentCaptor.forClass(GeneratedOutline.class);
-        verify(drafts).save(eq(project), eq(importId), eq(mode), eq(null), eq(bible), any(), saved.capture(),
+        verify(drafts).save(eq(project), eq(importId), eq(mode), eq(null), eq(new GeneratedStoryBible(bible.generatorType(), bible.content().withDevelopmentNotes(plan.context()), bible.changeSummary())), any(), saved.capture(),
                 eq(analysisId), eq(1L));
         assertThat(saved.getValue().content().arcs().getFirst().chapters().getFirst().status())
                 .isEqualTo(mode == ImportPlanningMode.CONTINUE_MANUSCRIPT ? ChapterPlanStatus.OCCURRED : ChapterPlanStatus.PLANNED);
+    }
+
+    @Test
+    void stopsBeforeReverseBibleAndRecordsFailureWhenCharacterDesignFails() {
+        UUID project = UUID.randomUUID(), imported = UUID.randomUUID(), analysis = UUID.randomUUID();
+        var mapper = new ObjectMapper();
+        var imports = mock(WorkImportService.class);
+        var models = mock(ImportedPlanningModelGateway.class);
+        var drafts = mock(ImportedPlanningDraftStore.class);
+        var jdbc = mock(JdbcTemplate.class);
+        var analyses = mock(ImportAnalysisStore.class);
+        var strategies = mock(CreativeStrategyService.class);
+        var characters = mock(com.novelagent.planning.application.SnowflakePlanningService.class);
+        var service = new ImportedPlanningService(imports, models, new StoryBibleOutputSchema(mapper),
+                mock(StoryBibleModelOutputParser.class), new OutlineOutputSchema(mapper), mock(OutlineModelOutputParser.class),
+                new OutlineWordBudgetPolicy(), mock(CreativeIntentRepository.class), drafts, jdbc, mapper, analyses, strategies, characters);
+        when(analyses.requireConfirmed(project, imported, analysis, 1L, ImportPlanningMode.ADAPT_SOURCE)).thenReturn(mapper.createObjectNode());
+        when(imports.planningSource(project, imported)).thenReturn(new WorkImportService.PlanningSource("已确认原文", 1, 5, false));
+        when(characters.generate(eq(project), eq(ModelProvider.DEEPSEEK), any())).thenThrow(new IllegalArgumentException("人物设计输出格式不合法"));
+        assertThatThrownBy(() -> service.generate(project, imported,
+                new ReversePlanRequest(ModelProvider.DEEPSEEK, ImportPlanningMode.ADAPT_SOURCE, null, analysis, 1L)))
+                .hasMessageContaining("人物设计");
+        org.mockito.Mockito.verifyNoInteractions(models, drafts);
+        verify(jdbc).update(org.mockito.ArgumentMatchers.contains("planning_status = 'FAILED'"),
+                org.mockito.ArgumentMatchers.contains("人物设计"), eq(imported));
     }
 
     @Test
@@ -98,6 +135,10 @@ class ImportedPlanningServiceTest {
                 .extracting(ChapterPlan::status)
                 .containsExactly(ChapterPlanStatus.OCCURRED, ChapterPlanStatus.OCCURRED,
                         ChapterPlanStatus.PLANNED);
+        assertThat(normalized.content().arcs().getFirst().chapters())
+                .extracting(ChapterPlan::sceneOutline).containsOnly("逐场说明目标、阻力与行动后果");
+        assertThat(normalized.content().arcs().getFirst().chapters())
+                .extracting(ChapterPlan::sceneOutlineNeedsUpdate).containsOnly(false);
         assertThat(ImportedPlanningService.normalizeChapterStatuses(outline(3), 0)
                 .content().arcs().getFirst().chapters())
                 .extracting(ChapterPlan::status)
@@ -110,7 +151,7 @@ class ImportedPlanningServiceTest {
     private static GeneratedOutline outline(int chapterCount) {
         List<ChapterPlan> chapters = java.util.stream.IntStream.rangeClosed(1, chapterCount)
                 .mapToObj(number -> new ChapterPlan(number, "第" + number + "章", "主角", "目标", "事件",
-                        "揭示", "钩子", 2_000, 4_000, ChapterPlanStatus.PLANNED))
+                        "揭示", "钩子", 2_000, 4_000, ChapterPlanStatus.PLANNED).withSceneOutline("逐场说明目标、阻力与行动后果"))
                 .toList();
         OutlineArc arc = new OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果",
                 20_000, 40_000, chapters);

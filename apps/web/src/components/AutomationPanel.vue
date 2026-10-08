@@ -87,7 +87,7 @@ function create() {
 
 <template>
   <section class="automation-panel" aria-label="自动创作任务">
-    <h3>自动创作任务</h3>
+    <h3>章节推进（需确认正文与正史）</h3>
     <form class="automation-form" @submit.prevent="create">
       <label>起始章<input v-model.number="firstChapter" type="number" min="1" max="100000" required :disabled="busy || active" /></label>
       <label>结束章<input v-model.number="lastChapter" type="number" :min="firstChapter" :max="Math.min(firstChapter + 19, 100000)" required :disabled="busy || active" /></label>

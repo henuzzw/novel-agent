@@ -16,7 +16,16 @@ public record ManuscriptResponse(UUID id, UUID projectId, UUID sourceContractVer
         UUID baseManuscriptVersionId, UUID sourceReviewVersionId, int chapterNumber,
         int versionNumber, String schemaVersion, ManuscriptStatus status, String generatorType,
         String authorInstruction, ManuscriptContent content, List<String> changeSummary,
-        long version, Instant createdAt, Instant updatedAt) {
+        long version, Instant createdAt, Instant updatedAt, com.novelagent.writing.domain.ManuscriptBasis writingBasis) {
+    public ManuscriptResponse(UUID id, UUID projectId, UUID sourceContractVersionId,
+            UUID baseManuscriptVersionId, UUID sourceReviewVersionId, int chapterNumber,
+            int versionNumber, String schemaVersion, ManuscriptStatus status, String generatorType,
+            String authorInstruction, ManuscriptContent content, List<String> changeSummary,
+            long version, Instant createdAt, Instant updatedAt) {
+        this(id, projectId, sourceContractVersionId, baseManuscriptVersionId, sourceReviewVersionId, chapterNumber,
+                versionNumber, schemaVersion, status, generatorType, authorInstruction, content, changeSummary,
+                version, createdAt, updatedAt, null);
+    }
     /**
      * 将领域版本映射为正文内容、基准稿来源及修改说明。仅转换字段，不查询数据库、不修改状态；传入已渲染内容的重载只影响返回展示，不重写源版本。
      *
@@ -39,6 +48,6 @@ public record ManuscriptResponse(UUID id, UUID projectId, UUID sourceContractVer
                 value.getBaseManuscriptVersionId(), value.getSourceReviewVersionId(),
                 value.getChapterNumber(), value.getVersionNumber(), value.getSchemaVersion(), value.getStatus(),
                 value.getGeneratorType(), value.getAuthorInstruction(), content, value.getChangeSummary(), value.getRowVersion(),
-                value.getCreatedAt(), value.getUpdatedAt());
+                value.getCreatedAt(), value.getUpdatedAt(), value.getWritingBasis());
     }
 }

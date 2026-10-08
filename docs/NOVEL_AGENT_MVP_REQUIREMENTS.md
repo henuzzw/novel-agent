@@ -2,7 +2,7 @@
 
 > 文档状态：初稿  
 > 目标版本：MVP 0.1  
-> 关联设计：[NOVEL_AGENT_SYSTEM_DESIGN.md](./NOVEL_AGENT_SYSTEM_DESIGN.md)
+> 关联设计：[NOVEL_AGENT_SYSTEM_DESIGN.md](NOVEL_AGENT_SYSTEM_DESIGN.md)
 
 ## 1. 文档目的
 

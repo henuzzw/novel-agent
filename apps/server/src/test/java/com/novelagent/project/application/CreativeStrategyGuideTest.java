@@ -28,8 +28,16 @@ class CreativeStrategyGuideTest {
     @Test
     void standardDoesNotInheritGrippingRequirements() {
         assertThat(CreativeStrategyGuide.render(CreativeStrategyPolicy.of(CreativeStrategy.STANDARD)))
-                .contains("标准创作", "允许有效的安静场景", "不强制每章反转")
+                .contains("标准创作", "允许有效的安静场景", "第一章仍执行大纲默认开篇要求", "不强制后续每章反转")
                 .doesNotContain("为何此刻必须回应", "偏爱被看见", "番茄强开篇");
+    }
+
+    @Test
+    void defaultOutlineOpeningIncludesAuthorRequestAndConcreteExecutionWithoutExtraStages() {
+        assertThat(CreativeStrategyGuide.outlineOpeningRules())
+                .contains("开头第一章一定要极其吸引眼球", "一定要制造反转", "充满爽点", "STANDARD 同样执行",
+                        "第一个场景", "coreEvent 和 sceneOutline", "反转依据与实际影响", "可感知爽点",
+                        "已确认事实优先", "OCCURRED", "不授权重新设计第一章", "不增加文学评分");
     }
 
     @Test

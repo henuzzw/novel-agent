@@ -76,7 +76,7 @@ class WritingServiceManuscriptVersionTest {
     private final TransactionTemplate transactions = mock(TransactionTemplate.class);
     private final WritingContextService contexts = new WritingContextService(new ProjectAccessService(projects, actor),
             outlines, bibles, memory);
-    private final ManuscriptService manuscriptService = new ManuscriptService(contexts, contracts, manuscripts,
+    private final ManuscriptService manuscriptService = new ManuscriptService(contexts, manuscripts,
             workflow, budgetPlanner, names, mock(WritingStyleService.class));
     private final WritingService service = new WritingService(mock(ChapterContractService.class), manuscriptService,
             new ChapterReviewService(contexts, contracts, manuscripts, reviews, workflow, budgetPlanner, entityCatalog,
@@ -136,6 +136,23 @@ class WritingServiceManuscriptVersionTest {
     }
 
     @Test
+    void generatesDirectlyFromPublishedOutlineWithoutAnyContractAndPreservesBasisOnManualRevision() {
+        var created = service.generateManuscript(projectId, 1, request(GenerationMode.REGENERATE, null));
+        assertThat(created.sourceContractVersionId()).isNull();
+        assertThat(created.writingBasis().outlineId()).isEqualTo(outlineId);
+        assertThat(created.writingBasis().plan().requiredBeats()).containsExactly("事件");
+        org.mockito.Mockito.verifyNoInteractions(contracts);
+        var source = ManuscriptVersion.create(created.id(), projectId, null, 1, 1, "LOCAL_TEMPLATE", null, generated)
+                .withWritingBasis(created.writingBasis());
+        source.accept();
+        when(manuscripts.findByIdAndProjectIdAndChapterNumber(source.getId(), projectId, 1)).thenReturn(Optional.of(source));
+        when(manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1)).thenReturn(Optional.of(source));
+        var revision = service.createManuscriptRevision(projectId, 1, source.getId(), 0);
+        assertThat(revision.writingBasis()).isEqualTo(created.writingBasis());
+        assertThat(revision.sourceContractVersionId()).isNull();
+    }
+
+    @Test
     void revisesSelectedOlderVersionAndRecordsItsSource() {
         ManuscriptVersion older = manuscript(2, "喜欢的旧稿");
         ManuscriptVersion latest = manuscript(3, "不满意的新稿");
@@ -180,18 +197,16 @@ class WritingServiceManuscriptVersionTest {
     }
 
     @Test
-    void rejectsContractChangedDuringGenerationWithoutSavingDraft() {
-        ChapterContractVersion contract = contracts
-                .findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(
-                        projectId, 1, ChapterContractStatus.APPROVED).orElseThrow();
+    void rejectsOutlineChangedDuringGenerationWithoutSavingDraft() {
+        OutlineVersion outline = outlines.findByIdAndProjectId(outlineId, projectId).orElseThrow();
         when(workflow.generateManuscript(eq(projectId), any(), any(), any(), any(), any(),
                 any(), eq(ModelProvider.LOCAL_TEMPLATE), any())).thenAnswer(call -> {
-                    when(contract.getRowVersion()).thenReturn(1L);
+                    when(outline.getRowVersion()).thenReturn(1L);
                     return new GeneratedManuscript(generated, List.of());
                 });
         assertThatThrownBy(() -> service.generateManuscript(projectId, 1,
                 request(GenerationMode.REGENERATE, null))).isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("章节合同或写作风格");
+                .hasMessageContaining("大纲");
         verify(manuscripts, never()).saveAndFlush(any());
     }
 

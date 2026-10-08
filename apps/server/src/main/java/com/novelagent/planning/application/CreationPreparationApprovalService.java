@@ -92,6 +92,7 @@ public class CreationPreparationApprovalService {
         if (chapter.number() <= last || chapter.status() == ChapterPlanStatus.OCCURRED) throw new IllegalArgumentException("不能调整已发生章节");
         var change = review.adjustments().stream().filter(item -> item.chapterNumber() == chapter.number()).findFirst().orElseThrow();
         return new ChapterPlan(chapter.number(), chapter.title(), chapter.pov(), change.objective(), change.coreEvent(),
-                change.reveal(), change.endingHook(), chapter.suggestedMinWords(), chapter.suggestedMaxWords(), chapter.status());
+                change.reveal(), change.endingHook(), chapter.suggestedMinWords(), chapter.suggestedMaxWords(), chapter.status(),
+                chapter.sceneOutline(), chapter.sceneOutlineNeedsUpdate()).reviewScenesAgainst(chapter, false);
     }
 }

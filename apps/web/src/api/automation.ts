@@ -46,7 +46,7 @@ export interface CreateAutomationInput {
 
 export interface AutomationChapterTarget {
   chapter: number
-  mode: 'contract' | 'contractReview' | 'manuscript' | 'review'
+  mode: 'manuscript' | 'review'
   provider: ModelProvider
 }
 
@@ -55,7 +55,7 @@ export function automationChapterTarget(run: AutomationRun): AutomationChapterTa
   const stage = steps[steps.length - 1]?.stage
   return { chapter: run.currentChapter, provider: run.provider,
     mode: stage === 'MANUSCRIPT' || stage === 'QUALITY_REVIEW' || stage === 'QUALITY_REVISION' ? 'manuscript'
-      : stage === 'REVIEW' ? 'review' : stage === 'CONTRACT_REVIEW' ? 'contractReview' : 'contract' }
+      : stage === 'REVIEW' ? 'review' : 'manuscript' }
 }
 
 export function listAutomationRuns(projectId: string) {

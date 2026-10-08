@@ -132,8 +132,8 @@ public class AutomationService {
                         && manuscript.status() == ManuscriptStatus.DRAFT ? quality.latest(projectId, chapter)
                                 .filter(report -> run.getProvider().name().equals(report.generatorType())).orElse(null) : null;
                 var decision = planner.next(run.getOutlineId(),
-                        writing.latestContract(projectId, chapter).orElse(null),
-                        writing.latestContractReview(projectId, chapter).orElse(null),
+                        null,
+                        null,
                         manuscript,
                         writing.latestReview(projectId, chapter).orElse(null),
                         canon.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapter)
@@ -154,8 +154,6 @@ public class AutomationService {
                 GenerateWritingRequest request = new GenerateWritingRequest(run.getProvider(), run.getInstruction(),
                         GenerationMode.REGENERATE, null, null);
                 UUID artifact = switch (decision.action()) {
-                    case CONTRACT -> writing.generateContract(projectId, chapter, request).id();
-                    case CONTRACT_REVIEW -> writing.generateContractReview(projectId, chapter, request).id();
                     case MANUSCRIPT -> writing.generateManuscript(projectId, chapter, request).id();
                     case QUALITY_REVIEW -> quality.generate(projectId, chapter, run.getProvider(), run.getInstruction()).id();
                     case QUALITY_REVISION -> quality.revise(projectId, chapter, qualityReport.id(), decision.issueIds(),

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SnowflakePlanningPanel from '@/components/SnowflakePlanningPanel.vue'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
 import GenerationModeControl from '@/components/GenerationModeControl.vue'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
@@ -221,6 +222,7 @@ function generate() {
       </div>
     </div>
 
+    <SnowflakePlanningPanel :project-id="projectId" />
     <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
     <p v-if="hasUnsavedChanges" class="acceptance-note" role="status">故事圣经有未保存修改。</p>
     <div v-if="bibleQuery.isPending.value" class="direction-loading">正在读取故事圣经…</div>
@@ -252,6 +254,10 @@ function generate() {
         <label class="bible-field"><span>不可违反的约束</span><textarea :value="listText(draft.hardConstraints)" rows="5" @input="setList('hardConstraints', ($event.target as HTMLTextAreaElement).value)" /></label>
         <label class="bible-field full"><span>待作者确认的问题</span><textarea :value="listText(draft.openQuestions)" rows="3" @input="setList('openQuestions', ($event.target as HTMLTextAreaElement).value)" /></label>
       </fieldset>
+      <details v-if="draft.developmentNotes" class="outline-base-preview">
+        <summary>雪花规划自由文本底稿</summary>
+        <label class="bible-field full"><span>规划底稿</span><textarea v-model="draft.developmentNotes" rows="14" :disabled="busy" /></label>
+      </details>
       <CharacterBlueprintEditor v-model="draftCharacters" :disabled="busy" />
       <ReaderExperienceSeedEditor :model-value="draft.readerExperiencePlans ?? []" :disabled="busy" @update:model-value="draft.readerExperiencePlans = $event" />
       <div v-if="characterError" class="form-error" role="alert">{{ characterError }}</div>

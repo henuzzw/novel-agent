@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 public class ChapterAutomationPlanner {
-    public enum Action { CONTRACT, CONTRACT_REVIEW, MANUSCRIPT, QUALITY_REVIEW, QUALITY_REVISION, REVIEW, WAIT, NEXT_CHAPTER }
+    public enum Action { MANUSCRIPT, QUALITY_REVIEW, QUALITY_REVISION, REVIEW, WAIT, NEXT_CHAPTER }
 
     public record Decision(Action action, String reason, List<String> issueIds) {
         public Decision(Action action, String reason) { this(action, reason, List.of()); }
@@ -43,20 +43,9 @@ public class ChapterAutomationPlanner {
                     ? new Decision(Action.NEXT_CHAPTER, null)
                     : waitFor("本章已有正史及更新稿，请先处理修订稿和正史替换");
         }
-        if (contract == null) return new Decision(Action.CONTRACT, null);
-        if (!outlineId.equals(contract.sourceOutlineVersionId())) {
-            return waitFor("本章合同来自旧大纲，请重新生成合同并审阅");
-        }
-        if (contract.status() != ChapterContractStatus.APPROVED) {
-            if (contractReview == null || !contract.id().equals(contractReview.sourceContractVersionId())
-                    || contract.version() != contractReview.sourceContractRowVersion()) {
-                return new Decision(Action.CONTRACT_REVIEW, null);
-            }
-            return waitFor("请处理合同审阅问题、确认审阅并确认章节合同");
-        }
         if (manuscript == null) return new Decision(Action.MANUSCRIPT, null);
-        if (!contract.id().equals(manuscript.sourceContractVersionId())) {
-            return waitFor("正文来自旧合同，请按当前合同重新生成正文");
+        if (manuscript.writingBasis() != null && !outlineId.equals(manuscript.writingBasis().outlineId())) {
+            return waitFor("正文来自旧大纲，请按当前大纲重新生成正文");
         }
         if (manuscript.status() != ManuscriptStatus.AUTHOR_ACCEPTED) {
             if (qualityReviewEnabled) {

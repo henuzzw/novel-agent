@@ -45,10 +45,10 @@ class WritingCraftRulesTest {
     @Test
     void qualityRequiresActualBodyEvidenceAndOnlyDuePayoffs() {
         assertThat(WritingCraftRules.qualityReview()).contains(
-                "只核对规划或合同明确标注为“本章兑现”的内容", "跨章长期承诺留给卷级检查",
+                "只核对规划或本章计划明确标注为“本章兑现”的内容", "跨章长期承诺留给卷级检查",
                 "起点、意图、阻力或信息差、行动、结束变化", "兑现落空、仅靠围观评价、重复场景功能",
                 "body 中逐字存在的连续原文", "缺失内容不能伪造引文", "无法定位则说明无法判断",
-                "仅有合同或被截断的正文不能宣称整章或三章兑现已校验", "开头片段只评估已展开内容",
+                "仅有计划或被截断的正文不能宣称整章或三章兑现已校验", "开头片段只评估已展开内容",
                 "正常概述、安静场景、必要过渡", "不擅自添加老师授权、临时能力或新剧情",
                 "STYLE / FLUENCY / LOGIC / SCENE", "不新增评分维度", "不替作者执行修订或批准正史");
     }

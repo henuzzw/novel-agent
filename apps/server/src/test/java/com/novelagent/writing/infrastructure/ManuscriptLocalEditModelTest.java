@@ -29,14 +29,14 @@ class ManuscriptLocalEditModelTest {
                 .thenReturn("{\"replacement\":\"new\"}");
         UUID project = UUID.randomUUID();
         var source = new ManuscriptLocalEditStore.Snapshot(project, 1, UUID.randomUUID(), 0, UUID.randomUUID(),
-                new ManuscriptContent("title", "old", "summary", List.of()), "contract + style", "hash");
+                new ManuscriptContent("title", "old", "summary", List.of()), "contract + style", "hash", null);
         var model = new ManuscriptLocalEditModel(gateway, new ObjectMapper());
         assertThat(model.replace(project, source, new ManuscriptLocalEditSelection("old", 0, 1), ModelProvider.LOCAL_CODEX, "clarify")).isEqualTo("new");
         var system = ArgumentCaptor.forClass(String.class);
         var user = ArgumentCaptor.forClass(String.class);
         verify(gateway).request(eq(project), eq("MANUSCRIPT_LOCAL_EDIT"), eq(ModelProvider.LOCAL_CODEX), system.capture(),
                 user.capture(), any(), eq("manuscript_local_edit"), eq(12000), eq(CodexSessionPolicy.NEW_THREAD));
-        assertThat(system.getValue()).contains("合同事实", "当前风格", "不自动确认或提交正史", "不得新增故事事实");
+        assertThat(system.getValue()).contains("本章已确认事实", "当前风格", "不自动确认或提交正史", "不得新增故事事实");
         assertThat(user.getValue()).contains("contract + style", "offsetUtf16", "occurrence");
         when(gateway.request(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any()))
                 .thenReturn("{\"replacement\":\"new\",\"body\":\"overwrite\"}");

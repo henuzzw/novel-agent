@@ -60,9 +60,10 @@ export interface ManuscriptContent {
 }
 
 export interface ManuscriptVersion {
+  writingBasis?: { outlineId: string; fingerprint: string; plan: ChapterContractContent } | null
   id: string
   projectId: string
-  sourceContractVersionId: string
+  sourceContractVersionId: string | null
   baseManuscriptVersionId: string | null
   sourceReviewVersionId: string | null
   chapterNumber: number

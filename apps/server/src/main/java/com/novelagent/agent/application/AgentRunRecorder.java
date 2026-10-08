@@ -126,7 +126,7 @@ public class AgentRunRecorder {
                     id, projectId, stage, provider, Duration.between(startedAt, Instant.now()).toMillis());
             return result;
         } catch (RuntimeException exception) {
-            boolean stopped = control != null && control.isStopped();
+            boolean stopped = exception instanceof GenerationStoppedException || control != null && control.isStopped();
             if (stopped) Thread.interrupted();
             log.warn("Agent run ended runId={} projectId={} stage={} provider={} durationMs={} status={} exceptionType={}",
                     id, projectId, stage, provider, Duration.between(startedAt, Instant.now()).toMillis(),

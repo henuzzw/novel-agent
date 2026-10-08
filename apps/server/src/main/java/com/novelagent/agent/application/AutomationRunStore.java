@@ -33,16 +33,25 @@ public class AutomationRunStore {
     private final OutlineVersionRepository outlines;
     private final ProjectAccessService access;
     private final EntityManager entityManager;
+    private final com.novelagent.writing.infrastructure.DraftLoopRunRepository draftLoops;
 
     public AutomationRunStore(
             AutomationRunRepository runs,
             OutlineVersionRepository outlines,
             ProjectAccessService access,
             EntityManager entityManager) {
+        this(runs, outlines, access, entityManager, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AutomationRunStore(AutomationRunRepository runs, OutlineVersionRepository outlines,
+            ProjectAccessService access, EntityManager entityManager,
+            com.novelagent.writing.infrastructure.DraftLoopRunRepository draftLoops) {
         this.runs = runs;
         this.outlines = outlines;
         this.access = access;
         this.entityManager = entityManager;
+        this.draftLoops = draftLoops;
     }
 
     /**
@@ -69,6 +78,7 @@ public class AutomationRunStore {
             }
             return run;
         }
+        requireNoDraftLoop(projectId);
         if (runs.findTop50ByProjectIdOrderByCreatedAtDesc(projectId).stream().anyMatch(run ->
                 run.getStatus() != AutomationStatus.CANCELLED && run.getStatus() != AutomationStatus.SUCCEEDED)) {
             throw new IllegalStateException("项目已有自动任务，请继续或取消该任务");
@@ -124,7 +134,9 @@ public class AutomationRunStore {
      */
     @Transactional
     public AutomationRun claim(UUID projectId, UUID id) {
-        access.requireOwnedProject(projectId);
+        var project = access.requireOwnedProject(projectId);
+        entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
+        requireNoDraftLoop(projectId);
         AutomationRun run = locked(projectId, id);
         run.start(Instant.now());
         return runs.saveAndFlush(run);
@@ -139,7 +151,9 @@ public class AutomationRunStore {
      */
     @Transactional
     public Optional<AutomationRun> claimPending(UUID projectId, UUID id) {
-        access.requireOwnedProject(projectId);
+        var project = access.requireOwnedProject(projectId);
+        entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
+        requireNoDraftLoop(projectId);
         AutomationRun run = locked(projectId, id);
         if (run.getStatus() != AutomationStatus.PENDING) return Optional.empty();
         run.start(Instant.now());
@@ -203,6 +217,14 @@ public class AutomationRunStore {
     private AutomationRun locked(UUID projectId, UUID id) {
         return runs.findLocked(projectId, id)
                 .orElseThrow(() -> new WritingResourceNotFoundException("自动任务", id));
+    }
+
+    private void requireNoDraftLoop(UUID projectId) {
+        if (draftLoops != null && !draftLoops.findByProjectIdAndStatusIn(projectId,
+                List.of(com.novelagent.writing.domain.DraftLoopRun.Status.PENDING,
+                        com.novelagent.writing.domain.DraftLoopRun.Status.RUNNING)).isEmpty()) {
+            throw new IllegalStateException("项目正在自动写作与检查，请等待或停止后再推进章节");
+        }
     }
 
 }

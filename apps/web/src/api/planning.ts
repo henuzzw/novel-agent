@@ -72,6 +72,7 @@ export interface CharacterBlueprint {
 }
 
 export interface StoryBibleContent {
+  developmentNotes?: string | null
   readerExperiencePlans?: ReaderExperienceSeed[]
   logline: string
   theme: string
@@ -129,6 +130,8 @@ export interface ChapterPlan {
   suggestedMinWords: number
   suggestedMaxWords: number
   status: 'OCCURRED' | 'PLANNED'
+  sceneOutline?: string
+  sceneOutlineNeedsUpdate?: boolean
 }
 
 export interface OutlineArc {

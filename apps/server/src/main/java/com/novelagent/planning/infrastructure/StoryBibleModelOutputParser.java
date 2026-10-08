@@ -34,7 +34,7 @@ public class StoryBibleModelOutputParser {
                 safe(value.supportingCharacters()), safe(value.relationshipDynamics()),
                 required(value.centralConflict(), "centralConflict"), required(value.stakes(), "stakes"),
                 required(value.narrativeStyle(), "narrativeStyle"), required(value.endingDirection(), "endingDirection"),
-                safe(value.hardConstraints()), safe(value.openQuestions()), value.characterBlueprints(), value.readerExperiencePlans());
+                safe(value.hardConstraints()), safe(value.openQuestions()), value.characterBlueprints(), value.readerExperiencePlans(), value.developmentNotes());
     }
 
     private static String required(String value, String field) {

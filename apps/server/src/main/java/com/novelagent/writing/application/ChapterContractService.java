@@ -1,25 +1,13 @@
 package com.novelagent.writing.application;
 
-import static com.novelagent.writing.application.WritingChecks.check;
-import static com.novelagent.writing.application.WritingChecks.normalize;
 
-import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
-import com.novelagent.memory.application.ContextBudgetPlanner;
-import com.novelagent.memory.application.MemoryBudgetPlan;
-import com.novelagent.memory.application.NovelMemoryContext;
-import com.novelagent.planning.application.GenerationMode;
-import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.api.ChapterContractResponse;
 import com.novelagent.writing.api.ChapterContractReviewResponse;
 import com.novelagent.writing.api.ChapterContractVersionSummaryResponse;
 import com.novelagent.writing.api.GenerateWritingRequest;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.ChapterContractReviewContent;
-import com.novelagent.writing.domain.ChapterContractReviewVersion;
-import com.novelagent.writing.domain.ChapterContractStatus;
-import com.novelagent.writing.domain.ChapterContractVersion;
-import com.novelagent.writing.domain.ReviewStatus;
 import com.novelagent.writing.infrastructure.ChapterContractReviewVersionRepository;
 import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import java.util.List;
@@ -31,25 +19,20 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 章节合同。
  *
- * <p>生成和编辑可执行节拍，独立审阅后才能由作者确认合同。模型等待不包在长事务中，完成后核对主要来源；审阅必须对应当前合同及行版本，不能用旧审阅批准新合同。</p>
+ * <p>只读保留历史合同与审阅；所有写入接口返回410，不再参与正文或自动创作。</p>
  */
 @Service
 public class ChapterContractService {
     private final WritingContextService contexts;
     private final ChapterContractVersionRepository contracts;
     private final ChapterContractReviewVersionRepository contractReviews;
-    private final WritingGenerationWorkflow workflow;
-    private final ContextBudgetPlanner budgetPlanner;
     private final CharacterNameService characterNames;
 
     public ChapterContractService(WritingContextService contexts, ChapterContractVersionRepository contracts,
-            ChapterContractReviewVersionRepository contractReviews, WritingGenerationWorkflow workflow,
-            ContextBudgetPlanner budgetPlanner, CharacterNameService characterNames) {
+            ChapterContractReviewVersionRepository contractReviews, CharacterNameService characterNames) {
         this.contexts = contexts;
         this.contracts = contracts;
         this.contractReviews = contractReviews;
-        this.workflow = workflow;
-        this.budgetPlanner = budgetPlanner;
         this.characterNames = characterNames;
     }
 
@@ -68,7 +51,7 @@ public class ChapterContractService {
     }
 
     /**
-     * 列出本章历史合同版本摘要，供作者显式选择生成基准。
+     * 列出退役流程留下的合同摘要，不再作为新正文生成基准。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -97,39 +80,16 @@ public class ChapterContractService {
     }
 
     /**
-     * 根据当前发布规划及记忆生成或有限调整合同草稿，模型返回后核对主要来源；不自动审阅或确认。
+     * 退役写入入口：校验项目权限后返回 410，不调用模型或保存记录。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     public ChapterContractResponse generateContract(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
-        WritingContextService.Context context = contexts.context(projectId, chapterNumber);
-        WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
-        ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
-        GenerationMode mode = request.mode() == null ? GenerationMode.REGENERATE : request.mode();
-        Optional<ChapterContractVersion> latest = contracts
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber);
-        if (mode == GenerationMode.REGENERATE && request.baseContractVersionId() != null) {
-            throw new IllegalArgumentException("重新生成时不能指定基准章节合同版本");
-        }
-        ChapterContractVersion base = mode == GenerationMode.REGENERATE ? null
-                : request.baseContractVersionId() == null ? latest.orElse(null)
-                : contracts.findByIdAndProjectIdAndChapterNumber(request.baseContractVersionId(), projectId, chapterNumber)
-                        .orElseThrow(() -> new WritingResourceNotFoundException(
-                                "章节合同版本", request.baseContractVersionId()));
-        ChapterContractContent previousContent = base == null ? null : base.getContent();
-        MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.CHAPTER_CONTRACT, provider,
-                context.budgetInputs(context.bible().getContent(), context.arc(), context.chapter(), previousContent, request.instruction()));
-        NovelMemoryContext recalled = contexts.recall(AgentStage.CHAPTER_CONTRACT, context, request.instruction(), budget);
-        ChapterContractContent generated = workflow.generateContract(projectId, context.bible().getContent(), context.arc(),
-                context.chapter(), recalled, previousContent, provider, context.instructionWithPreparation(normalize(request.instruction())));
-        basis.requireUnchanged(contexts.context(projectId, chapterNumber));
-        int version = latest.map(value -> value.getVersionNumber() + 1).orElse(1);
-        ChapterContractVersion result = ChapterContractVersion.create(UUID.randomUUID(), projectId,
-                context.outline().getId(), chapterNumber, version, provider.name(), normalize(request.instruction()),
-                base == null ? null : base.getId(), generated);
-        return ChapterContractResponse.from(contracts.saveAndFlush(result));
+        contexts.requireOwnedProject(projectId);
+        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
+                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
     }
 
     /**
@@ -147,7 +107,7 @@ public class ChapterContractService {
     }
 
     /**
-     * 独立审阅当前大纲下的合同草稿，保存与合同 ID 及行版本绑定的报告，不直接批准合同。
+     * 退役审阅入口：校验项目权限后返回 410，不调用模型或保存报告。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -155,42 +115,13 @@ public class ChapterContractService {
      */
     public ChapterContractReviewResponse generateContractReview(UUID projectId, int chapterNumber,
             GenerateWritingRequest request) {
-        WritingContextService.Context context = contexts.context(projectId, chapterNumber);
-        WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
-        long contractRowVersion;
-        ChapterContractVersion contract = contracts
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
-                .orElseThrow(() -> new IllegalArgumentException("请先生成并保存本章合同"));
-        if (!contract.getSourceOutlineVersionId().equals(context.outline().getId())) {
-            throw new IllegalArgumentException("章节合同来自旧大纲，请按当前已发布大纲重新生成");
-        }
-        if (contract.getStatus() != ChapterContractStatus.DRAFT) {
-            throw new IllegalArgumentException("已确认合同无需重新审阅，请先生成新合同草稿");
-        }
-        contractRowVersion = contract.getRowVersion();
-        ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
-        MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.CHAPTER_CONTRACT, provider,
-                context.budgetInputs(context.bible().getContent(), context.arc(), context.chapter(), contract.getContent(), request.instruction()));
-        NovelMemoryContext recalled = contexts.recall(AgentStage.CHAPTER_CONTRACT, context, request.instruction(), budget);
-        ChapterContractReviewContent generated = workflow.generateContractReview(projectId,
-                context.bible().getContent(), context.arc(), context.chapter(), contract.getContent(), recalled,
-                provider, context.instructionWithPreparation(normalize(request.instruction())));
-        basis.requireUnchanged(contexts.context(projectId, chapterNumber));
-        ChapterContractVersion currentContract = contracts
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber).orElseThrow();
-        if (!currentContract.getId().equals(contract.getId()) || currentContract.getRowVersion() != contractRowVersion) {
-            throw new IllegalStateException("审阅期间合同已变化，请重新审阅");
-        }
-        int version = contractReviews.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
-                .map(value -> value.getVersionNumber() + 1).orElse(1);
-        ChapterContractReviewVersion review = ChapterContractReviewVersion.create(UUID.randomUUID(), projectId,
-                chapterNumber, contract.getId(), contractRowVersion, version, provider.name(),
-                normalize(request.instruction()), generated);
-        return ChapterContractReviewResponse.from(contractReviews.saveAndFlush(review));
+        contexts.requireOwnedProject(projectId);
+        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
+                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
     }
 
     /**
-     * 保存作者对审阅问题的处理并确认报告；来源合同或最新报告变化时拒绝使用旧结果。
+     * 退役确认入口：校验项目权限后返回 410，不修改报告。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param id 当前方法所操作记录的稳定 ID。
@@ -201,35 +132,12 @@ public class ChapterContractService {
     public ChapterContractReviewResponse approveContractReview(UUID projectId, UUID id, long expected,
             ChapterContractReviewContent content) {
         contexts.requireOwnedProject(projectId);
-        ChapterContractReviewVersion review = contractReviews.findByIdAndProjectId(id, projectId)
-                .orElseThrow(() -> new WritingResourceNotFoundException("合同审阅", id));
-        check(review.getRowVersion(), expected);
-        ChapterContractVersion contract = requireContract(projectId, review.getSourceContractVersionId());
-        requireCurrentContractReview(projectId, contract, review);
-        if (content != null) review.revise(content);
-        review.approve();
-        return ChapterContractReviewResponse.from(contractReviews.saveAndFlush(review));
-    }
-
-    private void requireCurrentContractReview(UUID projectId, ChapterContractVersion contract,
-            ChapterContractReviewVersion review) {
-        if (!contract.getSourceOutlineVersionId().equals(contexts.requireOwnedProject(projectId).getCurrentOutlineVersionId())) {
-            throw new IllegalStateException("章节合同来自旧大纲，请重新生成并审阅");
-        }
-        ChapterContractVersion latest = contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
-                projectId, contract.getChapterNumber()).orElseThrow();
-        ChapterContractReviewVersion latestReview = contractReviews
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, contract.getChapterNumber())
-                .orElseThrow(() -> new IllegalStateException("请先审阅当前章节合同"));
-        if (!latest.getId().equals(contract.getId()) || !latestReview.getId().equals(review.getId())
-                || !review.getSourceContractVersionId().equals(contract.getId())
-                || review.getSourceContractRowVersion() != contract.getRowVersion()) {
-            throw new IllegalStateException("合同或审阅已更新，请重新审阅当前保存版本");
-        }
+        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
+                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
     }
 
     /**
-     * 按合同当前状态和行版本保存作者编辑；修改后的合同不能沿用不匹配的旧审阅批准。
+     * 退役编辑入口：校验项目权限后返回 410，不修改合同。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param id 当前方法所操作记录的稳定 ID。
@@ -239,14 +147,12 @@ public class ChapterContractService {
     @Transactional
     public ChapterContractResponse updateContract(UUID projectId, UUID id, long expected, ChapterContractContent content) {
         contexts.requireOwnedProject(projectId);
-        ChapterContractVersion value = requireContract(projectId, id);
-        check(value.getRowVersion(), expected);
-        value.revise(content);
-        return ChapterContractResponse.from(contracts.saveAndFlush(value));
+        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
+                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
     }
 
     /**
-     * 核对最新合同、最新已确认审阅及来源行版本后确认合同，为正式正文提供依据。
+     * 退役批准入口：校验项目权限后返回 410，不再为正文设置合同门禁。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param id 当前方法所操作记录的稳定 ID。
@@ -255,21 +161,8 @@ public class ChapterContractService {
     @Transactional
     public ChapterContractResponse approveContract(UUID projectId, UUID id, long expected) {
         contexts.requireOwnedProject(projectId);
-        ChapterContractVersion value = requireContract(projectId, id);
-        check(value.getRowVersion(), expected);
-        ChapterContractReviewVersion review = contractReviews
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, value.getChapterNumber())
-                .orElseThrow(() -> new IllegalStateException("请先审阅并确认当前章节合同"));
-        requireCurrentContractReview(projectId, value, review);
-        if (review.getStatus() != ReviewStatus.APPROVED) {
-            throw new IllegalStateException("请先确认合同审阅结果");
-        }
-        value.approve();
-        return ChapterContractResponse.from(contracts.saveAndFlush(value));
+        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
+                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
     }
 
-    private ChapterContractVersion requireContract(UUID projectId, UUID id) {
-        return contracts.findByIdAndProjectId(id, projectId)
-                .orElseThrow(() -> new WritingResourceNotFoundException("章节合同", id));
-    }
 }

@@ -54,7 +54,8 @@ public class ManuscriptLocalEditStore {
     }
 
     public record Snapshot(UUID projectId, int chapter, UUID sourceId, long sourceRowVersion,
-            UUID contractId, ManuscriptContent rendered, String context, String fingerprint) {
+            UUID contractId, ManuscriptContent rendered, String context, String fingerprint,
+            com.novelagent.writing.domain.ManuscriptBasis writingBasis) {
     }
 
     /**
@@ -77,9 +78,6 @@ public class ManuscriptLocalEditStore {
                 .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", sourceId));
         if (lock) entities.refresh(source, LockModeType.PESSIMISTIC_WRITE);
         WritingChecks.check(source.getRowVersion(), expected);
-        var contract = contracts.findByIdAndProjectId(source.getSourceContractVersionId(), projectId)
-                .orElseThrow(() -> new ManuscriptLocalEditConflictException("源稿合同已失效"));
-        if (lock) entities.refresh(contract, LockModeType.PESSIMISTIC_READ);
         WritingContextService.Context basis;
         try {
             basis = contexts.context(projectId, chapter);
@@ -91,15 +89,10 @@ public class ManuscriptLocalEditStore {
             entities.refresh(basis.bible(), LockModeType.PESSIMISTIC_READ);
             basis = contexts.context(projectId, chapter);
         }
-        if (contract.getChapterNumber() != chapter || contract.getStatus() != ChapterContractStatus.APPROVED
-                || !contract.getSourceOutlineVersionId().equals(basis.outline().getId())
-                || !contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapter)
-                        .map(value -> value.getId().equals(contract.getId())).orElse(false)) {
-            throw new ManuscriptLocalEditConflictException("源稿合同或已发布大纲已更新，请刷新来源");
-        }
+        var writingBasis = ChapterWritingBasisService.requireCurrent(source, basis, contracts);
         ManuscriptContent rendered = names.render(projectId, source.getContent());
         String context = names.render(projectId, mapper.valueToTree(basis.bible().getContent()).toString())
-                + "\n合同：" + names.render(projectId, mapper.valueToTree(contract.getContent()).toString())
+                + "\n本章大纲写作依据：" + names.render(projectId, mapper.valueToTree(writingBasis.plan()).toString())
                 + "\n当前章与相邻章边界：" + names.render(projectId, basis.toString())
                 + "\n人物档案：" + names.render(projectId, profiles.promptContext(projectId))
                 + "\n写作风格：" + styles.promptContext(projectId)
@@ -108,8 +101,8 @@ public class ManuscriptLocalEditStore {
         String fingerprint = NovelMemoryContext.fingerprint(context + "\n" + mapper.valueToTree(rendered)
                 + "\n" + mapper.valueToTree(source.getContent()) + "\n" + project.getRowVersion()
                 + "\n" + basis.boundaryFingerprint() + "\n" + mapper.valueToTree(basis.outline().getContent())
-                + "\n" + contract.getId() + ":" + contract.getRowVersion());
-        return new Snapshot(projectId, chapter, sourceId, expected, contract.getId(), rendered, context, fingerprint);
+                + "\n" + writingBasis);
+        return new Snapshot(projectId, chapter, sourceId, expected, source.getSourceContractVersionId(), rendered, context, fingerprint, writingBasis);
     }
 
     /**
@@ -125,7 +118,7 @@ public class ManuscriptLocalEditStore {
             ManuscriptLocalEditRequest request) {
         Snapshot current = read(source.projectId(), source.chapter(), source.sourceId(), source.sourceRowVersion(), true);
         if (!current.fingerprint().equals(source.fingerprint())) {
-            throw new ManuscriptLocalEditConflictException("局部编辑期间源稿、合同、规划、正史、风格或策略已变化，请重新选择");
+            throw new ManuscriptLocalEditConflictException("局部编辑期间源稿、写作依据、规划、正史、风格或策略已变化，请重新选择");
         }
         ManuscriptContent displayed = new ManuscriptContent(current.rendered().title(),
                 selection.replace(current.rendered().body(), replacement), current.rendered().summary(),
@@ -140,7 +133,7 @@ public class ManuscriptLocalEditStore {
         String provenance = mapper.valueToTree(request).toString() + "\n依据=" + source.fingerprint();
         ManuscriptVersion draft = ManuscriptVersion.create(UUID.randomUUID(), source.projectId(), source.contractId(),
                 source.chapter(), version, "LOCAL_EDIT_" + request.provider().name(), provenance, source.sourceId(), encoded,
-                List.of("仅替换第 " + selection.occurrence() + " 处精确选区（UTF-16 偏移 " + selection.offset() + "）"));
+                List.of("仅替换第 " + selection.occurrence() + " 处精确选区（UTF-16 偏移 " + selection.offset() + "）")).withWritingBasis(source.writingBasis());
         ManuscriptVersion saved = manuscripts.saveAndFlush(draft);
         return ManuscriptResponse.from(saved, names.render(source.projectId(), saved.getContent()));
     }

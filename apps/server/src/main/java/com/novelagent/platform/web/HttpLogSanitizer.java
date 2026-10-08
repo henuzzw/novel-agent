@@ -14,7 +14,9 @@ public class HttpLogSanitizer {
     private static final Set<String> PRIVATE_TEXT = Set.of("body", "text", "content", "quote", "sourcetext",
             "sample", "sampletext", "instruction", "instructions", "prompt", "systemprompt", "userprompt",
             "guidance", "defaultsystemprompt", "protectedrules",
-            "responsetext", "detail", "errordetail", "errormessage", "planningerror", "excerpt", "snippet");
+            "core", "characters", "world", "plot", "developmentnotes", "sceneoutline",
+            "responsetext", "detail", "errordetail", "errormessage", "planningerror", "excerpt", "snippet",
+            "evidence", "existingbasis", "gap", "candidatedesign", "impact", "suggestion", "reason", "description", "summary", "changesummary");
     private final ObjectMapper mapper;
     public HttpLogSanitizer(ObjectMapper mapper) { this.mapper = mapper; }
 

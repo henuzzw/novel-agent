@@ -20,9 +20,9 @@ const stageNames: Record<string, string> = {
   QUALITY_REVIEW: '正文质量检查', STYLE_ANALYSIS: '写作风格分析',
   STYLE_PREVIEW: '第一章风格试写', STYLE_RECOMMENDATION: '圣经风格推荐',
   STYLE_PREVIEW_REVIEW: '试写编辑检查', STYLE_PREVIEW_REVISION: '试写建议修订',
-  FIRST_THREE_CHAPTERS_REVIEW: '前三章完整通读', MANUSCRIPT_LOCAL_EDIT: '正文局部编辑',
+  FIRST_THREE_CHAPTERS_REVIEW: '前三章完整通读', MANUSCRIPT_LOCAL_EDIT: '正文局部编辑', DRAFT_JUDGE_REVISION: '自动裁决与修订 · C',
   IMPORT_REVERSE_BIBLE: '导入反推故事圣经', IMPORT_REVERSE_OUTLINE: '导入反推大纲',
-  CHARACTER_BLUEPRINT_COMPLETION: '人物底稿补全', PLANNING_CHECKPOINT: '分块规划',
+  SNOWFLAKE_PLANNING: '雪花渐进规划', CHARACTER_DESIGN: '统一人物设计', CHARACTER_BLUEPRINT_COMPLETION: '人物底稿补全（历史）', PLANNING_CHECKPOINT: '分块规划',
 }
 const providerNames: Record<string, string> = { LOCAL_CODEX: '服务端 Codex', DEEPSEEK: 'DeepSeek', LOCAL_TEMPLATE: '本地模板' }
 function tokens(value: number) { return new Intl.NumberFormat('zh-CN').format(value) }

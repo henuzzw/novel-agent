@@ -119,7 +119,7 @@ class FirstThreeChaptersPersistenceTest {
         assertThatThrownBy(() -> store.latest(PROJECT, "hash")).isInstanceOf(ProjectNotFoundException.class);
         verifyNoInteractions(manuscripts, reports);
     }
-    @Test void selectsSameProjectSameChapterHistoryAndCorrespondingContract() {
+    @Test void selectsSameProjectSameChapterHistoryWithOutlinePlan() {
         var current = texts.getFirst();
         var old = ManuscriptVersion.create(UUID.randomUUID(), PROJECT, current.getSourceContractVersionId(), 1, 1, "TEST", "",
                 new ManuscriptContent("old", "old complete body", "summary", List.of()));
@@ -127,7 +127,8 @@ class FirstThreeChaptersPersistenceTest {
         var source = store.snapshot(PROJECT, List.of(old.getId(), texts.get(1).getId(), texts.get(2).getId()));
         assertThat(source.available()).isTrue();
         assertThat(source.chapters().getFirst().body()).isEqualTo("old complete body");
-        assertThat(source.chapters().getFirst().contractId()).isEqualTo(chapterContracts.getFirst().getId());
+        assertThat(source.chapters().getFirst().contractId()).isNull();
+        assertThat(source.chapters().getFirst().contractStatus()).isEqualTo("OUTLINE_PLAN");
         var foreign = UUID.randomUUID();
         assertThatThrownBy(() -> store.snapshot(PROJECT, List.of(foreign, texts.get(1).getId(), texts.get(2).getId())))
                 .isInstanceOf(WritingResourceNotFoundException.class);
@@ -139,13 +140,13 @@ class FirstThreeChaptersPersistenceTest {
         assertThat(source.chapters().getLast().body()).isNull();
         assertThat(source.unavailableReasons()).anyMatch(r -> r.contains("完整正文"));
     }
-    @Test void olderOutlineOrSupersededContractMakesSourceUnavailable() {
+    @Test void olderOutlineMakesSourceUnavailableButSupersededLegacyContractDoesNot() {
         when(project.getCurrentOutlineVersionId()).thenReturn(UUID.randomUUID());
         assertThat(store.snapshot(PROJECT, List.of()).available()).isFalse();
         when(project.getCurrentOutlineVersionId()).thenReturn(outlineId);
         var next = ChapterContractVersion.create(UUID.randomUUID(), PROJECT, outlineId, 1, 2, "TEST", "", contract(1));
         when(contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(PROJECT, 1)).thenReturn(Optional.of(next));
-        assertThat(store.snapshot(PROJECT, List.of()).unavailableReasons()).anyMatch(r -> r.contains("来源过期"));
+        assertThat(store.snapshot(PROJECT, List.of()).available()).isTrue();
     }
     @Test void draftOrNonCurrentBibleMakesSourceUnavailable() {
         when(bible.getStatus()).thenReturn(StoryBibleStatus.DRAFT);
@@ -154,7 +155,7 @@ class FirstThreeChaptersPersistenceTest {
         when(project.getCurrentBibleVersionId()).thenReturn(UUID.randomUUID());
         assertThat(store.snapshot(PROJECT, List.of()).available()).isFalse();
     }
-    @ParameterizedTest @ValueSource(strings = {"body", "contract", "outline", "bible", "strategy", "style", "profile", "profileVersion", "canon", "newManuscript", "newContract"})
+    @ParameterizedTest @ValueSource(strings = {"body", "outline", "bible", "strategy", "style", "profile", "profileVersion", "canon", "newManuscript"})
     void everyDependencyChangeRejectsReportBeforeSaving(String dependency) {
         var source = store.snapshot(PROJECT, List.of());
         switch (dependency) {

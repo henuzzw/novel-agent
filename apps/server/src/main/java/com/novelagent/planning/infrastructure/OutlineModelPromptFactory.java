@@ -68,6 +68,7 @@ public class OutlineModelPromptFactory {
                 4. 调整模式下选定的基准大纲；除作者明确授权或有效上游约束实际影响的部分外保持原样，不能仅因策略建议改变而重写。
                 作者要求与硬约束冲突时，不悄悄改事实；调整模式在 changeSummary 说明未执行的要求、冲突依据及需作者先修改的上游，新规划在相关字段说明限制，不增加输出字段。
                 openQuestions 是待确认问题，不得擅自写成已确立事实。
+                developmentNotes 是雪花法自由文本底稿，不是另一套硬约束；作者修订后的圣经明确字段、硬约束和已确认事实优先，冲突底稿不采用。
 
                 【项目创作策略（系统辅助规则，不是作者原文）】
                 %s
@@ -86,6 +87,8 @@ public class OutlineModelPromptFactory {
 
                 【场景行动与读者体验设计】
                 按人物底稿的欲望、恐惧、能力限制和行为底线设计行动；在相关章节字段写出触发、选择与代价，不临时改性格来迁就事件。
+                沿用圣经已确定的具体姓名；从人物的关键经历、生活目标与内在矛盾推演选择，将关系双方的诉求落实为行动，不把人物重新简化成“主角/同伴”的功能标签。
+                人物背景通过影响本章选择的情境进入剧情，不为展示档案安排无关生平说明，也不在大纲阶段另造过去或更换名字。
                 开篇关系和物品随情节演变，不每章重置；秘密与未来弧光只在有依据、允许揭示的章节落实。
                 在现有 objective/coreEvent/reveal/endingHook 文本内表达“承诺 / 铺垫依据 / 本章兑现 / 余波”，不增加输出字段。
                 主要节拍写清起点、意图、阻力或信息差、行动、结束变化与重要依据；引用输入中已有的来源或章号，未知依据待确认，不编造正文证据。
@@ -93,10 +96,10 @@ public class OutlineModelPromptFactory {
                 按题材选择关系确认、悬疑公平揭示、成长的选择与代价、日常理解或行动突破，不靠围观夸赞、反派降智、临时能力或巧合救场。
                 不新编人物能力、道具权限、信息来源或帮助方向来修补因果；未来揭示不写成人物已知事实。
                 结尾钩子来自本章结果，不能代替当章兑现；伏笔强化应增加信息或影响选择，不连续重复同一铺垫、同型钩子或场景功能。
-                安静章、压抑章和悲剧章不强制正向快感，过渡章可标明主要积累；长期承诺不要求逐章兑现，不设置反转、回报或钩子的硬配额。
+                安静章、压抑章和悲剧章不强制正向快感，过渡章可标明主要积累；长期承诺不要求逐章兑现，不对所有章节设置反转、回报或钩子的硬配额；新规划第一章按系统开篇目标设计有依据的反转与题材回报。
 
                 【整份大纲的前三章短弧】
-                以独立“项目创作策略”区块中服务端传入的 policy 为准，不从作者原文推断项目配置；STANDARD 或未明确提供 FANQIE_GRIPPING 时按题材与作者节奏，不强制爽点或前三章强开篇。
+                以独立“项目创作策略”区块中服务端传入的 policy 为准，不从作者原文推断项目配置；STANDARD 或未明确提供 FANQIE_GRIPPING 时不强制完整前三章短弧，但新规划第一章同样执行系统默认的吸引力、反转与题材回报目标；作者明确的节奏选择仍优先。
                 仅 FANQIE_GRIPPING 下，从头规划或获授权调整前三章时，将整份大纲中的第 1～3 章一起设计为“开场问题 -> 主角行动 -> 阻力与代价 -> 第一轮兑现 -> 更长线目标”。
                 第一章：开头进入主角具体处境与迫切问题，主角可见行动遭遇阻力，章内取得第一次真实回报或不可逆变化；先有进展再留下由行动引出的具体问题。
                 第二章：承接第一章行动的后果与代价，升级阻力或使信息翻面，回应第一章一个具体期待；不重复设定介绍、心理结论或同型冲突。
@@ -118,7 +121,8 @@ public class OutlineModelPromptFactory {
                 budget.recommendedVolumeCount(), budget.recommendedChapterCount(),
                 budget.recommendedChapterMinWords(), budget.recommendedChapterMaxWords(),
                 modeRules) + com.novelagent.planning.application.ReaderExperiencePlanningGuide.rules()
-                + CreativeStrategyGuide.outlineRules();
+                + CreativeStrategyGuide.outlineRules()
+                + com.novelagent.planning.application.ScenePlanningGuide.planningRules();
     }
 
     private String json(Object value) {

@@ -89,17 +89,18 @@ public class QualityReviewStore {
         this.preparation = preparation;
     }
 
-    public record Snapshot(NovelProject project, ManuscriptVersion manuscript, ChapterContractVersion contract,
+    public record Snapshot(NovelProject project, ManuscriptVersion manuscript, com.novelagent.writing.domain.ManuscriptBasis writingBasis,
             StoryBibleVersion bible, ManuscriptContent rendered, String styleContext, String profileContext, String fingerprint,
             String futureContext) {
         public Snapshot(NovelProject project, ManuscriptVersion manuscript, ChapterContractVersion contract,
                 StoryBibleVersion bible, ManuscriptContent rendered, String styleContext, String profileContext, String fingerprint) {
-            this(project, manuscript, contract, bible, rendered, styleContext, profileContext, fingerprint, "");
+            this(project, manuscript, new com.novelagent.writing.domain.ManuscriptBasis(contract.getSourceOutlineVersionId(),
+                    "legacy", contract.getContent()), bible, rendered, styleContext, profileContext, fingerprint, "");
         }
     }
 
     /**
-     * 读取当前章最新正文及相关合同、圣经、渲染内容、人物档案、风格和准备上下文，构造质量检查来源指纹。不调用模型；模型结果保存前还需重新核对来源。
+     * 读取当前章最新正文及相关大纲计划、圣经、渲染内容、人物档案、风格和准备上下文，构造质量检查来源指纹。不调用模型；模型结果保存前还需重新核对来源。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapter 当前处理章号，从 1 开始。
@@ -109,15 +110,12 @@ public class QualityReviewStore {
         NovelProject project = access.requireOwnedProject(projectId);
         ManuscriptVersion manuscript = manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapter)
                 .orElseThrow(() -> new IllegalArgumentException("请先保存本章正文"));
-        ChapterContractVersion contract = contracts.findByIdAndProjectId(manuscript.getSourceContractVersionId(), projectId).orElseThrow();
-        if (manuscript.getChapterNumber() != chapter || contract.getChapterNumber() != chapter) {
-            throw new IllegalArgumentException("正文或合同不属于当前章节");
-        }
-        var outline = outlines.findByIdAndProjectId(contract.getSourceOutlineVersionId(), projectId)
+        if (manuscript.getChapterNumber() != chapter) throw new IllegalArgumentException("正文不属于当前章节");
+        UUID sourceOutlineId = manuscript.getWritingBasis() != null ? manuscript.getWritingBasis().outlineId()
+                : contracts.findByIdAndProjectId(manuscript.getSourceContractVersionId(), projectId).orElseThrow().getSourceOutlineVersionId();
+        var outline = outlines.findByIdAndProjectId(sourceOutlineId, projectId)
                 .filter(value -> value.getStatus() == OutlineStatus.PUBLISHED).orElseThrow();
-        if (!outline.getId().equals(project.getCurrentOutlineVersionId())
-                || !contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapter).orElseThrow()
-                        .getId().equals(contract.getId())) throw new IllegalArgumentException("正文关联的合同或大纲已更新，请先调整正文");
+        if (!outline.getId().equals(project.getCurrentOutlineVersionId())) throw new IllegalArgumentException("正文关联的大纲已更新，请先调整正文");
         StoryBibleVersion bible = bibles.findByIdAndProjectId(outline.getSourceBibleVersionId(), projectId)
                 .filter(value -> value.getStatus() == StoryBibleStatus.PUBLISHED)
                 .orElseThrow(() -> new IllegalArgumentException("质量检查需要当前已发布故事圣经"));
@@ -129,12 +127,16 @@ public class QualityReviewStore {
         String prepared = preparation == null ? "" : preparation.context(projectId, outline.getId(), chapter);
         if (!prepared.isEmpty()) profile += "\n作者确认的创作准备资料；规划不等于正史或角色已知信息：\n" + prepared;
         String style = styles.promptContext(projectId);
-        return new Snapshot(project, manuscript, contract, bible, rendered, style, profile,
+        var context = WritingContextService.resolve(outline, bible, chapter, CreativeStrategyPolicy.from(project));
+        context = new WritingContextService.Context(outline, bible, context.arc(), context.chapter(),
+                context.previous(), context.next(), context.creativeStrategy(), prepared);
+        var writingBasis = ChapterWritingBasisService.requireCurrent(manuscript, context, contracts);
+        return new Snapshot(project, manuscript, writingBasis, bible, rendered, style, profile,
                 fingerprint(rendered.toString() + "\n" + profile + "\n" + style + "\n" + project.getCurrentCanonVersion()
                         + "\n" + CreativeStrategyGuide.render(CreativeStrategyPolicy.from(project))
                         + "\n" + outline.getId() + ":" + outline.getRowVersion()
                         + "\n" + bible.getId() + ":" + bible.getRowVersion() + ":" + bible.getContent()
-                        + "\n" + contract.getId() + ":" + contract.getRowVersion() + ":" + contract.getContent()
+                        + "\n" + writingBasis
                         + "\n" + outline.getContent()
                         + "\n" + previousSources(projectId, chapter)),
                 "未来边界，仅为当前大纲的计划，不是人物已知信息或已发生事实。来源大纲=" + outline.getId()
@@ -212,7 +214,9 @@ public class QualityReviewStore {
     @Transactional
     public ManuscriptResponse saveRevision(QualityReviewVersion report, ManuscriptVersion draft) {
         Snapshot current = lockedSnapshot(report.getProjectId(), report.getChapterNumber());
-        if (!matches(report, current) || !draft.getSourceContractVersionId().equals(current.contract().getId())
+        if (!matches(report, current) || (draft.getWritingBasis() != null
+                ? !draft.getWritingBasis().outlineId().equals(current.writingBasis().outlineId())
+                : !java.util.Objects.equals(draft.getSourceContractVersionId(), current.manuscript().getSourceContractVersionId()))
                 || !report.getSourceManuscriptId().equals(draft.getBaseManuscriptVersionId())) {
             throw new IllegalStateException("润色期间正文或写作依据已变化，请重新检查");
         }
@@ -267,9 +271,6 @@ public class QualityReviewStore {
             manuscripts.findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(
                     projectId, prior, ManuscriptStatus.AUTHOR_ACCEPTED).ifPresent(value -> source.append("accepted=")
                             .append(value.getId()).append(':').append(value.getRowVersion()).append(':').append(value.getContent()).append('\n'));
-            contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, prior)
-                    .ifPresent(value -> source.append("contract=").append(value.getId()).append(':')
-                            .append(value.getRowVersion()).append(':').append(value.getContent()).append('\n'));
         }
         return source.toString();
     }

@@ -203,6 +203,11 @@ class AutomationPersistenceTest {
             if (((String) call.getArgument(1)).endsWith("BIBLE")) output.set("characterBlueprints", json.valueToTree(List.of(com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安"))));
             return json.writeValueAsString(java.util.Map.of("content", output, "changeSummary", List.of()));
         }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.startsWith("IMPORT_REVERSE_"), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.doReturn(json.valueToTree(java.util.Map.of("characterBlueprints", List.of(
+                com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安")))).toString())
+                .when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.eq("CHARACTER_DESIGN"),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
         var generated = importedPlanning.generate(projectId, source.id(), new com.novelagent.ingest.api.ReversePlanRequest(ModelProvider.DEEPSEEK, accepted.report().confirmedMode(), "", accepted.report().id(), accepted.report().version()));
         assertThat(generated.storyBible().status().toString()).isEqualTo("DRAFT"); assertThat(generated.outline().status().toString()).isEqualTo("DRAFT");
         assertThat(projects.findById(projectId).orElseThrow().getCurrentBibleVersionId()).isEqualTo(bibleId);
@@ -230,12 +235,12 @@ class AutomationPersistenceTest {
             assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             String stage = call.getArgument(1); var input = json.readTree((String) call.getArgument(4));
             return json.writeValueAsString(switch (stage) {
-                case "CREATION_PREPARATION_WORLD" -> preparationWorld();
+                case "CHARACTER_DESIGN" -> preparationWorld();
                 case "CREATION_PREPARATION_PLOT" -> preparationPlot();
                 case "CREATION_PREPARATION_REVIEW" -> review.apply(input);
                 default -> throw new IllegalArgumentException("unexpected stage");
             });
-        }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.startsWith("CREATION_PREPARATION_"),
+        }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.matches("CHARACTER_DESIGN|CREATION_PREPARATION_.*"),
                 org.mockito.ArgumentMatchers.eq(ModelProvider.DEEPSEEK), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
     }
@@ -405,10 +410,7 @@ class AutomationPersistenceTest {
     private void commitForeshadowChapter(int chapter) {
         var request = new com.novelagent.writing.api.GenerateWritingRequest(ModelProvider.LOCAL_TEMPLATE, null,
                 com.novelagent.planning.application.GenerationMode.REGENERATE, null, null);
-        var contract = writing.generateContract(projectId, chapter, request);
-        var contractReview = writing.generateContractReview(projectId, chapter, request);
-        writing.approveContractReview(projectId, contractReview.id(), contractReview.version(), null);
-        writing.approveContract(projectId, contract.id(), contract.version());
+
         var manuscript = writing.generateManuscript(projectId, chapter, request);
         String evidence = "林安发现纸条背面有半个签名。";
         manuscript = writing.updateManuscript(projectId, manuscript.id(), manuscript.version(),
@@ -576,9 +578,9 @@ class AutomationPersistenceTest {
             assertThat(json.readTree((String) call.getArgument(4)).path("storyBible").path("characterBlueprints")).isEmpty();
             return output.toString();
         }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId),
-                org.mockito.ArgumentMatchers.eq("CHARACTER_BLUEPRINT_COMPLETION"), org.mockito.ArgumentMatchers.eq(ModelProvider.DEEPSEEK),
+                org.mockito.ArgumentMatchers.eq("CHARACTER_DESIGN"), org.mockito.ArgumentMatchers.eq(ModelProvider.DEEPSEEK),
                 org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(8000), org.mockito.ArgumentMatchers.any());
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(10000), org.mockito.ArgumentMatchers.any());
         var draft = characterCompletion.complete(projectId, sourceId, source.getRowVersion(), ModelProvider.DEEPSEEK, "补全缺失人物");
         assertThat(calls.get()).isOne();
         assertThat(draft.status()).isEqualTo(com.novelagent.planning.domain.StoryBibleStatus.DRAFT);
@@ -1013,12 +1015,7 @@ class AutomationPersistenceTest {
         assertThat(automation.create(projectId, key, request).id()).isEqualTo(id);
         for (int chapter = 1; chapter <= 2; chapter++) {
             awaitWaiting(id);
-            var contract = writing.latestContract(projectId, chapter).orElseThrow();
-            var contractReview = writing.latestContractReview(projectId, chapter).orElseThrow();
-            writing.approveContractReview(projectId, contractReview.id(), contractReview.version(), null);
-            writing.approveContract(projectId, contract.id(), contract.version());
-            automation.resume(projectId, id);
-            awaitWaiting(id);
+
             var manuscript = writing.latestManuscript(projectId, chapter).orElseThrow();
             assertThat(writing.latestReview(projectId, chapter)).isEmpty();
             writing.acceptManuscript(projectId, manuscript.id(), manuscript.version());
@@ -1036,7 +1033,7 @@ class AutomationPersistenceTest {
         }
         awaitSettled(id);
         assertThat(automation.get(projectId, id).status()).isEqualTo(AutomationStatus.SUCCEEDED);
-        assertThat(automation.get(projectId, id).steps()).hasSize(8);
+        assertThat(automation.get(projectId, id).steps()).hasSize(4);
         assertThat(projects.findById(projectId).orElseThrow().getCurrentCanonVersion()).isEqualTo(2);
     }
 
@@ -1046,23 +1043,18 @@ class AutomationPersistenceTest {
                 new CreateAutomationRunRequest(1, 1, ModelProvider.LOCAL_TEMPLATE, null, true)).id();
         awaitWaiting(id);
         assertThat(automation.get(projectId, id).qualityReviewEnabled()).isTrue();
-        var contract = writing.latestContract(projectId, 1).orElseThrow();
-        var contractReview = writing.latestContractReview(projectId, 1).orElseThrow();
-        writing.approveContractReview(projectId, contractReview.id(), contractReview.version(), null);
-        writing.approveContract(projectId, contract.id(), contract.version());
-        automation.resume(projectId, id);
-        awaitWaiting(id);
+
         var report = quality.latest(projectId, 1).orElseThrow();
         assertThat(report.current()).isTrue();
         assertThat(automation.get(projectId, id).steps()).extracting(step -> step.stage())
-                .containsExactly("CONTRACT", "CONTRACT_REVIEW", "MANUSCRIPT", "QUALITY_REVIEW");
+                .containsExactly("MANUSCRIPT", "QUALITY_REVIEW");
         var manuscript = writing.latestManuscript(projectId, 1).orElseThrow();
         assertThat(manuscript.status().name()).isEqualTo("DRAFT");
         assertThat(writing.latestReview(projectId, 1)).isEmpty();
         automation.resume(projectId, id);
         awaitWaiting(id);
         assertThat(quality.latest(projectId, 1).orElseThrow().id()).isEqualTo(report.id());
-        assertThat(automation.get(projectId, id).steps()).hasSize(4);
+        assertThat(automation.get(projectId, id).steps()).hasSize(2);
         manuscript = writing.updateManuscript(projectId, manuscript.id(), manuscript.version(),
                 new com.novelagent.writing.domain.ManuscriptContent("纸条", "然后他走到门口，接着看见纸条，随后停下来。。", "发现纸条", List.of()));
         automation.resume(projectId, id);
@@ -1103,10 +1095,7 @@ class AutomationPersistenceTest {
                 .isInstanceOf(com.novelagent.project.application.ResourceVersionConflictException.class);
         var request = new com.novelagent.writing.api.GenerateWritingRequest(ModelProvider.LOCAL_TEMPLATE, null,
                 com.novelagent.planning.application.GenerationMode.REGENERATE, null, null);
-        var contract = writing.generateContract(projectId, 1, request);
-        var contractReview = writing.generateContractReview(projectId, 1, request);
-        writing.approveContractReview(projectId, contractReview.id(), contractReview.version(), null);
-        writing.approveContract(projectId, contract.id(), contract.version());
+
         var manuscript = writing.generateManuscript(projectId, 1, request);
         String repeated = "然后林安走到门口，接着看见纸条，随后停下脚步。。";
         var content = new com.novelagent.writing.domain.ManuscriptContent("失物", repeated + "\n" + repeated, "林安发现纸条", List.of());
@@ -1151,10 +1140,7 @@ class AutomationPersistenceTest {
     void returnedReviewAndCandidateRollBackTogetherWhenSavingReviewFails() {
         var request = new com.novelagent.writing.api.GenerateWritingRequest(ModelProvider.LOCAL_TEMPLATE, null,
                 com.novelagent.planning.application.GenerationMode.REGENERATE, null, null);
-        var contract = writing.generateContract(projectId, 1, request);
-        var contractReview = writing.generateContractReview(projectId, 1, request);
-        writing.approveContractReview(projectId, contractReview.id(), contractReview.version(), null);
-        writing.approveContract(projectId, contract.id(), contract.version());
+
         var draft = writing.generateManuscript(projectId, 1, request);
         writing.acceptManuscript(projectId, draft.id(), draft.version());
         var generatedReview = writing.generateReview(projectId, 1, request);
@@ -1210,9 +1196,17 @@ class AutomationPersistenceTest {
         var request = new CreateAutomationRunRequest(1, 1, ModelProvider.LOCAL_TEMPLATE, null, false, 0, 1);
         UUID id = automation.create(projectId, key, request).id();
         awaitWaiting(id);
+        assertThat(automation.get(projectId, id).waitingReason()).contains("作者确认正文");
+        var draft = writing.latestManuscript(projectId, 1).orElseThrow();
+        assertThat(draft.sourceContractVersionId()).isNull();
+        assertThat(draft.writingBasis().outlineId()).isEqualTo(projects.findById(projectId).orElseThrow().getCurrentOutlineVersionId());
+        writing.acceptManuscript(projectId, draft.id(), draft.version());
+        automation.resume(projectId, id);
+        awaitWaiting(id);
         assertThat(automation.get(projectId, id).waitingReason()).contains("生成次数上限");
         assertThat(automation.get(projectId, id).usedGenerationSteps()).isEqualTo(1);
-        assertThat(writing.latestContract(projectId, 1)).isPresent();
+        assertThat(writing.latestManuscript(projectId, 1)).isPresent();
+        assertThat(writing.latestContract(projectId, 1)).isEmpty();
         assertThat(writing.latestContractReview(projectId, 1)).isEmpty();
         automation.resume(projectId, id);
         awaitWaiting(id);
@@ -1231,10 +1225,7 @@ class AutomationPersistenceTest {
     void automaticRevisionUsesRealGraphAndPersistenceWithControlledModelOutput() throws Exception {
         var local = new com.novelagent.writing.api.GenerateWritingRequest(ModelProvider.LOCAL_TEMPLATE, null,
                 com.novelagent.planning.application.GenerationMode.REGENERATE, null, null);
-        var contract = writing.generateContract(projectId, 1, local);
-        var contractReview = writing.generateContractReview(projectId, 1, local);
-        writing.approveContractReview(projectId, contractReview.id(), contractReview.version(), null);
-        writing.approveContract(projectId, contract.id(), contract.version());
+
         var initial = writing.generateManuscript(projectId, 1, local);
         String body = "林安停在门口。他看见了纸条。。";
         var original = writing.updateManuscript(projectId, initial.id(), initial.version(),

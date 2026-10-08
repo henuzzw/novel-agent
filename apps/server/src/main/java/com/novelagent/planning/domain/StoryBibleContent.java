@@ -18,7 +18,8 @@ public record StoryBibleContent(
         List<String> hardConstraints,
         List<String> openQuestions,
         List<CharacterBlueprint> characterBlueprints,
-        List<ReaderExperienceSeed> readerExperiencePlans) {
+        List<ReaderExperienceSeed> readerExperiencePlans,
+        String developmentNotes) {
 
     public StoryBibleContent {
         readerExperiencePlans = validatedPlans(readerExperiencePlans);
@@ -27,6 +28,29 @@ public record StoryBibleContent(
         if (characterBlueprints.stream().map(CharacterBlueprint::name).distinct().count() != characterBlueprints.size()) {
             throw new IllegalArgumentException("人物底稿姓名不能重复，请用身份区分同名人物");
         }
+    }
+
+    public StoryBibleContent withCharacterBlueprints(List<CharacterBlueprint> characters) {
+        return new StoryBibleContent(logline, theme, worldSetting, worldRules, protagonist, protagonistArc,
+                supportingCharacters, relationshipDynamics, centralConflict, stakes, narrativeStyle,
+                endingDirection, hardConstraints, openQuestions, characters, readerExperiencePlans, developmentNotes);
+    }
+
+    /** Keep the original free prose available to outlines, without interpreting literary structure. */
+    public StoryBibleContent withDevelopmentNotes(String notes) {
+        return new StoryBibleContent(logline, theme, worldSetting, worldRules, protagonist, protagonistArc,
+                supportingCharacters, relationshipDynamics, centralConflict, stakes, narrativeStyle,
+                endingDirection, hardConstraints, openQuestions, characterBlueprints, readerExperiencePlans, notes);
+    }
+
+    public StoryBibleContent(String logline, String theme, String worldSetting, List<String> worldRules,
+            String protagonist, String protagonistArc, List<String> supportingCharacters,
+            List<String> relationshipDynamics, String centralConflict, String stakes, String narrativeStyle,
+            String endingDirection, List<String> hardConstraints, List<String> openQuestions,
+            List<CharacterBlueprint> characterBlueprints, List<ReaderExperienceSeed> readerExperiencePlans) {
+        this(logline, theme, worldSetting, worldRules, protagonist, protagonistArc, supportingCharacters,
+                relationshipDynamics, centralConflict, stakes, narrativeStyle, endingDirection,
+                hardConstraints, openQuestions, characterBlueprints, readerExperiencePlans, null);
     }
 
     static List<ReaderExperienceSeed> validatedPlans(List<ReaderExperienceSeed> values) {

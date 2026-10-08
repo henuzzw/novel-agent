@@ -37,8 +37,8 @@ class WritingPromptRevisionTest {
                 contract(), memory(), previous, "增强对话张力");
 
         assertThat(prompt.user()).contains("选定的基准正文版本（完整 JSON）", "需要保留的原文",
-                "当前章节合同", "不得借机整体重写", "changeSummary", "实际修改");
-        assertThat(prompt.system()).contains("降低模板化的 AI 写作感", "让读者愿意跟随人物继续读下去");
+                "当前本章大纲计划", "不得借机整体重写", "changeSummary", "实际修改");
+        assertThat(prompt.system()).contains("将规划写成现场发生的故事", "压缩重复解释", "继续阅读的理由");
         assertThat(prompt.user()).contains("修订旧稿时只在确有必要的地方改善节奏和表达");
         assertThat(prompt.user()).contains("只处理获授权的问题层次", "仅润色语句时保留事件及其先后",
                 "不擅自删并场景或改变情节");
@@ -56,7 +56,7 @@ class WritingPromptRevisionTest {
         WritingPromptFactory.Prompt prompt = factory.contract(UUID.randomUUID(), bible(), arc(), chapter(),
                 memory(), contract(), "只调整必写节拍");
 
-        assertThat(prompt.user()).contains("选定的基准章节合同（完整 JSON）", "退出状态", "钩子",
+        assertThat(prompt.user()).contains("选定的基准本章大纲计划（完整 JSON）", "退出状态", "钩子",
                 "未受影响的目标", "只调整必写节拍");
         assertThat(prompt.system()).contains("当前故事圣经", "章节计划优先于历史合同");
     }
@@ -73,7 +73,7 @@ class WritingPromptRevisionTest {
         WritingPromptFactory.Prompt prompt = factory.manuscript(UUID.randomUUID(), bible(), arc(), chapter(),
                 contract(), memory(), null, null);
 
-        assertThat(prompt.system()).contains("可信、具体", "不替读者总结", "具体冲突、信息变化和人物选择");
+        assertThat(prompt.system()).contains("人物诉求、阻力、互动、选择和后果", "不复述设计说明", "不更换核心事件及其结果");
         assertThat(prompt.system()).contains("前两章上下文用于衔接", "有效正史事实优先");
         assertThat(prompt.user()).contains(
                 "以具体场景为基本单位",
@@ -87,6 +87,8 @@ class WritingPromptRevisionTest {
                 "不强迫每段和每章都制造钩子");
         assertThat(prompt.user()).contains("用准确动词", "涉及误认、认知延迟或视角限制时保留",
                 "不规定感官、比喻或句长配额", "避免双方复述彼此早已知道的背景", "不为技法编造动机");
+        assertThat(prompt.user()).contains("直接落实本章 sceneOutline", "不再生成或展示另一个准备结果",
+                "旧文本仅供核对", "不把清单、设计说明和检查条目写进小说");
         assertThat(prompt.user()).doesNotContain("只处理获授权的问题层次", "scripts/draft_diagnostics.py");
     }
 
@@ -132,7 +134,7 @@ class WritingPromptRevisionTest {
         for (var prompt : List.of(draft, revision, preview, review)) {
             assertThat(prompt.user()).contains(guide);
         }
-        assertThat(draft.system()).contains("从第一稿就落实选定风格", "示例不能成为本书事实");
+        assertThat(draft.system()).contains("从第一稿就落实项目选定风格", "风格示例不得成为本书情节");
         assertThat(draft.user()).contains("不是统一文风", "不一律要求少比喻", "必要的直接心理表达可以保留");
         assertThat(revision.user()).contains("只处理获授权的问题层次", "保留这段正文", "不得借机整体重写");
         assertThat(review.user()).contains("description 指明偏离的档案维度", "suggestion 写出怎样落实该特征",

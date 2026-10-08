@@ -26,9 +26,9 @@ describe('automation API', () => {
     run.steps[1]!.stage = 'QUALITY_REVISION'
     expect(automationChapterTarget(run).mode).toBe('manuscript')
     run.steps[1]!.stage = 'CONTRACT_REVIEW'
-    expect(automationChapterTarget(run).mode).toBe('contractReview')
+    expect(automationChapterTarget(run).mode).toBe('manuscript')
     run.steps = run.steps.slice(0, 1)
-    expect(automationChapterTarget(run).mode).toBe('contract')
+    expect(automationChapterTarget(run).mode).toBe('manuscript')
   })
 
   it('surfaces server validation errors', async () => {

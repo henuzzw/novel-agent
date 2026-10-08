@@ -13,12 +13,9 @@ import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.api.GenerateWritingRequest;
 import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.ManuscriptVersionSummaryResponse;
-import com.novelagent.writing.domain.ChapterContractStatus;
-import com.novelagent.writing.domain.ChapterContractVersion;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ManuscriptVersion;
-import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import java.util.List;
 import java.util.Optional;
@@ -29,23 +26,21 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 章节正文。
  *
- * <p>依据已确认合同生成单份正文草稿，并维护编辑、手动修订、作者确认和导出。生成复核上游依据、保存来源合同及基准稿关联；作者确认不等于提交正史。</p>
+ * <p>依据已发布圣经和本章大纲生成单份正文草稿，并维护编辑、手动修订、作者确认和导出。生成复核上游依据、保存写作依据快照及基准稿关联；作者确认不等于提交正史。</p>
  */
 @Service
 public class ManuscriptService {
     private final WritingContextService contexts;
-    private final ChapterContractVersionRepository contracts;
     private final ManuscriptVersionRepository manuscripts;
     private final WritingGenerationWorkflow workflow;
     private final ContextBudgetPlanner budgetPlanner;
     private final CharacterNameService characterNames;
     private final WritingStyleService styles;
 
-    public ManuscriptService(WritingContextService contexts, ChapterContractVersionRepository contracts,
+    public ManuscriptService(WritingContextService contexts,
             ManuscriptVersionRepository manuscripts, WritingGenerationWorkflow workflow,
             ContextBudgetPlanner budgetPlanner, CharacterNameService characterNames, WritingStyleService styles) {
         this.contexts = contexts;
-        this.contracts = contracts;
         this.manuscripts = manuscripts;
         this.workflow = workflow;
         this.budgetPlanner = budgetPlanner;
@@ -83,7 +78,7 @@ public class ManuscriptService {
     }
 
     /**
-     * 按项目、章号及版本 ID 读取指定正文，保留其合同来源、基准稿与状态。
+     * 按项目、章号及版本 ID 读取指定正文，保留其大纲来源（历史正文保留合同来源）、基准稿与状态。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -97,7 +92,7 @@ public class ManuscriptService {
     }
 
     /**
-     * 依据本章已确认且属于当前大纲的合同生成一份新正文草稿，复核上游来源后保存，不直接确认或提交正史。
+     * 依据当前已发布圣经和本章大纲计划生成一份新正文草稿，复核上游来源后保存，不直接确认或提交正史。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -108,7 +103,7 @@ public class ManuscriptService {
     }
 
     /**
-     * 构建未持久化的新正文版本：读取确认合同、分配记忆预算、调用模型并复核合同、基准稿与风格。调用方负责随后保存。
+     * 构建未持久化的新正文版本：读取当前章节计划、分配记忆预算、调用模型并复核圣经与大纲、基准稿与风格。调用方负责随后保存。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -117,16 +112,8 @@ public class ManuscriptService {
     ManuscriptVersion prepareManuscript(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
         WritingContextService.Context context = contexts.context(projectId, chapterNumber);
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
-        ChapterContractVersion contract = contracts
-                .findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(
-                        projectId, chapterNumber, ChapterContractStatus.APPROVED)
-                .orElseThrow(() -> new IllegalArgumentException("请先生成并确认本章的章节合同"));
-        if (!contract.getSourceOutlineVersionId().equals(context.outline().getId())) {
-            throw new IllegalArgumentException("章节合同来自旧大纲，请按当前已发布大纲重新生成并确认");
-        }
-        long contractRowVersion = contract.getRowVersion();
-        ChapterContractContentSnapshot contractSnapshot = new ChapterContractContentSnapshot(contract.getId(),
-                contractRowVersion, contract.getContent());
+        var writingBasis = ChapterWritingBasisService.capture(context);
+        var plan = writingBasis.plan();
         ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
         Optional<ManuscriptVersion> latest = manuscripts
                 .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber);
@@ -142,19 +129,15 @@ public class ManuscriptService {
         ManuscriptContent previousContent = base == null ? null : base.getContent();
         String styleContext = styles.promptContext(projectId);
         MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.MANUSCRIPT, provider,
-                context.budgetInputs(context.bible().getContent(), context.arc(), context.chapter(), contract.getContent(),
+                context.budgetInputs(context.bible().getContent(), context.arc(), context.chapter(), plan,
                         previousContent, request.instruction(), styleContext));
         NovelMemoryContext recalled = contexts.recall(AgentStage.MANUSCRIPT, context, request.instruction(), budget);
         GeneratedManuscript generated = workflow.generateManuscript(projectId, context.bible().getContent(), context.arc(),
-                context.chapter(), contract.getContent(), recalled, previousContent, provider,
+                context.chapter(), plan, recalled, previousContent, provider,
                 context.instructionWithPreparation(normalize(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
-        ChapterContractVersion currentContract = contracts
-                .findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(
-                        projectId, chapterNumber, ChapterContractStatus.APPROVED).orElseThrow();
-        if (!contractSnapshot.matches(currentContract)
-                || !java.util.Objects.equals(styleContext, styles.promptContext(projectId))) {
-            throw new IllegalStateException("生成期间章节合同或写作风格已变化，请刷新后重试");
+        if (!java.util.Objects.equals(styleContext, styles.promptContext(projectId))) {
+            throw new IllegalStateException("生成期间写作风格已变化，请刷新后重试");
         }
         if (base != null) {
             ManuscriptVersion currentBase = manuscripts.findByIdAndProjectIdAndChapterNumber(
@@ -165,10 +148,10 @@ public class ManuscriptService {
         }
         ManuscriptContent generatedContent = characterNames.tokenize(projectId, generated.content());
         int version = latest.map(value -> value.getVersionNumber() + 1).orElse(1);
-        return ManuscriptVersion.create(UUID.randomUUID(), projectId, contract.getId(),
+        return ManuscriptVersion.create(UUID.randomUUID(), projectId, null,
                 chapterNumber, version, provider.name(), normalize(request.instruction()),
                 base == null ? null : base.getId(), generatedContent,
-                generated.changeSummary());
+                generated.changeSummary()).withWritingBasis(writingBasis);
     }
 
     /**
@@ -192,7 +175,7 @@ public class ManuscriptService {
         if (provider == null || provider == ModelProvider.LOCAL_TEMPLATE) {
             return ManuscriptVersion.create(UUID.randomUUID(), projectId, source.getSourceContractVersionId(),
                     chapterNumber, source.getVersionNumber() + 1, ModelProvider.LOCAL_TEMPLATE.name(), feedback,
-                    sourceId, source.getContent(), List.of("本地模板仅创建版本流程候选，保留原稿，未执行语义润色。"));
+                    sourceId, source.getContent(), List.of("本地模板仅创建版本流程候选，保留原稿，未执行语义润色。")).inheritWritingBasis(source);
         }
         return prepareManuscript(projectId, chapterNumber, new GenerateWritingRequest(provider, feedback,
                 GenerationMode.REVISE, sourceId, null));
@@ -239,7 +222,7 @@ public class ManuscriptService {
         }
         ManuscriptVersion revision = ManuscriptVersion.create(UUID.randomUUID(), projectId,
                 source.getSourceContractVersionId(), chapterNumber, latest.getVersionNumber() + 1,
-                "AUTHOR_EDIT", null, sourceId, source.getContent(), List.of());
+                "AUTHOR_EDIT", null, sourceId, source.getContent(), List.of()).inheritWritingBasis(source);
         return manuscriptResponse(manuscripts.saveAndFlush(revision));
     }
 
@@ -289,11 +272,4 @@ public class ManuscriptService {
         return characterNames.render(value.getProjectId(), value.getContent());
     }
 
-    private record ChapterContractContentSnapshot(UUID id, long rowVersion,
-            com.novelagent.writing.domain.ChapterContractContent content) {
-        boolean matches(ChapterContractVersion value) {
-            return id.equals(value.getId()) && rowVersion == value.getRowVersion()
-                    && java.util.Objects.equals(content, value.getContent());
-        }
-    }
 }
