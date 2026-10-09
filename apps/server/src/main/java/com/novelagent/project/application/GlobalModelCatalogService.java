@@ -16,9 +16,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class GlobalModelCatalogService {
     private final CodexAppServerClient codex;
+    private final com.novelagent.modelaccess.application.ChatGptTransportService transport;
+    private final com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient direct;
 
     public GlobalModelCatalogService(CodexAppServerClient codex) {
+        this(codex, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public GlobalModelCatalogService(CodexAppServerClient codex,
+            com.novelagent.modelaccess.application.ChatGptTransportService transport,
+            com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient direct) {
         this.codex = codex;
+        this.transport = transport;
+        this.direct = direct;
     }
 
     /**
@@ -28,6 +39,16 @@ public class GlobalModelCatalogService {
      */
     public List<ModelOption> chatGptModels() {
         List<ModelOption> options = new ArrayList<>();
+        if (transport != null && transport.direct()) {
+            for (JsonNode model : direct.models().path("models")) {
+                String id = model.path("slug").asText();
+                if (!id.isBlank() && "list".equals(model.path("visibility").asText()))
+                    options.add(new ModelOption(id, model.path("display_name").asText(id), List.of(), "medium"));
+            }
+            if (options.isEmpty()) throw new IllegalStateException("当前 ChatGPT 账号未返回可选模型");
+            // SIWC's catalog does not promise reasoning-effort capabilities. Do not fabricate them.
+            return List.copyOf(options);
+        }
         for (JsonNode model : codex.listModels()) {
             if (model.path("hidden").asBoolean(false)) continue;
             List<String> efforts = new ArrayList<>();
@@ -53,7 +74,7 @@ public class GlobalModelCatalogService {
     public GlobalModelSettings validate(GlobalModelSettings value) {
         if (value.provider() == ModelProvider.LOCAL_CODEX) {
             boolean supported = chatGptModels().stream().anyMatch(option -> option.model().equals(value.codexModel())
-                    && option.efforts().contains(value.codexEffort()));
+                    && (transport != null && transport.direct() || option.efforts().contains(value.codexEffort())));
             if (!supported) throw new IllegalArgumentException("当前 ChatGPT 接入不支持所选模型或推理强度");
         }
         return value;

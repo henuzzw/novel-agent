@@ -8,6 +8,8 @@
 
 ### 2026-10-09 系统与用户提示词配对编辑
 
+ChatGPT OAuth 直连入口新增后，每轮将配对系统文本作为 Responses `instructions` 发送，历史由本系统保存并完整发送，正常规划阶段切换复用。App Server 的 `developerInstructions` 不是对 Codex 内置基础系统提示词的替换，已挂载线程提前返回导致后续更新缺口仍保留，不宣称该旧入口已经修复。新增入口与底层 HTTP 验证见 [ChatGPT 直连接入](NOVEL_AGENT_CHATGPT_DIRECT_ACCESS.md)，活动 Agent 职责和纯文本保存协议不变。
+
 - 提示词管理在同一阶段界面编辑实际系统角色和用户阶段规范，配对保存、恢复默认及载入历史；数据库 V055 新增 `session_system_prompt`，既有 `system_prompt` 保留为阶段规范，不覆盖已保存自定义文本。
 - Codex 和 DeepSeek 共用实际请求组装：系统提示词追加固定事实/授权边界，用户提示词追加阶段规则、纯文本保存标题协议和动态创作资料。任务详情记录实际文本，HTTP 日志仅记录字符数。
 - **不改回 JSON**：模型继续返回纯文本，供应商请求不发送 JSON Schema；内部类型化解析、快照保存和确认门禁不变。

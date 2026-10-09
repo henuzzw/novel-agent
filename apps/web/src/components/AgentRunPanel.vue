@@ -24,7 +24,7 @@ const stageNames: Record<string, string> = {
   IMPORT_REVERSE_BIBLE: '导入反推故事圣经', IMPORT_REVERSE_OUTLINE: '导入反推大纲',
   SNOWFLAKE_PLANNING: '雪花渐进规划', CHARACTER_DESIGN: '统一人物设计', CHARACTER_BLUEPRINT_COMPLETION: '人物底稿补全（历史）', PLANNING_CHECKPOINT: '分块规划',
 }
-const providerNames: Record<string, string> = { LOCAL_CODEX: '服务端 Codex', DEEPSEEK: 'DeepSeek', LOCAL_TEMPLATE: '本地模板' }
+const providerNames: Record<string, string> = { LOCAL_CODEX: 'ChatGPT', DEEPSEEK: 'DeepSeek', LOCAL_TEMPLATE: '本地模板' }
 function tokens(value: number) { return new Intl.NumberFormat('zh-CN').format(value) }
 function time(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
 function refresh() { runsQuery.refetch(); summaryQuery.refetch() }

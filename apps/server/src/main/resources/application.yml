@@ -107,6 +107,10 @@ app:
       runtime-directory: ${CODEX_RUNTIME_DIRECTORY:${java.io.tmpdir}/novel-agent-codex}
       auth-source: ${CODEX_AUTH_SOURCE:${user.home}/.codex/auth.json}
       proxy-url: ${CODEX_PROXY_URL:}
+    chatgpt:
+      connection-admin-key: ${CHATGPT_CONNECTION_ADMIN_KEY:}
+      # Private owner-only credentials; never use desktop Codex auth.json on the SIWC route.
+      credential-directory: ${CHATGPT_CREDENTIAL_DIRECTORY:${user.home}/.novel-agent/chatgpt}
     deepseek:
       api-key: ${DEEPSEEK_API_KEY:}
       base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}

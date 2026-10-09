@@ -39,8 +39,10 @@ public class HttpLogSanitizer {
         String field = key.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
         if (field.contains("password") || field.contains("secret") || field.contains("token")
                 && !field.endsWith("tokens") && !field.equals("tokensource")
-                || field.contains("apikey") || field.equals("authorization") || field.equals("cookie")
-                || field.equals("setcookie") || field.equals("credential") || field.equals("auth")) {
+                || field.contains("apikey") || field.contains("adminkey") || field.equals("authorization") || field.equals("cookie")
+                || field.equals("setcookie") || field.equals("credential") || field.equals("auth")
+                || field.equals("callbackurl") || field.equals("authorizationurl") || field.equals("code")
+                || field.equals("state") || field.equals("nonce") || field.equals("codeverifier")) {
             return TextNode.valueOf("[REDACTED]");
         }
         if (node.isObject()) {

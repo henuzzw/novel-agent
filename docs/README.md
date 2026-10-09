@@ -6,6 +6,8 @@ HTTP 请求日志已统一记录项目 ID、请求 ID、参数／响应摘要、
 
 ## 当前进度
 
+新增 ChatGPT OAuth 直连候选入口，默认保留 Codex App Server，作者授权后手动切换；每轮实际发送当前系统指令与完整本地历史，纯文本返回不变，失败不自动换账号/供应商。新增 V056、私有凭据目录和连接管理口令，真实 SIWC 账号可用性待实际授权确认。详见 [ChatGPT 直连接入](NOVEL_AGENT_CHATGPT_DIRECT_ACCESS.md)。
+
 新增“提示词管理”：顶部入口或项目设置进入，可编辑 23 个 Agent 的系统指令和阶段执行规则；导入改编/续写分开，共 25 份模板。自定义内容和历史保存数据库，支持搜索、版本冲突保护、恢复默认、历史载入及未保存提醒；后续 ChatGPT/DeepSeek 调用使用实际保存文本，历史任务与项目结果不变。需重启后端加载 V049，详见 [提示词管理](NOVEL_AGENT_PROMPT_MANAGEMENT.md)。
 
 23 种模型工作流的实际先后关系、可选分支、作者确认门禁和返工回路见 [Agent 拓扑流程图](NOVEL_AGENT_AGENT_TOPOLOGY.md)。

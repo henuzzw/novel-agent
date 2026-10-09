@@ -8,7 +8,10 @@ public record ModelFailureDetails(String type, String category, String summary, 
         String normalized = text.toLowerCase(Locale.ROOT);
         String category;
         String summary;
-        if (exception instanceof GenerationStoppedException) {
+        if (exception instanceof com.novelagent.modelaccess.application.ChatGptAccessException access) {
+            category = access.category();
+            summary = text;
+        } else if (exception instanceof GenerationStoppedException) {
             category = "CANCELLED";
             summary = text;
         } else if (text.startsWith("原文解析输出校验失败")) {

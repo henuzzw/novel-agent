@@ -28,7 +28,7 @@ Novel Agent 是面向长篇小说作者的可控创作系统。服务端负责�
 | 向量检索 | PostgreSQL pgvector，统一 1024 维；本地或 OpenAI-compatible Embedding |
 | 图谱 | Spring Data Neo4j、Neo4j |
 | 消息 | Spring Kafka、Kafka KRaft |
-| 模型 | Codex App Server、DeepSeek Responses、本地模板 |
+| 模型 | Codex App Server、SIWC ChatGPT OAuth Responses SSE、DeepSeek Responses、本地模板 |
 | 测试 | JUnit 5、Spring Boot Test |
 
 Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
@@ -61,6 +61,9 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 最后更新：2026-10-09。
 
 ### 4.1 已完成
+
+- V056 ChatGPT OAuth 直连：新增 `modelaccess` 模块，按官方 SIWC 应用注册、PKCE/state/nonce、JWKS 身份签名及账号绑定登录；凭据保存在仓库外仅文件所有者可读的私有目录，跨进程文件锁串行刷新轮换令牌。全局设置可显式选择 App Server 或 SIWC HTTP，无自动账户/供应商/计费回退，默认仍是旧入口。直连每轮向公开 Responses API 发送当前 `instructions`、完整本地历史、`store=false` 和流式请求，不发送输出 Schema；规划共享历史、B/C 独立，只有 completed 且现有解析/保存成功后追加历史。V056 保存用户入口与项目会话租约，不保存凭据。账号管理接口需 `CHATGPT_CONNECTION_ADMIN_KEY`，前端仅内存保存；固定开发用户仍不是正式认证，禁止无保护公网部署。真实账户授权/模型可用性待验证，旧 App Server 的已挂载会话指令更新缺口未在本轮修复。详见 `../../docs/NOVEL_AGENT_CHATGPT_DIRECT_ACCESS.md`。
+  验证：相关后端24项（含隔离数据库3项）、前端6项、单尺寸浏览器1项及类型/ESLint通过，未跑全量。作者授权后配置仓库忽略的私有管理口令并重启8081，V056已加载，健康UP，5173代理连接查询与本机登录发起/取消可用，无口令403；未授权或请求真实模型，旧模型设置版本5与入口保持。忙碌检查区分本次实例运行任务和跨实例有效直连租约，旧遗留RUNNING不更改、不永久阻塞账号操作。
 
 - V055 配对提示词编辑（2026-10-09）：每个 Agent 的真实系统角色 `sessionSystemPrompt` 与用户阶段指令 `systemPrompt` 在同一提示词页独立编辑、共同保存/恢复/历史版本；原字段保留阶段语义，新字段在配置与历史表可空表示资源默认。网关对 Codex/DeepSeek 统一发送真实系统角色及固定业务边界、用户阶段规范及动态资料，记录实际两份文本，模型输出继续纯文本、供应商不发送 JSON Schema。共享规划会话版本聚合全部规划模板版本，阶段切换复用、保存/恢复后轮转，独立 B/C 会话策略不变。HTTP 日志对新字段只记录字符数。需重启后端加载迁移；不改已生成资料、不自动调用真实模型。详见 `../../docs/NOVEL_AGENT_PROMPT_MANAGEMENT.md`。
   部署验证：作者授权后核实 19 个项目无进行中模型/自动任务，已重启后端 8081 并加载 V055；健康 UP、前端 5173 代理接口 200，新配对字段齐全，23 份原阶段文本/规则指纹与配置版本均保持。相关后端与隔离数据库测试、前端 8 项单元/2 项单尺寸交互、类型/ESLint 通过；未跑全量或调用真实模型。
@@ -193,6 +196,7 @@ src/main/java/com/novelagent
 ├── agent         Agent 阶段定义、只读 Tool、白名单与工具编排
 ├── project       项目、创作入口、创作意图和当前版本指针
 ├── prompt        全局阶段指令、默认目录、配置版本和历史
+├── modelaccess   ChatGPT OAuth、显式入口、私有凭据、HTTP 流式与会话历史
 ├── planning      故事方向、故事圣经、大纲、模型生成适配
 ├── writing       章节合同、正文、审稿和候选事实
 ├── memory        pgvector 召回、图谱查询、Embedding、Token 预算
@@ -435,6 +439,7 @@ src/main/resources/db/migration
 | V049 | 用户全局 Agent 提示词、不可变版本历史、Codex 会话提示词版本 |
 | V050 | 正文来源改为可空合同关联与 writing_basis 写作依据 JSONB |
 | V051 | 雪花规划输入快照、四阶段自由文本、状态与错误；候选规划不写正史 |
+| V056 | 用户 ChatGPT 入口选择与 HTTP 会话历史/租约；OAuth 凭据不入库 |
 
 人物引用规则：
 
@@ -481,6 +486,7 @@ src/main/resources/db/migration
 | --- | --- |
 | `ProjectController` | 项目创建、列表、详情、创作意图 |
 | `GlobalModelSettingsController` | 当前用户全局模型设置、乐观版本更新、ChatGPT 运行时模型与强度目录 |
+| `ChatGptConnectionController` | 管理口令保护的 ChatGPT OAuth 登录/回调/取消/断开与显式入口切换 |
 | `AgentPromptController` | 当前用户全局提示词目录、版本保存、恢复默认、最近50版历史 |
 | `AutomationController` | 章节范围任务创建、查询、继续、显式重试和取消 |
 | `WritingStyleController` | 项目风格、预设、版本守卫的应用/清除、样本分析与上传、第一章试写和圣经风格推荐 |
@@ -524,6 +530,7 @@ spring.datasource.*
 spring.neo4j.*
 spring.kafka.*
 app.ai.codex.*
+app.ai.chatgpt.*
 app.ai.deepseek.*
 app.kafka.*
 app.memory.*

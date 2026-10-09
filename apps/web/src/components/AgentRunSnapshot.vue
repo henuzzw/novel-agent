@@ -17,6 +17,7 @@ const snapshot = computed(() => query.data.value?.requestSnapshot)
     <p v-else-if="query.isError.value" role="alert">{{ query.error.value?.message }}</p>
     <template v-else>
       <dl v-if="snapshot">
+        <div><dt>请求入口</dt><dd>{{ snapshot.sessionPolicy.startsWith('SIWC_HTTP_') ? 'ChatGPT OAuth 直连' : snapshot.effectiveSettings.provider === 'LOCAL_CODEX' ? 'Codex App Server' : snapshot.effectiveSettings.provider }}</dd></div>
         <div><dt>实际模型</dt><dd>{{ snapshot.effectiveSettings.model }} · {{ snapshot.effectiveSettings.effort ?? '未设置强度' }}</dd></div>
         <div><dt>设置版本</dt><dd>{{ snapshot.effectiveSettings.version ?? '环境初始值' }}</dd></div>
         <div><dt>输出上限</dt><dd>{{ snapshot.maxOutputTokens ?? '供应商未应用令牌上限' }} <small>请求参考 {{ snapshot.requestedMaxOutputTokens }}</small></dd></div>

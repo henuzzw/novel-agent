@@ -10,6 +10,8 @@
 
 ## 配对编辑
 
+接入区别：新 ChatGPT OAuth HTTP 路线每轮明确发送当前配对系统文本到 `instructions`；旧 Codex App Server 使用 `developerInstructions`，不改写 Codex 内置基础系统提示词，其已挂载线程的更新缺口尚未修复。详见 [直连接入与验证](NOVEL_AGENT_CHATGPT_DIRECT_ACCESS.md)。
+
 每个阶段在同一界面编辑、保存一对提示词：
 
 1. **系统提示词**：实际发送到模型系统角色的指令，每个阶段独立配置。默认值来自 `prompts/conversation_system.txt`。

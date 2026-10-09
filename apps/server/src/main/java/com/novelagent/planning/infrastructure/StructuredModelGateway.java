@@ -21,6 +21,8 @@ public class StructuredModelGateway {
     private final AgentRunRecorder runs;
     private final StructuredRequestBudget budget;
     private final AgentPromptService prompts;
+    private final com.novelagent.modelaccess.application.ChatGptDirectGateway direct;
+    private final com.novelagent.modelaccess.application.ChatGptTransportService transport;
 
     public StructuredModelGateway(
             CodexAppServerClient codex,
@@ -39,7 +41,6 @@ public class StructuredModelGateway {
         this(codex, sessions, deepSeek, runs, context, null);
     }
 
-    @Autowired
     public StructuredModelGateway(
             CodexAppServerClient codex,
             CodexAgentSessionRepository sessions,
@@ -47,12 +48,22 @@ public class StructuredModelGateway {
             AgentRunRecorder runs,
             ModelContextProperties context,
             AgentPromptService prompts) {
+        this(codex, sessions, deepSeek, runs, context, prompts, null, null);
+    }
+
+    @Autowired
+    public StructuredModelGateway(CodexAppServerClient codex, CodexAgentSessionRepository sessions,
+            DeepSeekStructuredOutputClient deepSeek, AgentRunRecorder runs, ModelContextProperties context,
+            AgentPromptService prompts, com.novelagent.modelaccess.application.ChatGptDirectGateway direct,
+            com.novelagent.modelaccess.application.ChatGptTransportService transport) {
         this.codex = codex;
         this.codexSessions = new CodexSessionManager(codex, sessions);
         this.deepSeek = deepSeek;
         this.runs = runs;
         this.budget = new StructuredRequestBudget(context);
         this.prompts = prompts;
+        this.direct = direct;
+        this.transport = transport;
     }
 
     public String request(UUID projectId, String workflow, ModelProvider provider,
@@ -80,8 +91,9 @@ public class StructuredModelGateway {
                 + "\n\n" + AgentPromptService.protectedRules(workflow);
         final String instructions = effectiveSystem;
         CodexSessionPolicy effectivePolicy = sharedPlanning ? CodexSessionPolicy.REUSE_THREAD : sessionPolicy;
+        boolean useDirect = provider == ModelProvider.LOCAL_CODEX && transport != null && transport.direct();
         EffectiveSettings selected = provider == ModelProvider.DEEPSEEK
-                ? deepSeek.effectiveSettings() : codex.effectiveSettings();
+                ? deepSeek.effectiveSettings() : useDirect ? direct.effectiveSettings() : codex.effectiveSettings();
         EffectiveSettings settings = new EffectiveSettings(provider, selected.model(), selected.effort(), selected.version());
         JsonNode frozenSchema = com.fasterxml.jackson.databind.node.NullNode.getInstance();
         var contextBudget = budget.requireCapacity(provider, instructions, effectiveUser, frozenSchema, maxOutputTokens);
@@ -99,6 +111,22 @@ public class StructuredModelGateway {
                     () -> deepSeek.request(schemaName, instructions, effectiveUser, frozenSchema,
                             maxOutputTokens, settings), decode);
             return decoded.get();
+        }
+
+        if (useDirect) {
+            try (var request = direct.prepare(projectId, sharedPlanning ? PlanningConversationPolicy.KEY : workflow,
+                    instructions, effectiveUser, effectivePolicy,
+                    sharedPlanning && resolved.revision() == null ? PlanningConversationPolicy.REVISION : resolved.revision(), maxOutputTokens)) {
+                // Record exactly the HTTP input array, including history, not just the latest user message.
+                var directSnapshot = RequestSnapshot.capture(settings, instructions, request.wireInput(), frozenSchema,
+                        "PLAIN_TEXT", maxOutputTokens, "SIWC_HTTP_" + effectivePolicy.name()).withContextBudget(request.budget());
+                runs.record(projectId, workflow, provider, instructions, request.wireInput(), directSnapshot,
+                        () -> request.run(settings, runs.progressSink()), result -> {
+                            decode.accept(result.output());
+                            request.accept(result);
+                        });
+                return decoded.get();
+            }
         }
 
         record(projectId, workflow, provider,
