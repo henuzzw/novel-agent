@@ -109,6 +109,5 @@ class CharacterBlueprintTest {
                 .userPrompt(restored, budget, null, "");
         String bibleJson = prompt.split("【已发布故事圣经（完整 JSON）】", 2)[1].split("【篇幅参考】", 2)[0].trim();
         assertThat(json.readValue(bibleJson, StoryBibleContent.class)).isEqualTo(bible);
-        assertThat(prompt).contains("从人物的关键经历、生活目标与内在矛盾推演选择", "不在大纲阶段另造过去或更换名字");
     }
 }

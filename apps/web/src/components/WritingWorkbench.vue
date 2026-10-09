@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { BrainCircuit, Check, Download, FileSearch, FileText, RefreshCw, Save } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import QualityReviewPanel from './QualityReviewPanel.vue'
+import PublishedMemoryPanel from './PublishedMemoryPanel.vue'
 import DraftLoopPanel from './DraftLoopPanel.vue'
 import FirstThreeChaptersPanel from './FirstThreeChaptersPanel.vue'
 import ManuscriptLocalEditPanel from './ManuscriptLocalEditPanel.vue'
@@ -17,14 +18,13 @@ import type { AutomationChapterTarget } from '@/api/automation'
 import { getCurrentOutline, type GenerationMode } from '@/api/planning'
 import { getProject } from '@/api/projects'
 import {
-  acceptManuscript, approveReview, commitCanon, replaceCanon, returnReviewToWriting, createManuscriptRevision,
-  generateManuscript, generateReview,
-  getLatestManuscript, getManuscriptVersion, getLatestReview, getMemoryPreview,
+  publishManuscript, createManuscriptRevision,
+  generateManuscript,
+  getLatestManuscript, getManuscriptVersion, getMemoryPreview,
   getCanonCommitStatus,
-  listManuscriptVersions, updateManuscript, updateReview,
-  listCanonEntities, manuscriptExportUrl,
-  type ChapterReviewContent, type ChapterReviewVersion, type FactProposal, type ManuscriptContent, type ManuscriptVersion,
-  type StoryEntity,
+  listManuscriptVersions, updateManuscript,
+  manuscriptExportUrl,
+  type ManuscriptContent, type ManuscriptVersion,
 } from '@/api/writing'
 
 const props = defineProps<{ projectId: string; initialTarget?: AutomationChapterTarget | null }>()
@@ -57,11 +57,6 @@ function setQualityState(state: QualityReportState, label: string) {
 }
 const error = ref('')
 const manuscriptDraft = ref<ManuscriptContent | null>(null)
-const reviewDraft = ref<ChapterReviewContent | null>(null)
-const selectedReviewIssueIds = ref<string[]>([])
-const returnMode = ref<GenerationMode>('REVISE')
-const committedCanonVersion = ref<number | null>(null)
-
 const outlineQuery = useQuery({ queryKey: computed(() => ['current-outline', props.projectId]), queryFn: () => getCurrentOutline(props.projectId) })
 const projectQuery = useQuery({ queryKey: computed(() => ['project', props.projectId]), queryFn: () => getProject(props.projectId) })
 const currentChapter = computed(() => outlineQuery.data.value?.content.arcs
@@ -98,46 +93,26 @@ const selectedBaseManuscript = computed(() => manuscriptVersionsQuery.data.value
 const manuscriptBaseNumber = computed(() => manuscriptVersionsQuery.data.value?.find(
   (item) => item.id === manuscriptQuery.data.value?.baseManuscriptVersionId,
 )?.versionNumber)
-const reviewQuery = useQuery({
-  queryKey: computed(() => ['chapter-review', props.projectId, selectedChapter.value]),
-  queryFn: () => getLatestReview(props.projectId, selectedChapter.value),
-  enabled: computed(() => outlineQuery.data.value?.status === 'PUBLISHED'),
-})
 const canonStatusQuery = useQuery({
   queryKey: computed(() => ['canon-commit-status', props.projectId, selectedChapter.value]),
   queryFn: () => getCanonCommitStatus(props.projectId, selectedChapter.value),
   enabled: computed(() => outlineQuery.data.value?.status === 'PUBLISHED'),
 })
-const reviewMatchesCurrentManuscript = computed(() => !!reviewQuery.data.value && !!manuscriptQuery.data.value
-  && reviewQuery.data.value.sourceManuscriptVersionId === manuscriptQuery.data.value.id)
-useUnsavedChanges(computed(() => (!!manuscriptDraft.value && !!manuscriptQuery.data.value
-    && JSON.stringify(manuscriptDraft.value) !== JSON.stringify(manuscriptQuery.data.value.content))
-  || (!!reviewDraft.value && reviewQuery.data.value?.status === 'DRAFT'
-    && JSON.stringify(reviewDraft.value) !== JSON.stringify(reviewQuery.data.value.content))), ['section', 'chapter'])
+const currentManuscriptPublished = computed(() => !!manuscriptQuery.data.value
+  && canonStatusQuery.data.value?.activeManuscriptVersionId === manuscriptQuery.data.value.id)
+useUnsavedChanges(computed(() => !!manuscriptDraft.value && !!manuscriptQuery.data.value
+  && JSON.stringify(manuscriptDraft.value) !== JSON.stringify(manuscriptQuery.data.value.content)), ['section', 'chapter'])
 const openingRefreshKey = computed(() => JSON.stringify([
   outlineQuery.data.value?.id, outlineQuery.data.value?.version, projectQuery.data.value?.version,
   projectQuery.data.value?.currentCanonVersion, manuscriptQuery.data.value?.id, manuscriptQuery.data.value?.version,
   openingRefresh.value,
 ]))
-const entityQuery = useQuery({
-  queryKey: computed(() => ['canon-entities', props.projectId]),
-  queryFn: () => listCanonEntities(props.projectId),
-  enabled: computed(() => mode.value === 'review'),
-})
-
 function copyManuscript(value: ManuscriptContent): ManuscriptContent {
   return { ...value, continuityNotes: [...value.continuityNotes] }
 }
-function copyReview(value: ChapterReviewContent): ChapterReviewContent {
-  return { ...value, issues: value.issues.map((item) => ({ ...item })), factProposals: value.factProposals.map((item) => ({ ...item, payload: item.payload ? { ...item.payload } : null })) }
-}
 watch(() => manuscriptQuery.data.value, (value) => { manuscriptDraft.value = value ? copyManuscript(value.content) : null }, { immediate: true })
-watch(() => reviewQuery.data.value, (value) => { reviewDraft.value = value ? copyReview(value.content) : null }, { immediate: true })
-watch(() => reviewQuery.data.value?.id, () => { selectedReviewIssueIds.value = [] })
 watch(() => [props.projectId, selectedChapter.value], () => {
   error.value = ''; instruction.value = ''; baseManuscriptVersionId.value = ''
-  selectedReviewIssueIds.value = []; returnMode.value = 'REVISE'
-  committedCanonVersion.value = null
   qualityState.value = 'unrun'; qualityLabel.value = '未检查'
 })
 
@@ -153,10 +128,6 @@ async function refreshDraftLoopManuscript() {
     await manuscriptVersionsQuery.refetch()
   } finally { draftLoopRefreshes.value-- }
 }
-function setReview(value: ChapterReviewVersion) {
-  queryClient.setQueryData(['chapter-review', props.projectId, selectedChapter.value], value)
-  reviewDraft.value = copyReview(value.content)
-}
 function lines(value: string) { return value.split('\n').map((item) => item.trim()).filter(Boolean) }
 function joined(value: string[] | undefined) { return value?.join('\n') ?? '' }
 function toolLabel(value: string) {
@@ -166,56 +137,10 @@ function toolLabel(value: string) {
     GET_RELATED_CANON_FACTS: '相关正史事实',
   } as Record<string, string>)[value] ?? value
 }
-function factTypeLabel(value: string) {
-  return ({
-    ENTITY_UPSERT: '实体', EVENT_CREATE: '事件', STATE_CHANGE: '状态变化',
-    RELATION_CHANGE: '关系变化', KNOWLEDGE_CHANGE: '人物认知', FORESHADOW_CHANGE: '伏笔',
-    EVENT: '事件', STATE: '状态变化',
-  } as Record<string, string>)[value] ?? value
-}
-type EntityRole = 'entity' | 'source' | 'target' | 'character'
-function entityTypeFor(fact: FactProposal, role: EntityRole) {
-  if (role === 'entity') return fact.payload?.entityType ?? 'CHARACTER'
-  return 'CHARACTER'
-}
-function entityOptions(fact: FactProposal, role: EntityRole): StoryEntity[] {
-  const type = entityTypeFor(fact, role)
-  return (entityQuery.data.value ?? []).filter((entity) => entity.type === type)
-}
-function selectedEntityId(fact: FactProposal, role: EntityRole) {
-  if (!fact.payload) return ''
-  if (role === 'entity') return fact.payload.entityId ?? ''
-  if (role === 'source') return fact.payload.sourceEntityId ?? ''
-  if (role === 'target') return fact.payload.targetEntityId ?? ''
-  return fact.payload.characterId ?? ''
-}
-function setEntityId(fact: FactProposal, role: EntityRole, event: Event) {
-  if (!fact.payload) return
-  const value = (event.target as HTMLSelectElement).value || null
-  if (role === 'entity') fact.payload.entityId = value
-  else if (role === 'source') fact.payload.sourceEntityId = value
-  else if (role === 'target') fact.payload.targetEntityId = value
-  else fact.payload.characterId = value
-}
-function mentionName(fact: FactProposal, role: EntityRole) {
-  if (!fact.payload) return fact.subject
-  if (role === 'entity') return fact.payload.entityName ?? fact.subject
-  if (role === 'source') return fact.payload.sourceEntityName ?? fact.subject
-  if (role === 'target') return fact.payload.targetEntityName ?? fact.object
-  return fact.payload.characterName ?? fact.subject
-}
-function emptyEntityOption(fact: FactProposal, role: EntityRole) {
-  return ['他', '她', '它', '他们', '她们', '它们', '自己', '对方', '那个人', '这个人'].includes(mentionName(fact, role))
-    ? '必须选择具体实体'
-    : '按名称匹配或创建新实体'
-}
 function updateNotes(event: Event) { if (manuscriptDraft.value) manuscriptDraft.value.continuityNotes = lines((event.target as HTMLTextAreaElement).value) }
 const busy = computed(() => draftLoopEditingLocked.value || qualityBusy.value || localEditBusy.value || openingBusy.value || generateManuscriptMutation.isPending.value
   || saveManuscriptMutation.isPending.value || createManuscriptRevisionMutation.isPending.value
-  || acceptManuscriptMutation.isPending.value
-  || generateReviewMutation.isPending.value || saveReviewMutation.isPending.value || approveReviewMutation.isPending.value
-  || commitCanonMutation.isPending.value || replaceCanonMutation.isPending.value
-  || returnReviewMutation.isPending.value)
+  || publishManuscriptMutation.isPending.value)
 const fail = (reason: Error) => { error.value = reason.message }
 
 const generateManuscriptMutation = useMutation({ mutationFn: () => {
@@ -237,67 +162,29 @@ const createManuscriptRevisionMutation = useMutation({ mutationFn: () => {
   }
   return createManuscriptRevision(props.projectId, manuscriptQuery.data.value)
 }, onSuccess: (value) => { setManuscript(value); error.value = '' }, onError: fail })
-const acceptManuscriptMutation = useMutation({ mutationFn: () => {
-  if (!manuscriptQuery.data.value) throw new Error('没有可确认的正文。')
-  return acceptManuscript(props.projectId, manuscriptQuery.data.value)
-}, onSuccess: setManuscript, onError: fail })
-const generateReviewMutation = useMutation({ mutationFn: () => generateReview(props.projectId, selectedChapter.value, provider.value, instruction.value), onSuccess: (v) => { setReview(v); instruction.value = ''; error.value = '' }, onError: fail })
-const saveReviewMutation = useMutation({ mutationFn: () => {
-  if (!reviewMatchesCurrentManuscript.value) throw new Error('此审稿对应旧版正文，请重新审稿。')
-  if (!reviewQuery.data.value || !reviewDraft.value) throw new Error('没有可保存的审稿结果。')
-  return updateReview(props.projectId, reviewQuery.data.value, reviewDraft.value)
-}, onSuccess: setReview, onError: fail })
-const approveReviewMutation = useMutation({ mutationFn: () => {
-  if (!reviewMatchesCurrentManuscript.value) throw new Error('此审稿对应旧版正文，请重新审稿。')
-  if (!reviewQuery.data.value || !reviewDraft.value) throw new Error('没有可确认的审稿结果。')
-  const pending = reviewDraft.value.factProposals.filter((fact) => fact.decision === 'PENDING').length
-  if (pending) throw new Error(`还有 ${pending} 条候选事实待决定，请逐条接受或拒绝。`)
-  return approveReview(props.projectId, reviewQuery.data.value, reviewDraft.value)
-}, onSuccess: setReview, onError: fail })
-const returnReviewMutation = useMutation({ mutationFn: () => {
-  if (!reviewMatchesCurrentManuscript.value || manuscriptQuery.data.value?.status !== 'AUTHOR_ACCEPTED') {
-    throw new Error('请先确认当前正文并使用对应的审稿。')
+const publishManuscriptMutation = useMutation({ mutationFn: () => {
+  const manuscript = manuscriptQuery.data.value
+  const status = canonStatusQuery.data.value
+  const project = projectQuery.data.value
+  if (!manuscript || !manuscriptDraft.value) throw new Error('没有可发布的正文。')
+  if (!status || !project) throw new Error('发布状态尚未读取，请稍后再试。')
+  if (JSON.stringify(manuscriptDraft.value) !== JSON.stringify(manuscript.content)) {
+    throw new Error('正文有未保存的修改，请先保存再确认并发布。')
   }
-  if (!reviewQuery.data.value || reviewQuery.data.value.status !== 'DRAFT') {
-    throw new Error('只有待处理审稿可以打回。')
-  }
-  if (!selectedReviewIssueIds.value.length) throw new Error('请先选择要打回的问题。')
-  return returnReviewToWriting(props.projectId, reviewQuery.data.value, provider.value,
-    returnMode.value, selectedReviewIssueIds.value, instruction.value)
-}, onSuccess: (value) => {
-  setManuscript(value); mode.value = 'manuscript'; instruction.value = ''; error.value = ''
-  queryClient.invalidateQueries({ queryKey: ['chapter-review', props.projectId, selectedChapter.value] })
+  return publishManuscript(props.projectId, manuscript, project.currentCanonVersion,
+    status.activeCommitId, provider.value)
+}, onSuccess: (commit) => {
+  error.value = ''
+  queryClient.setQueryData(['canon-commit-status', commit.projectId, commit.chapterNumber], {
+    committed: true, activeCommitId: commit.id, activeManuscriptVersionId: commit.manuscriptVersionId,
+    canonVersion: commit.canonVersion,
+  })
+  queryClient.invalidateQueries({ queryKey: ['manuscript', commit.projectId, commit.chapterNumber] })
+  queryClient.invalidateQueries({ queryKey: ['manuscript-versions', commit.projectId, commit.chapterNumber] })
+  queryClient.invalidateQueries({ queryKey: ['project', commit.projectId] })
+  queryClient.invalidateQueries({ queryKey: ['published-memory', commit.projectId, commit.chapterNumber] })
+  queryClient.invalidateQueries({ queryKey: ['novel-memory', commit.projectId] })
 }, onError: fail })
-const commitCanonMutation = useMutation({ mutationFn: () => {
-  if (!reviewMatchesCurrentManuscript.value) throw new Error('此审稿对应旧版正文，请重新审稿。')
-  if (canonStatusQuery.data.value?.committed !== false) throw new Error('本章正史状态未确认，或已提交过正史。')
-  if (!reviewQuery.data.value || reviewQuery.data.value.status !== 'APPROVED') throw new Error('请先确认审稿结果。')
-  return commitCanon(props.projectId, selectedChapter.value, reviewQuery.data.value.id, projectQuery.data.value?.currentCanonVersion ?? 0)
-}, onSuccess: (value) => {
-  committedCanonVersion.value = value.canonVersion; error.value = ''
-  queryClient.invalidateQueries({ queryKey: ['canon-commit-status', props.projectId, selectedChapter.value] })
-  queryClient.invalidateQueries({ queryKey: ['project', props.projectId] })
-  queryClient.invalidateQueries({ queryKey: ['novel-memory', props.projectId] })
-}, onError: fail })
-const replaceCanonMutation = useMutation({ mutationFn: () => {
-  if (!reviewMatchesCurrentManuscript.value) throw new Error('请先为新版正文重新审稿。')
-  if (!reviewQuery.data.value || reviewQuery.data.value.status !== 'APPROVED') throw new Error('请先确认新版审稿。')
-  const activeCommitId = canonStatusQuery.data.value?.activeCommitId
-  if (!activeCommitId) throw new Error('本章正史状态未确认，请刷新后重试。')
-  if (reviewQuery.data.value.sourceManuscriptVersionId === canonStatusQuery.data.value?.activeManuscriptVersionId) {
-    throw new Error('请先确认新版正文并重新审稿。')
-  }
-  if (!window.confirm('替换本章正史？旧版会保留作历史记录，但不再参与后续写作检索。')) {
-    throw new Error('已取消替换。')
-  }
-  return replaceCanon(props.projectId, selectedChapter.value, reviewQuery.data.value.id,
-    activeCommitId, projectQuery.data.value?.currentCanonVersion ?? 0)
-}, onSuccess: (value) => {
-  committedCanonVersion.value = value.canonVersion; error.value = ''
-  queryClient.invalidateQueries({ queryKey: ['canon-commit-status', props.projectId, selectedChapter.value] })
-  queryClient.invalidateQueries({ queryKey: ['project', props.projectId] })
-  queryClient.invalidateQueries({ queryKey: ['novel-memory', props.projectId] })
-}, onError: (reason) => { if (reason.message !== '已取消替换。') fail(reason) } })
 </script>
 
 <template>
@@ -323,9 +210,7 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
         <nav class="chapter-flow" aria-label="章节写作进度">
           <button type="button" :class="{ active: mode === 'manuscript', done: !!manuscriptQuery.data.value }" @click="mode = 'manuscript'"><span>01</span>正文草稿<small>{{ manuscriptQuery.data.value ? '第 ' + manuscriptQuery.data.value.versionNumber + ' 版' : '未开始' }}</small></button>
           <button type="button" :class="{ active: mode === 'quality', done: qualityState === 'valid' }" @click="mode = 'quality'"><span>02</span>检查与润色<small>{{ qualityLabel }}</small></button>
-          <button type="button" :class="{ done: manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED' }" @click="mode = 'manuscript'"><span>03</span>作者确认<small>{{ manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED' ? '已完成' : '待完成' }}</small></button>
-          <button type="button" :class="{ active: mode === 'review', done: reviewMatchesCurrentManuscript && reviewQuery.data.value?.status === 'APPROVED' }" @click="mode = 'review'"><span>04</span>正史审稿<small>{{ reviewMatchesCurrentManuscript ? reviewQuery.data.value?.status === 'APPROVED' ? '已通过' : '待处理' : reviewQuery.data.value ? '需重审' : '未开始' }}</small></button>
-          <button type="button" :class="{ done: !!canonStatusQuery.data.value?.committed }" @click="mode = 'review'"><span>05</span>正史发布<small>{{ canonStatusQuery.data.value?.committed ? '已发布' : '待完成' }}</small></button>
+          <button type="button" :class="{ done: currentManuscriptPublished }" @click="mode = 'manuscript'"><span>03</span>作者确认并发布<small>{{ currentManuscriptPublished ? '已发布' : '待发布' }}</small></button>
         </nav>
         <div v-if="mode !== 'memory' && mode !== 'opening'" class="writing-actions">
           <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" :maxlength="mode === 'quality' ? 2000 : undefined" placeholder="可选，例如：增强对话张力，减少解释" /></label>
@@ -336,16 +221,7 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
             <button class="button secondary" type="button" :disabled="busy || !currentChapter" @click="generateManuscriptMutation.mutate()"><RefreshCw :size="16" />{{ generateManuscriptMutation.isPending.value ? '正在生成…' : manuscriptQuery.data.value ? manuscriptGenerationMode === 'REVISE' ? '按要求调整' : '重新创作' : '生成正文' }}</button>
             <button v-if="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" class="button secondary" type="button" :disabled="busy" @click="createManuscriptRevisionMutation.mutate()"><FileText :size="16" />{{ createManuscriptRevisionMutation.isPending.value ? '正在创建…' : '复制为修订草稿' }}</button>
             <button v-if="manuscriptQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy" @click="saveManuscriptMutation.mutate()"><Save :size="16" />保存</button>
-            <button v-if="manuscriptQuery.data.value?.status === 'DRAFT'" class="button primary" type="button" :disabled="busy" @click="acceptManuscriptMutation.mutate()"><Check :size="16" />作者确认</button>
-          </div>
-          <div class="direction-action-buttons" v-else-if="mode === 'review'">
-            <GenerationModeControl v-if="reviewQuery.data.value?.status === 'DRAFT'" v-model="returnMode" label="打回方式" revise-label="按原稿修订" regenerate-label="重写整章" :disabled="busy" />
-            <button class="button secondary" type="button" :disabled="busy || manuscriptQuery.data.value?.status !== 'AUTHOR_ACCEPTED'" @click="generateReviewMutation.mutate()"><RefreshCw :size="16" />{{ reviewQuery.data.value ? '重新审稿' : '开始审稿' }}</button>
-            <button v-if="reviewQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript || !selectedReviewIssueIds.length || manuscriptQuery.data.value?.status !== 'AUTHOR_ACCEPTED'" @click="returnReviewMutation.mutate()"><RefreshCw :size="16" />{{ returnReviewMutation.isPending.value ? '正在生成新稿…' : '打回并生成新稿' }}</button>
-            <button v-if="reviewQuery.data.value?.status === 'DRAFT'" class="button secondary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript" @click="saveReviewMutation.mutate()"><Save :size="16" />保存处理</button>
-            <button v-if="reviewQuery.data.value?.status === 'DRAFT'" class="button primary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript" @click="approveReviewMutation.mutate()"><Check :size="16" />确认审稿</button>
-            <button v-if="reviewQuery.data.value?.status === 'APPROVED' && canonStatusQuery.data.value?.committed === false" class="button primary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript" @click="commitCanonMutation.mutate()"><Check :size="16" />{{ commitCanonMutation.isPending.value ? '正在提交…' : '提交正史' }}</button>
-            <button v-if="reviewQuery.data.value?.status === 'APPROVED' && canonStatusQuery.data.value?.committed" class="button primary" type="button" :disabled="busy || !reviewMatchesCurrentManuscript || reviewQuery.data.value.sourceManuscriptVersionId === canonStatusQuery.data.value?.activeManuscriptVersionId" @click="replaceCanonMutation.mutate()"><RefreshCw :size="16" />{{ replaceCanonMutation.isPending.value ? '正在替换…' : '替换正史' }}</button>
+            <button v-if="manuscriptQuery.data.value && !currentManuscriptPublished" class="button primary" type="button" :disabled="busy || !canonStatusQuery.data.value || !projectQuery.data.value" @click="publishManuscriptMutation.mutate()"><Check :size="16" />{{ publishManuscriptMutation.isPending.value ? '正在发布…' : canonStatusQuery.data.value?.committed ? '确认并替换已发布正文' : '作者确认并发布' }}</button>
           </div>
         </div>
         <GlobalModelBadge v-if="mode === 'opening'" />
@@ -356,12 +232,17 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
           <button type="button" :aria-pressed="mode === 'manuscript'" :class="{ active: mode === 'manuscript' }" @click="mode = 'manuscript'"><FileText :size="16" />正文草稿</button>
           <button type="button" :aria-pressed="mode === 'quality'" :class="{ active: mode === 'quality' }" @click="mode = 'quality'"><FileSearch :size="16" />检查与润色</button>
           <button type="button" :aria-pressed="mode === 'opening'" :class="{ active: mode === 'opening' }" @click="mode = 'opening'"><FileSearch :size="16" />前三章连读<small v-if="openingBusy"> · 正在通读</small></button>
-          <button type="button" :aria-pressed="mode === 'review'" :class="{ active: mode === 'review' }" @click="mode = 'review'"><FileSearch :size="16" />审稿与记忆</button>
+          <button type="button" :aria-pressed="mode === 'review'" :class="{ active: mode === 'review' }" @click="mode = 'review'"><FileSearch :size="16" />发布后记忆</button>
           <button type="button" :aria-pressed="mode === 'memory'" :class="{ active: mode === 'memory' }" @click="mode = 'memory'"><BrainCircuit :size="16" />长期记忆</button>
         </div>
         <span>第 {{ selectedChapter }} 章</span>
       </div>
 
+      <PublishedMemoryPanel :key="`${projectId}-${selectedChapter}-memory`" :project-id="projectId"
+        :chapter="selectedChapter" :published="!!canonStatusQuery.data.value?.committed"
+        :compact="mode !== 'review'" @open="mode = 'review'" />
+      <p v-if="mode === 'manuscript' && canonStatusQuery.isError.value" class="form-error">发布状态读取失败，请刷新后重试。</p>
+      <p v-if="mode === 'manuscript' && currentManuscriptPublished" class="acceptance-note">本版正文已发布，可作为后续章节的写作依据。</p>
       <DraftLoopPanel v-if="outlineQuery.data.value?.status === 'PUBLISHED'" v-show="mode === 'manuscript' || mode === 'quality'"
         :key="`${projectId}-${selectedChapter}`" :project-id="projectId" :chapter="selectedChapter" :provider="provider"
         :manuscript="manuscriptQuery.data.value" :external-busy="busy && !draftLoopBusy"
@@ -374,12 +255,12 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
             <strong>本版修改说明</strong>
             <ul><li v-for="item in manuscriptQuery.data.value.changeSummary" :key="item">{{ item }}</li></ul>
           </section>
-          <p v-if="manuscriptQuery.data.value?.sourceReviewVersionId" class="acceptance-note"><FileSearch :size="16" />本稿根据审稿意见打回生成。作者确认后需重新审稿。</p>
+          <p v-if="manuscriptQuery.data.value?.sourceReviewVersionId" class="acceptance-note"><FileSearch :size="16" />本稿根据历史审稿意见生成，可在核对后直接确认并发布。</p>
           <input v-model="manuscriptDraft.title" class="manuscript-title" aria-label="正文标题" :disabled="draftLoopEditingLocked || manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" />
           <textarea v-model="manuscriptDraft.body" class="manuscript-body" aria-label="正文" :disabled="draftLoopEditingLocked || manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" />
           <label><span>章节摘要</span><textarea v-model="manuscriptDraft.summary" rows="3" :disabled="draftLoopEditingLocked || manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" /></label>
           <label><span>连续性备注</span><textarea :value="joined(manuscriptDraft.continuityNotes)" rows="3" :disabled="draftLoopEditingLocked || manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" @input="updateNotes" /></label>
-          <p v-if="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" class="acceptance-note"><Check :size="16" />作者已确认。复制修订不会自动替换已提交的正史与长期记忆。</p>
+          <p v-if="manuscriptQuery.data.value?.status === 'AUTHOR_ACCEPTED'" class="acceptance-note"><Check :size="16" />作者已确认。复制修订后，可通过“确认并替换已发布正文”发布新版；旧版保留供追溯。</p>
         </div>
         <div v-else class="editor-empty">发布大纲后，即可生成本章正文草稿。</div>
         <details v-if="manuscriptQuery.data.value" class="local-edit-entry">
@@ -399,53 +280,6 @@ const replaceCanonMutation = useMutation({ mutationFn: () => {
           <ul><li v-for="item in manuscriptQuery.data.value.changeSummary" :key="item">{{ item }}</li></ul>
         </section>
         <div v-if="!manuscriptQuery.data.value" class="editor-empty">当前章暂无已保存正文，尚未检查。</div>
-      </template>
-
-      <template v-else-if="mode === 'review'">
-        <div class="editor-status"><strong>审稿与候选记忆</strong><span v-if="reviewQuery.data.value">第 {{ reviewQuery.data.value.versionNumber }} 版 · {{ reviewQuery.data.value.status === 'APPROVED' ? '已确认' : reviewQuery.data.value.status === 'RETURNED' ? '已打回' : '待处理' }}</span></div>
-        <p v-if="reviewQuery.data.value && !reviewMatchesCurrentManuscript" class="form-error" role="alert">此审稿对应旧版正文。当前正文确认后需要重新审稿，旧结果不能用于新稿提交。</p>
-        <p v-if="canonStatusQuery.data.value?.committed" class="acceptance-note"><Check :size="16" />本章已有正史 v{{ canonStatusQuery.data.value.canonVersion }}。确认新版正文并重新审稿后，可替换本章正史；旧版保留供追溯。</p>
-        <p v-if="canonStatusQuery.isError.value" class="form-error" role="alert">正史状态读取失败，暂不能提交。</p>
-        <div v-if="reviewDraft" class="review-panel">
-          <p class="review-summary">{{ reviewDraft.summary }}</p>
-          <section><h3>问题清单</h3>
-            <article v-for="issue in reviewDraft.issues" :key="issue.id" class="review-item">
-              <header><span :class="['severity', issue.severity.toLowerCase()]">{{ issue.severity }}</span><strong>{{ issue.category }}</strong></header>
-              <p>{{ issue.description }}</p><blockquote>{{ issue.evidence }}</blockquote><small>{{ issue.suggestion }}</small>
-              <label v-if="reviewQuery.data.value?.status === 'DRAFT' && reviewMatchesCurrentManuscript && (issue.description?.trim() || issue.suggestion?.trim())" class="resolve-check"><input v-model="selectedReviewIssueIds" type="checkbox" :value="issue.id" />打回重写</label>
-              <label v-if="reviewQuery.data.value?.status === 'DRAFT'" class="resolve-check"><input v-model="issue.resolved" type="checkbox" />已处理</label>
-            </article>
-            <p v-if="!reviewDraft.issues.length" class="quiet-text">未发现需要处理的问题。</p>
-          </section>
-          <section><h3>候选事实</h3>
-            <article v-for="fact in reviewDraft.factProposals" :key="fact.id" class="fact-item">
-              <div><span>{{ factTypeLabel(fact.factType) }}</span><strong>{{ fact.subject }} · {{ fact.predicate }}</strong></div>
-              <p>{{ fact.object }}</p><small>证据：{{ fact.evidence }}</small>
-              <small v-if="fact.confidence != null">置信度：{{ Math.round(fact.confidence * 100) }}%</small>
-              <div v-if="fact.payload && ['ENTITY_UPSERT', 'STATE_CHANGE'].includes(fact.factType)" class="entity-resolution-row">
-                <label><span>“{{ mentionName(fact, 'entity') }}”对应实体</span>
-                  <select :value="selectedEntityId(fact, 'entity')" :disabled="reviewQuery.data.value?.status === 'APPROVED'" @change="setEntityId(fact, 'entity', $event)">
-                    <option value="">{{ emptyEntityOption(fact, 'entity') }}</option>
-                    <option v-for="entity in entityOptions(fact, 'entity')" :key="entity.id" :value="entity.id">{{ entity.name }}</option>
-                  </select>
-                </label>
-              </div>
-              <div v-else-if="fact.payload && fact.factType === 'RELATION_CHANGE'" class="entity-resolution-row two">
-                <label><span>“{{ mentionName(fact, 'source') }}”</span><select :value="selectedEntityId(fact, 'source')" :disabled="reviewQuery.data.value?.status === 'APPROVED'" @change="setEntityId(fact, 'source', $event)"><option value="">{{ emptyEntityOption(fact, 'source') }}</option><option v-for="entity in entityOptions(fact, 'source')" :key="entity.id" :value="entity.id">{{ entity.name }}</option></select></label>
-                <label><span>“{{ mentionName(fact, 'target') }}”</span><select :value="selectedEntityId(fact, 'target')" :disabled="reviewQuery.data.value?.status === 'APPROVED'" @change="setEntityId(fact, 'target', $event)"><option value="">{{ emptyEntityOption(fact, 'target') }}</option><option v-for="entity in entityOptions(fact, 'target')" :key="entity.id" :value="entity.id">{{ entity.name }}</option></select></label>
-              </div>
-              <div v-else-if="fact.payload && fact.factType === 'KNOWLEDGE_CHANGE'" class="entity-resolution-row">
-                <label><span>“{{ mentionName(fact, 'character') }}”对应人物</span><select :value="selectedEntityId(fact, 'character')" :disabled="reviewQuery.data.value?.status === 'APPROVED'" @change="setEntityId(fact, 'character', $event)"><option value="">{{ emptyEntityOption(fact, 'character') }}</option><option v-for="entity in entityOptions(fact, 'character')" :key="entity.id" :value="entity.id">{{ entity.name }}</option></select></label>
-              </div>
-              <select v-model="fact.decision" :disabled="reviewQuery.data.value?.status === 'APPROVED'">
-                <option value="PENDING">待决定</option><option value="ACCEPTED">接受</option><option value="REJECTED">拒绝</option>
-              </select>
-            </article>
-          </section>
-          <p v-if="reviewQuery.data.value?.status === 'APPROVED'" class="acceptance-note"><Check :size="16" />审稿门禁已通过，下一步可{{ canonStatusQuery.data.value?.committed ? '替换' : '提交' }}正史。</p>
-          <p v-if="committedCanonVersion" class="acceptance-note"><Check :size="16" />已提交为正史 v{{ committedCanonVersion }}，检索与图谱投影正在后台同步。</p>
-        </div>
-        <div v-else class="editor-empty">作者确认正文后，运行一致性审稿并抽取候选事实。</div>
       </template>
 
       <template v-else-if="mode === 'memory'">

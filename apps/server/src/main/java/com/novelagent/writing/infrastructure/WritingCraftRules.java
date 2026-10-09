@@ -33,29 +33,6 @@ public final class WritingCraftRules {
             未提供相邻章计划或完整正文时说明依据不足，不猜测缺章，不宣称完成三章连读检查；慢热、留白与旧素材仍服从作者授权。
             """;
 
-    public static String contract() {
-        return BOUNDARIES + READER_EXPERIENCE + STRATEGY + """
-                【合同场景执行规则】
-                复用现有 requiredBeats 文本，主要节拍按“起点 / 意图 / 阻力或信息差 / 行动 / 结束变化 / 重要依据”表达，
-                使人物如何从进入状态走到 expectedExitState 可执行；未知的重要依据标明待确认，不把规划写成正文证据。
-                将“承诺 / 铺垫依据 / 本章兑现 / 余波”写入相关 requiredBeats，与 requiredReveals、foreshadowActions、hook 对应。
-                主要积累的章节明确哪些承诺留待后章；已有旧节拍可以沿用原文，不为统一格式重写未受影响合同。
-                同一伏笔操作与钩子只描述其有效作用，避免在多个节拍重复安排同一场景；不增加输出字段或结构。
-                """;
-    }
-
-    public static String contractReview() {
-        return BOUNDARIES + READER_EXPERIENCE + STRATEGY + """
-                【合同独立审阅规则】
-                逐个主要节拍核对起点、意图、阻力或信息差、行动、结束变化及重要依据，检查目标与退出状态是否由行动相连。
-                核对承诺、铺垫、本章兑现与余波是否对应，揭示、伏笔动作和钩子是否重复或越过未来边界。
-                独立核对道具权限、帮助方向、人物能力与动机依据；含糊处指出缺失的信息，建议澄清，不新编来源修补合同。
-                引用合同原文并指出所依赖的规划或事实及最小修改；旧合同未采用统一格式本身不是错误。
-                仅明确硬约束冲突或无法执行的合同可判 BLOCKING；文学偏好、安静场景和依据不足不能直接判阻断。
-                只审阅不改写，不抽取正史，不把合同计划当作已经兑现的正文事实。
-                """;
-    }
-
     public static String manuscript() {
         return BOUNDARIES + READER_EXPERIENCE + STRATEGY + """
                 【正文场景执行规则】

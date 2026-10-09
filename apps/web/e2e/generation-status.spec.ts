@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 
-test('shows every stage, immediate request state, failure, and restored background state', async ({ page }, info) => {
+test('shows every stage, immediate request state, failure, and restored background state', async ({ page }) => {
   const models = createModelSettingsFixture()
   const intent = { premise: '校园纸条引发误会', genres: ['校园'], targetAudience: '青年读者',
     protagonistBrief: '林安想说清误会', centralConflict: '朋友拒绝听解释', tones: ['克制'], targetWords: 50000,
@@ -65,8 +65,6 @@ test('shows every stage, immediate request state, failure, and restored backgrou
   await expect(panel.locator('[data-stage="STORY_DIRECTION"]')).toContainText('请求中')
   await page.evaluate(() => scrollTo(0, 0))
   await expect.poll(() => page.locator('.topbar').evaluate(element => element.getBoundingClientRect().top)).toBe(0)
-  await page.screenshot({ path: info.outputPath('generation-requesting.png'), fullPage: true })
-  await page.screenshot({ path: info.outputPath('generation-viewport.png') })
   await release!()
   await expect(panel.locator('[data-stage="STORY_DIRECTION"]')).toContainText('失败')
   await expect(panel.locator('[data-stage="STORY_DIRECTION"]')).toContainText('测试权限不足')
@@ -88,5 +86,4 @@ test('shows every stage, immediate request state, failure, and restored backgrou
   await expect(panel.locator('[data-stage="MANUSCRIPT"]')).toContainText('已停止')
   expect(generationCalls).toBe(2)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: info.outputPath('generation-restored.png'), fullPage: true })
 })

@@ -66,7 +66,7 @@ async function setup(page: Page, failFirstCheck = false) {
   return { checks, revisions, applications: () => applications }
 }
 
-test('checks a preview, revises selected evidence and rechecks while preserving the original', async ({ page }, testInfo) => {
+test('checks a preview, revises selected evidence and rechecks while preserving the original', async ({ page }) => {
   const activity = await setup(page)
   const old = page.locator('.preview-result').first()
   await expect(old).toContainText('名单来源未交代')
@@ -83,8 +83,7 @@ test('checks a preview, revises selected evidence and rechecks while preserving 
   expect(activity.checks).toEqual([original, revised])
   expect(activity.revisions).toHaveLength(1)
   expect(activity.applications()).toBe(0)
-  await page.screenshot({ path: testInfo.outputPath('preview-editor.png'), fullPage: true })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
 test('a failed automatic check keeps the sample and only retries when requested', async ({ page }) => {

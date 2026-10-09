@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 
-test('shows SSE response and timeout details without issuing another generation request', async ({ page }, testInfo) => {
+test('shows SSE response and timeout details without issuing another generation request', async ({ page }) => {
   const models = createModelSettingsFixture()
   const run = { id: 'run-1', stage: 'IMPORT_REVERSE_BIBLE', provider: 'LOCAL_CODEX', status: 'RUNNING',
     inputTokens: 4541, outputTokens: 0, tokenSource: 'ESTIMATED', estimatedCost: 0, durationMs: null,
@@ -43,5 +43,4 @@ test('shows SSE response and timeout details without issuing another generation 
   expect(generationRequests).toBe(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.locator('.run-output').scrollIntoViewIfNeeded()
-  await page.screenshot({ path: testInfo.outputPath('run-output.png') })
 })

@@ -15,10 +15,15 @@ const query = useQuery({
 })
 watch(pending, () => query.refetch())
 const stages = [
-  { key: 'CORE', field: 'core', label: '故事核心与梗概' },
-  { key: 'CHARACTERS', field: 'characters', label: '人物设计' },
-  { key: 'WORLD', field: 'world', label: '世界构建' },
-  { key: 'PLOT', field: 'plot', label: '三幕情节与悬念节奏' },
+  { key: 'CORE', label: '1 · 一句话故事核心' },
+  { key: 'SYNOPSIS', label: '2 · 一段故事梗概' },
+  { key: 'CHARACTER_ARCS', label: '3 · 主要角色与弧线' },
+  { key: 'PLOT_SUMMARY', label: '4 · 数页情节概要' },
+  { key: 'CHARACTER_BIOGRAPHIES', label: '5 · 人物经历与各自故事线' },
+  { key: 'DETAILED_OUTLINE', label: '6 · 详细故事发展' },
+  { key: 'CHARACTER_SETTINGS', label: '7 · 完整人物设定' },
+  { key: 'SCENE_LIST', label: '8 · 全部场景清单' },
+  { key: 'SCENE_EXPANSION', label: '9 · 关键场景展开（可选）' },
 ] as const
 const statusNames = { RUNNING: '请求中', SUCCEEDED: '成功', FAILED: '失败', CANCELLED: '已停止' }
 </script>
@@ -34,8 +39,8 @@ const statusNames = { RUNNING: '请求中', SUCCEEDED: '成功', FAILED: '失败
     <template v-if="query.data.value">
       <p v-if="query.data.value.errorMessage" class="form-error" role="alert">{{ query.data.value.errorMessage }}</p>
       <details v-for="stage in stages" :key="stage.key">
-        <summary><span>{{ stage.label }}</span><small>{{ query.data.value[stage.field] ? '成功' : query.data.value.activeStage === stage.key ? statusNames[query.data.value.status] : '待生成' }}</small></summary>
-        <div v-if="query.data.value[stage.field]" class="snowflake-text">{{ query.data.value[stage.field] }}</div>
+        <summary><span>{{ stage.label }}</span><small>{{ query.data.value.steps?.[stage.key] ? '成功' : query.data.value.activeStage === stage.key ? statusNames[query.data.value.status] : stage.key === 'SCENE_EXPANSION' && query.data.value.status === 'SUCCEEDED' ? '未启用' : '待生成' }}</small></summary>
+        <div v-if="query.data.value.steps?.[stage.key]" class="snowflake-text">{{ query.data.value.steps[stage.key] }}</div>
       </details>
     </template>
   </section>

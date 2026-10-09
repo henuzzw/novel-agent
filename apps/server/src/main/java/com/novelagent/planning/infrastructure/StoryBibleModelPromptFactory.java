@@ -61,7 +61,7 @@ public class StoryBibleModelPromptFactory {
                 整理阶段不删除底稿已有的具体姓名、经历和生活目标，也不另起设计；允许的原创候选设定不因没有原文证据而一律清空。
                 原文提炼的未知、来源冲突或需要作者选择的问题放入 openQuestions；不得捏造来源，不把候选设定当正史。
                 调整模式下保留已有底稿中未受本次要求影响的字段；旧版本没有底稿时可补齐，但不得借此改写既有设定、剧情或硬约束。
-                返回格式为 {"content":{...完整故事圣经...},"changeSummary":[]}。
+                按本次纯文本保存标题输出完整故事圣经和实际修改说明。
                 """.formatted(previousBible == null ? "NEW_STORY" : "REVISE_AUTHORIZED",
                 value(intent.premise()), intent.genres(), value(intent.targetAudience()),
                 intent.targetWords(), intent.tones(), intent.mustHave(), intent.avoid(), direction.title(),

@@ -27,7 +27,7 @@ public class FreeTextPlanningRequest {
         var text = new AtomicReference<String>();
         models.request(projectId, workflow, provider, AgentPromptDefaults.system(workflow), prompt,
                 schema, "snowflake_" + stage.toLowerCase(java.util.Locale.ROOT), maxTokens,
-                CodexSessionPolicy.NEW_THREAD, raw -> text.set(readText(raw)));
+                CodexSessionPolicy.REUSE_THREAD, raw -> text.set(readText(raw)));
         return text.get();
     }
 

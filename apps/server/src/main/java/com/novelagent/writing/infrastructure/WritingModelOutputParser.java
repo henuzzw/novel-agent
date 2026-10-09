@@ -4,8 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.writing.application.GeneratedManuscript;
-import com.novelagent.writing.domain.ChapterContractContent;
-import com.novelagent.writing.domain.ChapterContractReviewContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
@@ -24,19 +22,6 @@ class WritingModelOutputParser {
 
     WritingModelOutputParser(ObjectMapper mapper) {
         this.mapper = mapper;
-    }
-
-    ChapterContractContent contract(String output) {
-        return read(output, ChapterContractContent.class);
-    }
-
-    ChapterContractReviewContent contractReview(String output) {
-        ChapterContractReviewContent content = read(output, ChapterContractReviewContent.class);
-        if (content.issues() == null) throw new ModelProviderException("模型未返回合同审阅问题清单");
-        return new ChapterContractReviewContent(content.summary(), content.issues().stream()
-                .map(issue -> new ReviewIssue(issue.id(), issue.severity(), issue.category(),
-                        issue.description(), issue.evidence(), issue.suggestion(), false))
-                .toList());
     }
 
     GeneratedManuscript manuscript(String output) {

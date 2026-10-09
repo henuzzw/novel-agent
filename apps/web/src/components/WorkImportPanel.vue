@@ -8,16 +8,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, Check, Download, FileText, LoaderCircle, Sparkles, Upload } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 
-import { listWorkImports, reversePlanFromImport, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
+import { listWorkImports, prepareImportedDirections, pasteWork, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
 
-const props = defineProps<{ projectId: string }>()
+const props = defineProps<{ projectId: string; autoAnalyze?: boolean }>()
 const emit = defineEmits<{ planningGenerated: [] }>()
 const queryClient = useQueryClient()
 const selectedImportId = ref<string | null>(null)
+const newlyImportedId = ref<string | null>(null)
 const actionError = ref('')
 const { provider: planningProvider } = useGlobalModelSettings()
 const planningMode = ref<ImportPlanningMode>('ADAPT_SOURCE')
 const planningInstruction = ref('')
+const sourceMode = ref<'file' | 'text'>('file')
+const pastedText = ref('')
+const targetWords = ref(50000)
+const expandScenes = ref(false)
 const analysisProof = ref<AnalysisProof | null>(null)
 let generationScope = ''
 watch(() => [props.projectId, selectedImportId.value, planningMode.value], () => { analysisProof.value = null })
@@ -39,11 +44,17 @@ function updateImport(value: WorkImport) {
     return [value, ...items.filter((item) => item.id !== value.id)]
   })
   selectedImportId.value = value.id
+  newlyImportedId.value = value.id
 }
 
 const uploadMutation = useMutation({
   mutationFn: (file: File) => uploadWork(props.projectId, file),
   onSuccess: (value) => { updateImport(value); actionError.value = '' },
+  onError: (reason: Error) => { actionError.value = reason.message },
+})
+const pasteMutation = useMutation({
+  mutationFn: () => pasteWork(props.projectId, pastedText.value),
+  onSuccess: value => { updateImport(value); pastedText.value = ''; actionError.value = '' },
   onError: (reason: Error) => { actionError.value = reason.message },
 })
 const confirmMutation = useMutation({
@@ -55,12 +66,13 @@ const confirmMutation = useMutation({
     const projectId = props.projectId
     const proof = analysisProof.value
     if (!proof || proof.mode !== planningMode.value) throw new Error('请先完成并确认当前使用方式的原文解析。')
-    const result = await reversePlanFromImport(projectId, importId, planningProvider.value, planningMode.value, planningInstruction.value, proof.id, proof.version)
+    const result = await prepareImportedDirections(projectId, importId, planningProvider.value, planningMode.value,
+      planningInstruction.value, proof.id, proof.version, targetWords.value, expandScenes.value)
     return { projectId, importId, result }
   },
   onSuccess: (value) => {
-    queryClient.setQueryData(['story-bible', value.projectId], value.result.storyBible)
-    queryClient.setQueryData(['outline', value.projectId], value.result.outline)
+    queryClient.setQueryData(['story-directions', value.projectId], value.result)
+    queryClient.invalidateQueries({ queryKey: ['project', value.projectId] })
     queryClient.invalidateQueries({ queryKey: ['work-imports', value.projectId] })
     if (props.projectId !== value.projectId || selectedImportId.value !== value.importId) return
     actionError.value = ''
@@ -89,9 +101,10 @@ function contentTypeLabel(value: string) {
   <div class="import-workbench">
     <div class="section-heading">
       <div><span class="eyebrow">已有作品</span><h2>导入与章节识别</h2></div>
-      <label class="button primary import-upload"><Upload :size="16" />{{ uploadMutation.isPending.value ? '正在解析…' : '选择文件' }}<input type="file" accept=".txt,.md,.docx,.pdf" :disabled="uploadMutation.isPending.value" @change="selectFile" /></label>
+      <div class="import-source-options" role="radiogroup" aria-label="导入方式"><label><input v-model="sourceMode" type="radio" value="file" />导入文件</label><label><input v-model="sourceMode" type="radio" value="text" />粘贴文字</label></div>
     </div>
-    <p class="import-hint">支持 TXT、Markdown、DOCX 和文本型 PDF，单个文件不超过 20 MB。原文件会完整保留。</p>
+    <label v-if="sourceMode === 'file'" class="button primary import-upload"><Upload :size="16" />{{ uploadMutation.isPending.value ? '正在导入…' : '选择文件' }}<input type="file" accept=".txt,.md,.docx,.pdf" :disabled="uploadMutation.isPending.value" @change="selectFile" /></label>
+    <form v-else class="paste-source" @submit.prevent="pasteMutation.mutate()"><label class="instruction-field"><span>故事文字</span><textarea v-model="pastedText" rows="8" :disabled="pasteMutation.isPending.value" /></label><button class="button primary" :disabled="!pastedText.trim() || pasteMutation.isPending.value"><FileText :size="16" />{{ pasteMutation.isPending.value ? '正在导入…' : '导入文字' }}</button></form>
     <SnowflakePlanningPanel :project-id="projectId" />
     <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
 
@@ -126,8 +139,8 @@ function contentTypeLabel(value: string) {
         </section>
 
         <div class="import-actions">
-          <div v-if="planningBusy" class="acceptance-note" role="status"><LoaderCircle :size="16" />小说规划请求中 · 圣经与大纲完成后保存草稿</div>
-          <div v-if="selectedImport.planningStatus === 'GENERATED'" class="acceptance-note"><Check :size="16" />{{ selectedImport.planningMode === 'ADAPT_SOURCE' ? '改编版' : '续写版' }}故事圣经与分层大纲草稿已生成，请到“大纲”中检查。</div>
+          <div v-if="planningBusy" class="acceptance-note" role="status"><LoaderCircle :size="16" />雪花规划请求中 · 依次生成底稿和故事方向</div>
+          <div v-if="selectedImport.planningStatus === 'DIRECTIONS_READY'" class="acceptance-note"><Check :size="16" />雪花底稿与故事方向已生成</div>
           <div class="planning-mode-field">
             <span>这份内容怎么使用</span>
             <div class="planning-mode-options">
@@ -135,13 +148,24 @@ function contentTypeLabel(value: string) {
               <label :class="{ selected: planningMode === 'CONTINUE_MANUSCRIPT' }"><input v-model="planningMode" type="radio" value="CONTINUE_MANUSCRIPT" /><strong>作为已有正文续写</strong><small>保留已经发生的内容，在其后继续写作</small></label>
             </div>
           </div>
-            <ImportAnalysisPanel :key="`${projectId}:${selectedImport.id}`" :project-id="projectId" :import-id="selectedImport.id" :mode="planningMode" :chapters="selectedImport.chapters" :disabled="confirmMutation.isPending.value" @ready="analysisProof = $event" @confirmed="importsQuery.refetch()" />
+            <ImportAnalysisPanel :key="`${projectId}:${selectedImport.id}`" :project-id="projectId" :import-id="selectedImport.id" :mode="planningMode" :chapters="selectedImport.chapters" :auto-start="autoAnalyze || newlyImportedId === selectedImport.id" :disabled="planningBusy" @ready="analysisProof = $event" @confirmed="importsQuery.refetch()" />
             <GlobalModelBadge />
             <label class="instruction-field"><span>改编或续写要求</span><textarea v-model="planningInstruction" rows="2" maxlength="1000" placeholder="可选，例如：扩写为青春校园成长小说，增强人物弧光" /></label>
-            <button class="button primary" type="button" :disabled="planningBusy || !analysisProof" @click="confirmMutation.mutate()"><Sparkles :size="16" />{{ planningBusy ? '正在生成小说规划…' : selectedImport.planningStatus === 'GENERATED' ? '重新生成小说规划' : '生成小说规划' }}</button>
+            <label class="instruction-field"><span>目标字数</span><input v-model.number="targetWords" type="number" min="1000" max="10000000" step="1000" :disabled="planningBusy" /></label>
+            <label><input v-model="expandScenes" type="checkbox" :disabled="planningBusy" />执行第9步：关键场景展开</label>
+            <button class="button primary" type="button" :disabled="planningBusy || !analysisProof || targetWords < 1000" @click="confirmMutation.mutate()"><Sparkles :size="16" />{{ planningBusy ? '正在生成雪花底稿…' : '生成雪花底稿与故事方向' }}</button>
             <p v-if="selectedImport.planningError" class="form-error">上次反推失败：{{ selectedImport.planningError }}</p>
         </div>
       </main>
     </div>
   </div>
 </template>
+
+<style scoped>
+.import-source-options { display: flex; gap: 16px; flex-wrap: wrap; }
+.import-source-options label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.import-upload { margin-block: 12px; }
+.paste-source { display: grid; gap: 12px; margin-block: 16px; }
+.paste-source button { justify-self: start; }
+.paste-source textarea { width: 100%; min-width: 0; resize: vertical; }
+</style>

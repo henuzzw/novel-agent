@@ -148,6 +148,8 @@ public class StoryBibleVersion {
         this.status = StoryBibleStatus.PUBLISHED;
     }
 
+    public void linkImport(UUID importId) { this.sourceImportId = importId; }
+
     private static StoryBibleContent validate(StoryBibleContent value) {
         if (value == null) {
             throw new IllegalArgumentException("故事圣经内容不能为空");

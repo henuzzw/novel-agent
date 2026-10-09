@@ -1,5 +1,5 @@
-import { test, expect, type Page, type TestInfo } from '@playwright/test'
-import type { CreativeStrategySettings, CreateProjectInput, UpdateCreativeStrategyInput } from '../src/api/projects'
+import { test, expect, type Page } from '@playwright/test'
+import type { CreativeStrategySettings, UpdateCreativeStrategyInput } from '../src/api/projects'
 import { createModelSettingsFixture } from './model-settings-fixture'
 
 async function fixture(page: Page, options: { readFailures?: number; conflict?: boolean; forbidden?: boolean; holdSave?: boolean } = {}) {
@@ -9,7 +9,6 @@ async function fixture(page: Page, options: { readFailures?: number; conflict?: 
     'project-b': { strategy: 'STANDARD', policyVersion: 1, version: 20 },
   }
   const saves: Array<{ projectId: string; input: UpdateCreativeStrategyInput }> = []
-  const creates: CreateProjectInput[] = []
   const unrelatedWrites: string[] = []
   const failures: string[] = []
   let readFailures = options.readFailures ?? 0
@@ -50,12 +49,6 @@ async function fixture(page: Page, options: { readFailures?: number; conflict?: 
       return route.fulfill({ json: settings[id] })
     }
     if (path === '/api/v1/projects') {
-      if (request.method() === 'POST') {
-        const input = request.postDataJSON() as CreateProjectInput
-        creates.push(input)
-        settings['created'] = { strategy: input.creativeStrategy ?? 'STANDARD', policyVersion: 1, version: 0 }
-        return route.fulfill({ status: 201, json: { ...project('created'), ...input } })
-      }
       return route.fulfill({ json: [project('project-a'), project('project-b')] })
     }
     if (/\/projects\/[^/]+$/.test(path)) {
@@ -65,7 +58,7 @@ async function fixture(page: Page, options: { readFailures?: number; conflict?: 
     }
     return route.fulfill({ json: path.endsWith('/latest') || path.endsWith('/current') ? null : [] })
   })
-  return { settings, saves, creates, unrelatedWrites, failures, releaseSave: () => releaseSave?.() }
+  return { settings, saves, unrelatedWrites, failures, releaseSave: () => releaseSave?.() }
 }
 
 async function openSettings(page: Page, id = 'project-a') {
@@ -74,10 +67,9 @@ async function openSettings(page: Page, id = 'project-a') {
   return page.getByRole('region', { name: '项目创作策略' })
 }
 
-async function screenshotAndLayout(page: Page, testInfo: TestInfo, name: string) {
+async function checkLayout(page: Page) {
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-  await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   const controls = page.getByRole('radiogroup', { name: '创作策略' })
   const boxes = await controls.locator('label').evaluateAll(labels => labels.map(label => {
@@ -97,27 +89,7 @@ async function screenshotAndLayout(page: Page, testInfo: TestInfo, name: string)
   expect(first!.right <= second!.x || first!.bottom <= second!.y).toBe(true)
 }
 
-for (const [strategy, label] of [['STANDARD', '标准创作'], ['FANQIE_GRIPPING', '番茄强开篇']] as const) {
-  test(`creates an IDEA project with explicit ${strategy}`, async ({ page }, testInfo) => {
-    const state = await fixture(page)
-    await page.goto('/projects/new')
-    await expect(page.getByRole('radio', { name: '标准创作' })).toBeChecked()
-    await page.getByRole('radio', { name: label }).check()
-    await page.getByLabel('项目名称', { exact: true }).fill('开篇策略测试')
-    await page.getByLabel('一句话创意', { exact: true }).fill('少年在新学期寻找一封遗失的信')
-    await page.getByLabel('主角简述', { exact: true }).fill('少年想澄清同学之间的误会')
-    await page.getByLabel('核心冲突', { exact: true }).fill('每个人给出的线索都不一样')
-    await screenshotAndLayout(page, testInfo, `create-${strategy.toLowerCase()}`)
-    await page.getByRole('button', { name: '创建项目', exact: true }).click()
-    await expect(page).toHaveURL(/\/projects\/created$/)
-    expect(state.creates).toHaveLength(1)
-    expect(state.creates[0]).toMatchObject({ creativeStrategy: strategy, creativeIntent: { stylePreferences: [] } })
-    expect(state.unrelatedWrites).toEqual([])
-    expect(state.failures).toEqual([])
-  })
-}
-
-test('saves independently of global models and styles, persists on reload and isolates projects', async ({ page }, testInfo) => {
+test('saves independently of global models and styles, persists on reload and isolates projects', async ({ page }) => {
   const state = await fixture(page)
   let panel = await openSettings(page)
   await expect(panel.getByRole('radio', { name: '标准创作' })).toBeChecked()
@@ -128,7 +100,7 @@ test('saves independently of global models and styles, persists on reload and is
   await expect(panel.getByRole('status')).toContainText('已保存')
   expect(state.saves).toEqual([{ projectId: 'project-a', input: { strategy: 'FANQIE_GRIPPING', version: 7 } }])
   await expect(page.getByLabel('ChatGPT 模型', { exact: true })).toHaveValue('gpt-6.1-sol')
-  await screenshotAndLayout(page, testInfo, 'settings-saved')
+  await checkLayout(page)
   await page.reload()
   await page.getByRole('button', { name: '设置', exact: true }).click()
   panel = page.getByRole('region', { name: '项目创作策略' })
@@ -140,7 +112,7 @@ test('saves independently of global models and styles, persists on reload and is
   expect(state.failures).toEqual([])
 })
 
-test('retries a failed read and recovers from 409 using a freshly read row version', async ({ page }, testInfo) => {
+test('retries a failed read and recovers from 409 using a freshly read row version', async ({ page }) => {
   const state = await fixture(page, { readFailures: 1, conflict: true })
   const panel = await openSettings(page)
   await expect(panel.getByRole('alert')).toHaveText('创作策略读取失败')
@@ -150,7 +122,7 @@ test('retries a failed read and recovers from 409 using a freshly read row versi
   await panel.getByRole('button', { name: '保存创作策略' }).click()
   await expect(panel.getByRole('alert')).toContainText('重新读取后再保存')
   await expect(panel.getByRole('button', { name: '保存创作策略' })).toBeDisabled()
-  await screenshotAndLayout(page, testInfo, 'settings-conflict')
+  await checkLayout(page)
   await panel.getByRole('button', { name: '重新读取创作策略', exact: true }).click()
   await expect(panel.getByRole('radio', { name: '标准创作' })).toBeChecked()
   await panel.getByRole('radio', { name: '番茄强开篇' }).check()
@@ -174,7 +146,7 @@ test('preserves an unsaved selection after permission failure', async ({ page })
   expect(state.failures).toEqual([])
 })
 
-test('a delayed save cannot overwrite another project after SPA navigation', async ({ page }, testInfo) => {
+test('a delayed save cannot overwrite another project after SPA navigation', async ({ page }) => {
   const state = await fixture(page, { holdSave: true })
   let panel = await openSettings(page)
   await panel.getByRole('radio', { name: '番茄强开篇' }).check()
@@ -194,7 +166,7 @@ test('a delayed save cannot overwrite another project after SPA navigation', asy
   await panel.getByRole('button', { name: '保存创作策略' }).click()
   await expect(panel.getByRole('status')).toContainText('已保存')
   expect(state.saves[1]).toEqual({ projectId: 'project-b', input: { strategy: 'FANQIE_GRIPPING', version: 20 } })
-  await screenshotAndLayout(page, testInfo, 'settings-project-switch')
+  await checkLayout(page)
   expect(state.unrelatedWrites).toEqual([])
   expect(state.failures).toEqual([])
 })

@@ -72,15 +72,7 @@ public class ChapterAutomationPlanner {
             }
             return waitFor("请由作者确认正文");
         }
-        if (review == null || !manuscript.id().equals(review.sourceManuscriptVersionId())) {
-            return new Decision(Action.REVIEW, null);
-        }
-        if (review.status() == ReviewStatus.RETURNED) return waitFor("审稿已打回，请完成正文修改并重新确认");
-        if (review.content().issues().stream().anyMatch(issue -> "BLOCKING".equals(issue.severity()) && !issue.resolved())) {
-            return waitFor("审稿存在未处理的阻断问题，请修改正文或处理问题");
-        }
-        if (review.status() != ReviewStatus.APPROVED) return waitFor("请处理候选事实并确认审稿结果");
-        return waitFor("请由作者提交本章正史，再继续下一章");
+        return waitFor("请由作者确认并发布本章，再继续下一章");
     }
 
     private static Decision waitFor(String reason) {

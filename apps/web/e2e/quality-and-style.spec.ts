@@ -1,19 +1,13 @@
 import { createModelSettingsFixture, selectGlobalProvider } from './model-settings-fixture'
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import type { QualityReview, WritingStyleProfile } from '../src/api/writingQuality'
 
-async function capture(page: Page, path: string) {
-  await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }))
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-  await page.screenshot({ path, fullPage: true })
-}
-
-test('chooses and analyzes an editable style, then checks and revises a manuscript', async ({ page }, testInfo) => {
+test('chooses and analyzes an editable style, then checks and revises a manuscript', async ({ page }) => {
   const profile: WritingStyleProfile = { name: '悬疑克制', narrativeVoice: '克制', sentenceRhythm: '长短交替', descriptionFocus: '具体物件', dialogueStyle: '保留信息差', emotionalExpression: '动作表达', pacing: '线索递进', avoidPatterns: ['重复解释'] }
   let style: WritingStyleProfile | null = null
   let version = 0
   let applied = 0
-  let manuscript = { id: 'm1', projectId: 'test-project', chapterNumber: 1, versionNumber: 1, version: 0, status: 'DRAFT', sourceContractVersionId: 'c1', baseManuscriptVersionId: null as string | null, sourceReviewVersionId: null, generatorType: 'LOCAL_TEMPLATE', changeSummary: [] as string[], content: { title: '纸条', body: '然后他走到门口，接着看见纸条，随后停下来。。', summary: '发现纸条', continuityNotes: [] } }
+  let manuscript = { id: 'm1', projectId: 'test-project', chapterNumber: 1, versionNumber: 1, version: 0, status: 'DRAFT', sourceContractVersionId: null, baseManuscriptVersionId: null as string | null, sourceReviewVersionId: null, generatorType: 'LOCAL_TEMPLATE', changeSummary: [] as string[], content: { title: '纸条', body: '然后他走到门口，接着看见纸条，随后停下来。。', summary: '发现纸条', continuityNotes: [] } }
   let report: object | null = null
   const modelSettings = createModelSettingsFixture()
   await page.route('**/api/v1/**', async route => {
@@ -29,9 +23,8 @@ test('chooses and analyzes an editable style, then checks and revises a manuscri
       return route.fulfill({ json: { profile: { ...profile, name: '样本节奏' }, analysisMode: 'TEXT_METRICS', sampleCharacters: 100 } })
     }
     if (path.endsWith('/outlines/current')) return route.fulfill({ json: { id: 'o1', status: 'PUBLISHED', content: { arcs: [{ ordinal: 1, title: '第一卷', chapters: [{ number: 1, title: '纸条', objective: '寻找线索' }] }] } } })
-    if (path.endsWith('/contracts/latest')) return route.fulfill({ json: { id: 'c1', version: 0, versionNumber: 1, status: 'APPROVED', content: { chapterTitle: '纸条', pov: '主角', objective: '寻找线索', storyTime: '当天', locations: [], requiredBeats: [], requiredReveals: [], forbiddenFacts: [], expectedExitState: '发现纸条', foreshadowActions: [], hook: '纸条内容', suggestedMinWords: 1000, suggestedMaxWords: 2000 } } })
     if (path.endsWith('/manuscripts/latest')) return route.fulfill({ json: manuscript })
-    if (path.endsWith('/manuscripts') || path.endsWith('/contracts') || /\/(character-profiles|characters|entities)$/.test(path)) return route.fulfill({ json: [] })
+    if (path.endsWith('/manuscripts') || /\/(character-profiles|characters|entities)$/.test(path)) return route.fulfill({ json: [] })
     if (path.endsWith('/quality-reviews/actions/generate')) {
       report = { id: 'q1', sourceManuscriptId: manuscript.id, sourceManuscriptRowVersion: manuscript.version, current: true, content: { summary: '本地规则检查；不能判断因果与动机。', scores: ['STYLE', 'FLUENCY', 'LOGIC', 'SCENE'].map(dimension => ({ dimension, score: null, rationale: '本地不提供文学评分' })), issues: [{ id: 'Q1', category: 'FLUENCY', severity: 'INFO', description: '连续标点', evidence: '。。', suggestion: '检查并删除误输入标点', resolved: false }] } }
       return route.fulfill({ status: 201, json: report })
@@ -64,7 +57,6 @@ test('chooses and analyzes an editable style, then checks and revises a manuscri
   await expect(page.getByText('本地结果仅包含句式指标', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: '应用风格' }).click()
   await expect.poll(() => applied).toBe(2)
-  await capture(page, testInfo.outputPath('style.png'))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('button', { name: '写作', exact: true }).click()
   await page.locator('.chapter-flow').getByRole('button', { name: /检查与润色/ }).click()
@@ -77,13 +69,12 @@ test('chooses and analyzes an editable style, then checks and revises a manuscri
   await expect(page.locator('.editor-status')).toContainText('第 2 版')
   await expect(page.locator('.quality-panel')).toHaveAttribute('data-state', 'stale')
   await expect(page.locator('.quality-status')).toContainText('修订后需复检')
-  await capture(page, testInfo.outputPath('quality.png'))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })
 
-test('checks authorization, source locations, stale rejection, recheck and author/canon gates', async ({ page }, testInfo) => {
+test('checks authorization, source locations, stale rejection, recheck and author/canon gates', async ({ page }) => {
   let manuscript = { id: 'm1', projectId: 'test-project', chapterNumber: 1, versionNumber: 1, version: 0, status: 'DRAFT',
-    sourceContractVersionId: 'c1', baseManuscriptVersionId: null as string | null, sourceReviewVersionId: null,
+    sourceContractVersionId: null, baseManuscriptVersionId: null as string | null, sourceReviewVersionId: null,
     generatorType: 'LOCAL_CODEX', changeSummary: [] as string[],
     content: { title: '纸条', body: `然后他走到门口。。\n\n${'窗外的雨声压过脚步，她放下纸条，等他读完。'.repeat(30)}\n\n然后他走到门口。。`, summary: '发现纸条', continuityNotes: [] } }
   const history = new Map([[manuscript.id, structuredClone(manuscript)]])
@@ -114,10 +105,9 @@ test('checks authorization, source locations, stale rejection, recheck and autho
     }
     if (path.endsWith('/opening-review/actions/check')) { openingModelCalls++; return route.fulfill({ status: 400, json: { detail: '缺少正文' } }) }
     if (path.endsWith('/outlines/current')) return route.fulfill({ json: { id: 'o1', status: 'PUBLISHED', content: { arcs: [{ ordinal: 1, title: '第一卷', chapters: [{ number: 1, title: '纸条', objective: '寻找线索' }] }] } } })
-    if (path.endsWith('/contracts/latest')) return route.fulfill({ json: { id: 'c1', sourceOutlineVersionId: 'o1', version: 0, versionNumber: 1, status: 'APPROVED', content: { chapterTitle: '纸条', pov: '主角', objective: '寻找线索', storyTime: '当天', locations: [], requiredBeats: [], requiredReveals: [], forbiddenFacts: [], expectedExitState: '发现纸条', foreshadowActions: [], hook: '纸条内容', suggestedMinWords: 1000, suggestedMaxWords: 2000 } } })
     if (path.endsWith('/manuscripts/latest')) return route.fulfill({ json: manuscript })
     if (/\/manuscripts\/m\d+$/.test(path)) return route.fulfill({ json: history.get(path.split('/').at(-1)!) })
-    if (path.endsWith('/manuscripts') || path.endsWith('/contracts') || path.endsWith('/entities')) return route.fulfill({ json: [] })
+    if (path.endsWith('/manuscripts') || path.endsWith('/entities')) return route.fulfill({ json: [] })
     if (path.endsWith('/quality-reviews/latest')) return report ? route.fulfill({ json: report }) : route.fulfill({ status: 204 })
     if (path.endsWith('/quality-reviews/actions/generate')) {
       if (holdCheck) await new Promise<void>(resolve => { releaseCheck = resolve })
@@ -199,7 +189,6 @@ test('checks authorization, source locations, stale rejection, recheck and autho
   await expect(panel.locator('mark')).toHaveText('然后他走到门口')
   await panel.getByRole('button', { name: '下一处原文', exact: true }).click()
   await expect(panel.locator('.quality-original header')).toContainText('第 3 段')
-  await capture(page, testInfo.outputPath('quality-valid-located.png'))
   await panel.locator('input[value="Q1"]').check()
   await panel.getByRole('button', { name: '按建议生成润色稿', exact: true }).click()
   await expect(panel).toHaveAttribute('data-state', 'stale')
@@ -218,7 +207,6 @@ test('checks authorization, source locations, stale rejection, recheck and autho
   await panel.getByRole('button', { name: '复检正文', exact: true }).click()
   await expect(panel).toHaveAttribute('data-state', 'valid')
   await panel.locator('input[value="Q2"]').check()
-  await capture(page, testInfo.outputPath('quality-scene-authorization.png'))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   expect(await panel.evaluate(root => [...root.querySelectorAll('.quality-actions')].every(group => {
     const boxes = [...group.querySelectorAll('button')].map(button => button.getBoundingClientRect())
@@ -249,6 +237,5 @@ test('checks authorization, source locations, stale rejection, recheck and autho
   await expect(page.getByRole('button', { name: '检查完整三章', exact: true })).toBeDisabled()
   expect(openingReads).toBeGreaterThan(0)
   expect(openingModelCalls).toBe(0)
-  await capture(page, testInfo.outputPath('quality-opening-entry.png'))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

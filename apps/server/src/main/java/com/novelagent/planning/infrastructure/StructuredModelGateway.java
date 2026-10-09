@@ -71,26 +71,43 @@ public class StructuredModelGateway {
         // Freeze the saved template before budgeting, recording and dispatching either provider.
         var resolved = prompts == null ? new AgentPromptService.Resolved(systemPrompt, null)
                 : prompts.resolve(workflow, systemPrompt);
-        String effectiveSystem = resolved.systemPrompt();
+        var protocol = new PlainTextOutputProtocol(schema);
+        String stageInstructions = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.systemPrompt()) + protocol.instructions();
+        boolean sharedPlanning = provider == ModelProvider.LOCAL_CODEX && PlanningConversationPolicy.shares(workflow);
+        String effectiveUser = "【本轮服务端执行规范】\n" + stageInstructions
+                + "\n【本轮创作资料】\n" + userPrompt;
+        String effectiveSystem = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.sessionSystemPrompt())
+                + "\n\n" + AgentPromptService.protectedRules(workflow);
+        final String instructions = effectiveSystem;
+        CodexSessionPolicy effectivePolicy = sharedPlanning ? CodexSessionPolicy.REUSE_THREAD : sessionPolicy;
         EffectiveSettings selected = provider == ModelProvider.DEEPSEEK
                 ? deepSeek.effectiveSettings() : codex.effectiveSettings();
         EffectiveSettings settings = new EffectiveSettings(provider, selected.model(), selected.effort(), selected.version());
-        JsonNode frozenSchema = schema.deepCopy();
-        var contextBudget = budget.requireCapacity(provider, effectiveSystem, userPrompt, frozenSchema, maxOutputTokens);
-        RequestSnapshot snapshot = RequestSnapshot.capture(settings, effectiveSystem, userPrompt,
-                frozenSchema, schemaName, maxOutputTokens,
-                provider == ModelProvider.DEEPSEEK ? "STATELESS" : sessionPolicy.name()).withContextBudget(contextBudget);
+        JsonNode frozenSchema = com.fasterxml.jackson.databind.node.NullNode.getInstance();
+        var contextBudget = budget.requireCapacity(provider, instructions, effectiveUser, frozenSchema, maxOutputTokens);
+        RequestSnapshot snapshot = RequestSnapshot.capture(settings, instructions, effectiveUser,
+                frozenSchema, "PLAIN_TEXT", maxOutputTokens,
+                provider == ModelProvider.DEEPSEEK ? "STATELESS" : effectivePolicy.name()).withContextBudget(contextBudget);
+        var decoded = new java.util.concurrent.atomic.AtomicReference<String>();
+        Consumer<String> decode = raw -> {
+            String output = protocol.decode(raw);
+            if (processOutput != null) processOutput.accept(output);
+            decoded.set(output);
+        };
         if (provider == ModelProvider.DEEPSEEK) {
-            return record(projectId, workflow, provider, effectiveSystem, userPrompt, snapshot,
-                    () -> deepSeek.request(schemaName, effectiveSystem, userPrompt, frozenSchema,
-                            maxOutputTokens, settings), processOutput).output();
+            record(projectId, workflow, provider, instructions, effectiveUser, snapshot,
+                    () -> deepSeek.request(schemaName, instructions, effectiveUser, frozenSchema,
+                            maxOutputTokens, settings), decode);
+            return decoded.get();
         }
 
-        CodexAppServerClient.TurnResult result = record(projectId, workflow, provider,
-                effectiveSystem, userPrompt, snapshot,
-                () -> codexSessions.run(projectId, workflow, effectiveSystem, userPrompt, frozenSchema,
-                        sessionPolicy, settings, resolved.revision(), runs.progressSink()), processOutput);
-        return result.output();
+        record(projectId, workflow, provider,
+                instructions, effectiveUser, snapshot,
+                () -> codexSessions.run(projectId, sharedPlanning ? PlanningConversationPolicy.KEY : workflow,
+                        instructions, effectiveUser, frozenSchema, effectivePolicy, settings,
+                        sharedPlanning && resolved.revision() == null ? PlanningConversationPolicy.REVISION : resolved.revision(),
+                        runs.progressSink()), decode);
+        return decoded.get();
     }
 
     private <T extends AgentRunRecorder.ModelResult> T record(UUID projectId, String workflow, ModelProvider provider,

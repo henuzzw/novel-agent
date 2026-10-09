@@ -38,6 +38,11 @@ public class StoryBibleService {
     private final PlanningMaterialSyncService materials;
     private final SnowflakePlanningService snowflake;
     private final com.fasterxml.jackson.databind.ObjectMapper mapper;
+    private com.novelagent.ingest.application.ImportedBibleGenerator importedGenerator;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setImportedGenerator(com.novelagent.ingest.application.ImportedBibleGenerator generator) {
+        this.importedGenerator = generator;
+    }
 
     public StoryBibleService(
             NovelProjectRepository projectRepository,
@@ -84,7 +89,13 @@ public class StoryBibleService {
                 : requireVersion(projectId, request.baseBibleVersionId());
         StoryBibleContent previousContent = base == null ? null : base.getContent();
         String notes = previousContent == null ? null : previousContent.developmentNotes();
-        if (provider != ModelProvider.LOCAL_TEMPLATE && previousContent == null) {
+        var prepared = source.getSourceSnowflakeId() != null
+                ? Optional.of(snowflake.get(projectId, source.getSourceSnowflakeId()))
+                : Optional.<com.novelagent.planning.domain.SnowflakePlan>empty();
+        var importInput = prepared.isPresent() ? snowflake.input(projectId, prepared.get().id()) : null;
+        boolean fromImport = importInput != null && importInput.hasNonNull("sourceImportId");
+        if (fromImport && notes == null) notes = prepared.get().context();
+        if (provider != ModelProvider.LOCAL_TEMPLATE && previousContent == null && !fromImport) {
             var input = mapper.createObjectNode();
             input.put("mode", "NEW_STORY");
             input.put("sourceDirectionSetId", source.getId().toString());
@@ -100,8 +111,10 @@ public class StoryBibleService {
                     + "\n沿用底稿的因果、人物和世界，不再次另起设计；将人物文本映射到现有档案以供页面编辑。"
                     + "本次作者要求、已确认方向和修订基准中的明确设定优先于旧底稿；不要把未来弧光写成过去。";
         }
-        GeneratedStoryBible generated = workflow.generate(projectId, source.getInputSnapshot(), direction,
-                provider, previousContent, generationInstruction);
+        GeneratedStoryBible generated = fromImport && importedGenerator != null
+                ? importedGenerator.generate(projectId, provider, importInput, direction, notes,
+                        generationInstruction + "\n【本次修订基准；空则新生成】\n" + previousContent)
+                : workflow.generate(projectId, source.getInputSnapshot(), direction, provider, previousContent, generationInstruction);
         if (notes != null) {
             generated = new GeneratedStoryBible(generated.generatorType(),
                     generated.content().withDevelopmentNotes(notes), generated.changeSummary());
@@ -112,6 +125,7 @@ public class StoryBibleService {
                 generated.generatorType(), normalize(request.instruction()), source.getId(), direction.id(),
                 base == null ? null : base.getId(),
                 generated.content(), generated.changeSummary());
+        if (fromImport) version.linkImport(UUID.fromString(importInput.path("sourceImportId").asText()));
         return response(bibleRepository.saveAndFlush(version));
     }
 
@@ -210,11 +224,9 @@ public class StoryBibleService {
         }
         int generation = bibleRepository.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
                 .map(value -> value.getGenerationNumber() + 1).orElse(1);
-        StoryBibleVersion revision = source.getSourceImportId() == null
-                ? StoryBibleVersion.create(UUID.randomUUID(), projectId, generation, "AUTHOR_EDIT", null,
-                        source.getSourceDirectionSetId(), source.getSourceCandidateId(), source.getId(), content, List.of())
-                : StoryBibleVersion.createFromImport(UUID.randomUUID(), projectId, generation, "AUTHOR_EDIT", null,
-                        source.getSourceImportId(), source.getId(), content);
+        StoryBibleVersion revision = StoryBibleVersion.create(UUID.randomUUID(), projectId, generation, "AUTHOR_EDIT", null,
+                source.getSourceDirectionSetId(), source.getSourceCandidateId(), source.getId(), content, List.of());
+        if (source.getSourceImportId() != null) revision.linkImport(source.getSourceImportId());
         return response(bibleRepository.saveAndFlush(revision));
     }
 

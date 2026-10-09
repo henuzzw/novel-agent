@@ -179,7 +179,8 @@ public class AgentRunRecorder {
             Integer maxOutputTokens, String sessionPolicy, ContextBudget contextBudget) {
         public static RequestSnapshot capture(EffectiveSettings settings, String systemPrompt,
                 String userPrompt, JsonNode schema, String schemaName, int maxOutputTokens, String sessionPolicy) {
-            return new RequestSnapshot(settings, hash(systemPrompt), hash(userPrompt), hash(schema.toString()),
+            return new RequestSnapshot(settings, hash(systemPrompt), hash(userPrompt),
+                    schema == null || schema.isNull() ? null : hash(schema.toString()),
                     schemaName, maxOutputTokens,
                     settings.provider() == ModelProvider.DEEPSEEK ? maxOutputTokens : null, sessionPolicy, null);
         }

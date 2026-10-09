@@ -7,7 +7,8 @@ export interface SnowflakePlan {
   mode: string
   provider: ModelProvider
   status: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
-  activeStage: 'CORE' | 'CHARACTERS' | 'WORLD' | 'PLOT'
+  activeStage: string
+  steps: Record<string, string>
   core: string | null
   characters: string | null
   world: string | null

@@ -12,6 +12,7 @@ function plan(overrides: Partial<SnowflakePlan> = {}): SnowflakePlan {
   return { id: 'plan-1', projectId: 'p1', mode: 'NEW_STORY', provider: 'DEEPSEEK',
     status: 'SUCCEEDED', activeStage: 'PLOT', core: '自由文本故事核心', characters: '人物自由叙述，无字段清单',
     world: '世界使人物无法轻易选择', plot: '第一幕起因，第二幕受阻，第三幕承担代价', errorMessage: null,
+    steps: { CORE: '自由文本故事核心', CHARACTER_SETTINGS: '人物自由叙述，无字段清单' },
     createdAt: '', updatedAt: '', ...overrides }
 }
 function render() {
@@ -29,14 +30,14 @@ describe('snowflake planning', () => {
     vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan())
     const view = render()
     await flushPromises()
-    expect(view.findAll('details')).toHaveLength(4)
+    expect(view.findAll('details')).toHaveLength(9)
     expect(view.text()).toContain('人物自由叙述，无字段清单')
-    expect(view.text()).toContain('三幕情节与悬念节奏')
+    expect(view.text()).toContain('全部场景清单')
     expect(view.findAll('textarea')).toHaveLength(0)
   })
 
   it('keeps successful text visible when a later stage fails or stops', async () => {
-    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'FAILED', activeStage: 'WORLD',
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'FAILED', activeStage: 'CHARACTER_ARCS',
       world: null, plot: null, errorMessage: '世界请求超时' }))
     const view = render()
     await flushPromises()

@@ -68,10 +68,18 @@ class AgentPromptIntegrationTest {
     }
 
     @Test void savesThroughTheApiAppliesToARealRecordedCallAndResetsWithoutWritingCanon() throws Exception {
-        mvc.perform(get("/api/v1/settings/prompts")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(24));
+        var defaultResponse = mvc.perform(get("/api/v1/settings/prompts")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(23)).andReturn();
+        for (var prompt : mapper.readTree(defaultResponse.getResponse().getContentAsByteArray())) {
+            String key = prompt.path("key").asText();
+            assertThat(prompt.path("systemPrompt").asText()).as(key)
+                    .isEqualTo(com.novelagent.prompt.application.AgentPromptDefaults.system(key));
+            assertThat(prompt.path("sessionSystemPrompt").asText()).as(key)
+                    .isEqualTo(com.novelagent.prompt.application.AgentPromptDefaults.sessionSystemPrompt());
+            assertThat(prompt.path("customized").asBoolean()).as(key).isFalse();
+        }
         assertThat(jdbc.queryForObject("SELECT count(*) FROM user_agent_prompt", Integer.class)).isZero();
-        String payload = "{\"systemPrompt\":\"集成验证的阶段角色\",\"guidance\":\"紧扣当前矛盾\",\"version\":0}";
+        String payload = "{\"systemPrompt\":\"集成验证的阶段角色\",\"sessionSystemPrompt\":\"集成验证的系统角色\",\"guidance\":\"紧扣当前矛盾\",\"version\":0}";
         mvc.perform(put("/api/v1/settings/prompts/OUTLINE").contentType(MediaType.APPLICATION_JSON).content(payload))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(1));
         mvc.perform(get("/api/v1/settings/prompts/OUTLINE")).andExpect(status().isOk())
@@ -82,15 +90,18 @@ class AgentPromptIntegrationTest {
         var projectId = UUID.randomUUID();
         projects.saveAndFlush(NovelProject.create(projectId, actor.currentUserId(), "提示词隔离验证", EntryMode.IDEA));
         var settings = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 0L);
-        var schema = mapper.createObjectNode().put("type", "object");
+        var schema = mapper.createObjectNode().put("type", "object")
+                .set("properties", mapper.createObjectNode().set("text", mapper.createObjectNode().put("type", "string")));
         when(deepSeek.effectiveSettings()).thenReturn(settings);
-        when(deepSeek.request(eq("schema"), anyString(), eq("项目资料保持原样"), eq(schema), eq(3456), eq(settings)))
-                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("{\"ok\":true}", null));
+        when(deepSeek.request(eq("schema"), anyString(), anyString(), eq(com.fasterxml.jackson.databind.node.NullNode.getInstance()), eq(3456), eq(settings)))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("文本结果", null));
         assertThat(models.request(projectId, "OUTLINE", ModelProvider.DEEPSEEK, "默认系统原文", "项目资料保持原样",
-                schema, "schema", 3456, CodexSessionPolicy.NEW_THREAD)).isEqualTo("{\"ok\":true}");
+                schema, "schema", 3456, CodexSessionPolicy.NEW_THREAD)).isEqualTo("{\"text\":\"文本结果\"}");
         String actual = jdbc.queryForObject("SELECT system_prompt FROM agent_run WHERE project_id = ?", String.class, projectId);
-        assertThat(actual).startsWith("集成验证的阶段角色").contains("紧扣当前矛盾", "OUTLINE · 版本 1", "不提交正史");
-        verify(deepSeek).request("schema", actual, "项目资料保持原样", schema, 3456, settings);
+        String actualUser = jdbc.queryForObject("SELECT user_prompt FROM agent_run WHERE project_id = ?", String.class, projectId);
+        assertThat(actual).startsWith("集成验证的系统角色");
+        assertThat(actualUser).contains("集成验证的阶段角色", "紧扣当前矛盾", "OUTLINE · 版本 1", "项目资料保持原样");
+        verify(deepSeek).request("schema", actual, actualUser, com.fasterxml.jackson.databind.node.NullNode.getInstance(), 3456, settings);
         mvc.perform(post("/api/v1/settings/prompts/OUTLINE/reset").contentType(MediaType.APPLICATION_JSON).content("{\"version\":1}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.customized").value(false))
                 .andExpect(jsonPath("$.version").value(2));

@@ -34,22 +34,13 @@ public class WritingContextService {
     private final OutlineVersionRepository outlines;
     private final StoryBibleVersionRepository bibles;
     private final NovelMemoryService memory;
-    private final com.novelagent.planning.application.CreationPreparationContextService preparation;
 
     public WritingContextService(ProjectAccessService access, OutlineVersionRepository outlines,
             StoryBibleVersionRepository bibles, NovelMemoryService memory) {
-        this(access, outlines, bibles, memory, null);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public WritingContextService(ProjectAccessService access, OutlineVersionRepository outlines,
-            StoryBibleVersionRepository bibles, NovelMemoryService memory,
-            com.novelagent.planning.application.CreationPreparationContextService preparation) {
         this.access = access;
         this.outlines = outlines;
         this.bibles = bibles;
         this.memory = memory;
-        this.preparation = preparation;
     }
 
     /**
@@ -103,8 +94,7 @@ public class WritingContextService {
     }
 
     private Context prepared(Context context) {
-        String text = preparation == null ? "" : preparation.context(context.outline().getProjectId(), context.outline().getId(), context.chapter().number());
-        return new Context(context.outline(), context.bible(), context.arc(), context.chapter(), context.previous(), context.next(), context.creativeStrategy(), text);
+        return context;
     }
 
     /**

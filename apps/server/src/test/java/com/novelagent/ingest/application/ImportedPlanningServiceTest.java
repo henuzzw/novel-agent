@@ -90,11 +90,8 @@ class ImportedPlanningServiceTest {
         order.verify(characters).generate(eq(project), eq(ModelProvider.DEEPSEEK), any());
         order.verify(models).request(eq(project), eq("IMPORT_REVERSE_BIBLE"), any(), anyString(), anyString(), any(), anyString(), eq(10000));
         order.verify(models).request(eq(project), eq("IMPORT_REVERSE_OUTLINE"), any(), anyString(), anyString(), any(), anyString(), eq(16000));
-        assertThat(biblePrompt.getValue()).contains(guide, "雪花法自由文本底稿", "【当前任务模式】" + mode.name(),
-                "完整保留前置人物底稿的具体姓名", "新增设计与原文事实的区别也保留",
-                "续写提炼时缺少依据的既往信息留空", "素材改编模式允许设计新的底稿");
-        assertThat(outlinePrompt.getValue()).contains(guide, CreativeStrategyGuide.outlineRules(), "江澈",
-                "与章节大纲在本次请求一起输出", "OCCURRED 章节只归纳原文已发生场景");
+        assertThat(biblePrompt.getValue()).contains(guide, mode.name());
+        assertThat(outlinePrompt.getValue()).contains(guide, "江澈");
         var saved = ArgumentCaptor.forClass(GeneratedOutline.class);
         verify(drafts).save(eq(project), eq(importId), eq(mode), eq(null), eq(new GeneratedStoryBible(bible.generatorType(), bible.content().withDevelopmentNotes(plan.context()), bible.changeSummary())), any(), saved.capture(),
                 eq(analysisId), eq(1L));

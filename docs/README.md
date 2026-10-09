@@ -139,9 +139,13 @@ cd apps\server
 
 cd ..\web
 npm run type-check
-npm run test:unit -- --run
+npm run test:unit
 npm run build
 ```
+
+默认测试已缩减为低负载关键回归：后端 9 个测试类、前端 7 个测试文件，均串行执行，前端不进入监听模式。数据库、模拟长时间超时和浏览器完整验证不默认运行。
+
+需要完整回归时手动执行后端 `./mvnw.cmd -Pfull-tests test`、前端 `npm run test:unit:full` 或 `npm run test:e2e:full`。不要同时运行这些命令；详细规则见 [测试计划](NOVEL_AGENT_TEST_PLAN.md)。
 
 服务启动后可通过 `http://localhost:8081/actuator/health` 查看 PostgreSQL、Neo4j 和应用状态。
 

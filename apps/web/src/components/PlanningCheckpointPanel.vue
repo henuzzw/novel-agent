@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createUuid } from '@/lib/uuid'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Check, Layers, Pause, Play, RefreshCw, RotateCcw } from 'lucide-vue-next'
 import {
@@ -106,7 +107,7 @@ async function create() {
     instruction: instruction.value.trim(), expectedBibleVersion: bible.value.version, expectedBibleId: bible.value.id }
   const fingerprint = JSON.stringify({ ...input, bibleId: bible.value.id })
   // Keep the same key after an ambiguous response so an explicit click cannot create a duplicate batch.
-  if (createIdentity?.fingerprint !== fingerprint) createIdentity = { fingerprint, requestId: crypto.randomUUID() }
+  if (createIdentity?.fingerprint !== fingerprint) createIdentity = { fingerprint, requestId: createUuid() }
   busy.value = 'create'
   actionError.value = ''
   try {

@@ -58,11 +58,7 @@ class DraftLoopModelTest {
         assertThat(saved).isFalse();
     }
 
-    @Test void cDefaultIsEditableAndProtectsCandidateDesignBoundary() {
-        assertThat(new AgentPromptCatalog().require("DRAFT_JUDGE_REVISION").defaultSystemPrompt())
-                .contains("B 的报告不是事实来源", "候选补丁", "既往经历", "摘要、连续性备注");
-        assertThat(AgentPromptDefaults.system("MANUSCRIPT")).startsWith("你是一名专业爽文作家");
-        assertThat(AgentPromptDefaults.system("QUALITY_REVIEW")).contains("新增内容明确标为候选设计", "不设最低数量");
+    @Test void checkProtocolDoesNotRequireScores() {
         assertThat(model.checkSchema().path("properties").has("scores")).isFalse();
     }
 

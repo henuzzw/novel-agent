@@ -88,10 +88,6 @@ class AutomationPersistenceTest {
     @Autowired private com.novelagent.planning.application.OutlineService outlineService;
     @Autowired private com.novelagent.canon.application.CharacterProfileService characterProfiles;
     @Autowired private com.novelagent.canon.application.CharacterNameService characterNames;
-    @Autowired private com.novelagent.planning.application.CreationPreparationStore preparationStore;
-    @Autowired private com.novelagent.planning.application.CreationPreparationRunner preparationRunner;
-    @Autowired private com.novelagent.planning.application.CreationPreparationApprovalService preparationApproval;
-    @Autowired private com.novelagent.planning.application.CreationPreparationContextService preparationContext;
     @Autowired private com.novelagent.writing.application.WritingContextService writingContexts;
     @Autowired private com.novelagent.ingest.application.WorkImportService workImports;
     @Autowired private com.novelagent.ingest.application.ImportAnalysisStore importAnalyses;
@@ -215,107 +211,16 @@ class AutomationPersistenceTest {
         assertThat(jdbc.queryForObject("SELECT generated_analysis_id FROM work_import WHERE id = ?", UUID.class, source.id())).isEqualTo(accepted.report().id());
     }
 
-    private com.novelagent.planning.domain.CreationPreparation.World preparationWorld() {
-        return new com.novelagent.planning.domain.CreationPreparation.World(
-                List.of(com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安")),
-                List.of(new com.novelagent.planning.domain.CreationPreparation.Entity("letter", "ITEM", "纸条", "来源待核对", "夹在书里", "林安")));
-    }
-    private com.novelagent.planning.domain.CreationPreparation.Plot preparationPlot() {
-        return new com.novelagent.planning.domain.CreationPreparation.Plot(
-                List.of(new com.novelagent.planning.domain.CreationPreparation.Unit("find", "寻找失物", 1, 2, "找到失物", "线索矛盾", "认出字迹", "澄清误会", List.of("林安"), List.of("letter_owner"))),
-                List.of(), List.of(new com.novelagent.planning.domain.CreationPreparation.Knowledge("林安", "纸条主人", 2, "核对字迹后确认")),
-                List.of(new com.novelagent.planning.domain.CreationPreparation.Timeline("clue", 1, "放学后", "发现纸条", List.of("林安"))),
-                List.of(new com.novelagent.planning.domain.ReaderExperienceSeed("letter_owner", "FORESHADOW", "纸条主人", "找到纸条主人", "字迹", "认出主人", "澄清误会", 2)));
-    }
-    private com.novelagent.planning.application.CreationPreparationStore.View createPreparation(String mode) {
-        return preparationStore.create(projectId, new com.novelagent.planning.application.CreationPreparationStore.Create(UUID.randomUUID(), mode, ModelProvider.DEEPSEEK, 1, 2, "按剧情规划，不按字数切分"));
-    }
-    private void stubPreparationModels(java.util.function.Function<com.fasterxml.jackson.databind.JsonNode, com.novelagent.planning.domain.CreationPreparation.Review> review) {
-        org.mockito.Mockito.doAnswer(call -> {
-            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            String stage = call.getArgument(1); var input = json.readTree((String) call.getArgument(4));
-            return json.writeValueAsString(switch (stage) {
-                case "CHARACTER_DESIGN" -> preparationWorld();
-                case "CREATION_PREPARATION_PLOT" -> preparationPlot();
-                case "CREATION_PREPARATION_REVIEW" -> review.apply(input);
-                default -> throw new IllegalArgumentException("unexpected stage");
-            });
-        }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.matches("CHARACTER_DESIGN|CREATION_PREPARATION_.*"),
-                org.mockito.ArgumentMatchers.eq(ModelProvider.DEEPSEEK), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
-    }
-    @Test void preparationPersistsThreeStagesAndAppliesOnlyAfterAuthorConfirmation() {
-        stubPreparationModels(input -> new com.novelagent.planning.domain.CreationPreparation.Review("只检查规划，未检查正文", List.of(), List.of()));
-        var created = createPreparation("PREPARE");
-        var ready = preparationRunner.all(projectId, created.task().id(), created.task().version());
-        assertThat(ready.task().status()).isEqualTo("AWAITING_CONFIRMATION"); assertThat(ready.stale()).isFalse();
-        assertThat(characterNames.list(projectId)).isEmpty();
-        assertThat(readerExperiences.list(projectId)).isEmpty();
-        var applied = preparationApproval.confirm(projectId, ready.task().id(), new com.novelagent.planning.application.CreationPreparationApprovalService.Confirm(ready.task().version(), true, false, List.of()));
-        assertThat(applied.task().status()).isEqualTo("CONFIRMED"); assertThat(applied.stale()).isFalse();
-        assertThat(characterNames.list(projectId)).hasSize(1);
-        assertThat(characterProfiles.list(projectId).getFirst().background()).isEqualTo(preparationWorld().characters().getFirst().background());
-        assertThat(planningMaterials.characters(projectId).getFirst().blueprint().abilitiesAndLimits()).contains("数学");
-        assertThat(readerExperiences.list(projectId)).hasSize(1); assertThat(readerExperiences.list(projectId).getFirst().state()).isEqualTo(com.novelagent.writing.domain.ReaderExperienceState.PLANNED);
-        assertThat(preparationContext.context(projectId, ready.task().sourceOutlineId(), 1)).contains("寻找失物", "不知道", "未来规划", "认出主人");
-        assertThat(writingContexts.context(projectId, 1).instructionWithPreparation("写第一章")).contains("创作准备资料", "纸条");
-        assertThat(preparationContext.checkpoints(projectId)).hasSize(1).allMatch(point -> !point.ready());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM story_fact WHERE project_id = ?", Integer.class, projectId)).isZero();
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentCanonVersion()).isZero();
-        jdbc.update("UPDATE reader_experience_plan SET payoff_text = '核对后归还纸条', row_version = row_version + 1 WHERE project_id = ?", projectId);
-        assertThat(preparationContext.context(projectId, ready.task().sourceOutlineId(), 1)).contains("核对后归还纸条").doesNotContain("认出主人");
-        jdbc.update("UPDATE reader_experience_plan SET deleted = true, row_version = row_version + 1 WHERE project_id = ?", projectId);
-        assertThat(preparationContext.context(projectId, ready.task().sourceOutlineId(), 1)).doesNotContain("核对后归还纸条");
-    }
-    @Test void preparationRejectsStaleSourceAndIdempotencyMismatchBeforePaidCall() {
-        var request = new com.novelagent.planning.application.CreationPreparationStore.Create(UUID.randomUUID(), "PREPARE", ModelProvider.DEEPSEEK, 1, 2, "");
-        var first = preparationStore.create(projectId, request);
-        assertThat(preparationStore.create(projectId, request).task().id()).isEqualTo(first.task().id());
-        assertThatThrownBy(() -> preparationStore.create(projectId, new com.novelagent.planning.application.CreationPreparationStore.Create(request.requestId(), "REVIEW", ModelProvider.DEEPSEEK, 1, 2, ""))).hasMessageContaining("请求标识");
-        jdbc.update("UPDATE outline_version SET row_version = row_version + 1 WHERE id = ?", first.task().sourceOutlineId());
-        assertThat(preparationStore.get(projectId, first.task().id()).stale()).isTrue();
-        assertThatThrownBy(() -> preparationRunner.next(projectId, first.task().id(), first.task().version())).hasMessageContaining("已变化");
-    }
-    @Test void preparationRejectsLateCancelledOutputAndBlocksOtherOwners() {
-        var created = createPreparation("PREPARE"); var claim = preparationStore.claim(projectId, created.task().id(), created.task().version());
-        assertThatThrownBy(() -> preparationStore.claim(projectId, claim.id(), claim.version())).hasMessageContaining("不能执行");
-        preparationStore.action(projectId, claim.id(), claim.version(), "cancel");
-        assertThatThrownBy(() -> preparationStore.finish(claim, json.valueToTree(preparationWorld()))).isInstanceOf(com.novelagent.project.application.ResourceVersionConflictException.class);
-        assertThat(preparationStore.get(projectId, claim.id()).task().status()).isEqualTo("CANCELLED");
-        assertThat(characterNames.list(projectId)).isEmpty();
-        UUID foreign = UUID.randomUUID(); projects.saveAndFlush(NovelProject.create(foreign, UUID.randomUUID(), "他人", EntryMode.IDEA));
-        assertThatThrownBy(() -> preparationStore.list(foreign)).isInstanceOf(ProjectNotFoundException.class);
-        assertThatThrownBy(() -> preparationContext.links(foreign)).isInstanceOf(ProjectNotFoundException.class);
-    }
-    @Test void preparationEditingInvalidatesReviewAndRequiresRecheck() {
-        stubPreparationModels(input -> new com.novelagent.planning.domain.CreationPreparation.Review("规划检查", List.of(), List.of()));
-        var created = createPreparation("PREPARE"); var checked = preparationRunner.all(projectId, created.task().id(), created.task().version());
-        var edited = preparationStore.edit(projectId, checked.task().id(), checked.task().version(), checked.task().worldDesign(), checked.task().plotDesign());
-        assertThat(edited.task().nextStep()).isEqualTo(2); assertThat(edited.task().reviewReport()).isNull();
-        assertThatThrownBy(() -> preparationApproval.confirm(projectId, edited.task().id(), new com.novelagent.planning.application.CreationPreparationApprovalService.Confirm(edited.task().version(), true, false, List.of()))).hasMessageContaining("复核");
-        var rechecked = preparationRunner.next(projectId, edited.task().id(), edited.task().version());
-        assertThat(rechecked.task().status()).isEqualTo("AWAITING_CONFIRMATION");
-    }
-    @Test void preparationBlockingIssuesCannotBeBypassedAndWarningsNeedExplicitAcceptance() {
-        stubPreparationModels(input -> new com.novelagent.planning.domain.CreationPreparation.Review("需要作者确认", List.of(
-                new com.novelagent.planning.domain.CreationPreparation.Issue("goal", "BLOCKING", "动机", "需要先澄清", "/world_design/characters/0/coreDesire", "希望被明确选择", "修订人物动机")), List.of()));
-        var created = createPreparation("PREPARE"); var checked = preparationRunner.all(projectId, created.task().id(), created.task().version());
-        assertThatThrownBy(() -> preparationApproval.confirm(projectId, checked.task().id(), new com.novelagent.planning.application.CreationPreparationApprovalService.Confirm(checked.task().version(), true, true, List.of()))).hasMessageContaining("阻断");
-        assertThat(characterNames.list(projectId)).isEmpty();
-    }
-    @Test void preparationReviewCreatesFutureOutlineDraftWithoutPublishingOrChangingCanon() {
-        stubPreparationModels(input -> new com.novelagent.planning.domain.CreationPreparation.Review("检查规划，尚无正文", List.of(),
-                List.of(new com.novelagent.planning.domain.CreationPreparation.Adjustment(2, "核对字迹", "当面核对纸条", "认出主人", "决定说明", "让真相由行动揭示"))));
-        var created = createPreparation("REVIEW"); var ready = preparationRunner.all(projectId, created.task().id(), created.task().version());
-        assertThat(ready.task().worldDesign()).isNull();
-        var confirmed = preparationApproval.confirm(projectId, ready.task().id(), new com.novelagent.planning.application.CreationPreparationApprovalService.Confirm(ready.task().version(), true, false, List.of(2)));
-        var draft = outlines.findById(confirmed.task().resultOutlineId()).orElseThrow();
-        assertThat(draft.getStatus()).isEqualTo(com.novelagent.planning.domain.OutlineStatus.DRAFT);
-        assertThat(draft.getContent().arcs().getFirst().chapters().getFirst()).isEqualTo(outlines.findById(created.task().sourceOutlineId()).orElseThrow().getContent().arcs().getFirst().chapters().getFirst());
-        assertThat(draft.getContent().arcs().getFirst().chapters().get(1).coreEvent()).isEqualTo("当面核对纸条");
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentOutlineVersionId()).isEqualTo(created.task().sourceOutlineId());
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentCanonVersion()).isZero();
-    }
+
+
+
+
+
+
+
+
+
+
 
     @Test void publishedPlanningSynchronizesProfilesRelationsAndLedgerWithoutCanonOrOverwrites() {
         var character = com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安");
@@ -425,39 +330,7 @@ class AutomationPersistenceTest {
         canon.commit(projectId, chapter, new CommitCanonRequest(review.id(), chapter - 1));
     }
 
-    @Test void reviewAssociatesCanonEvidenceButProgressNeedsSeparateExplicitConfirmation() {
-        stubPreparationModels(input -> new com.novelagent.planning.domain.CreationPreparation.Review("规划检查", List.of(), List.of()));
-        var created = createPreparation("PREPARE"); var checked = preparationRunner.all(projectId, created.task().id(), created.task().version());
-        preparationApproval.confirm(projectId, checked.task().id(), new com.novelagent.planning.application.CreationPreparationApprovalService.Confirm(checked.task().version(), true, false, List.of()));
-        commitForeshadowChapter(1);
-        assertThat(preparationContext.checkpoints(projectId)).allMatch(point -> !point.ready());
-        commitForeshadowChapter(2);
-        assertThat(preparationContext.checkpoints(projectId)).allMatch(point -> point.ready() && !point.reviewed());
-        var plan = readerExperiences.list(projectId).stream().filter(entry -> entry.plan().title().equals("纸条主人")).findFirst().orElseThrow();
-        stubPreparationModels(input -> {
-            var fact = input.path("source_snapshot").path("facts").get(0);
-            return new com.novelagent.planning.domain.CreationPreparation.Review("核对有效正史事实，没有检查全部正文", List.of(), List.of(),
-                    List.of(new com.novelagent.planning.domain.CreationPreparation.PlanLink(plan.plan().id().toString(), fact.path("id").asText(), "SET_UP", fact.path("evidence_ref").asText())));
-        });
-        var review = createPreparation("REVIEW"); var reviewed = preparationRunner.all(projectId, review.task().id(), review.task().version());
-        assertThat(preparationContext.links(projectId)).isEmpty();
-        preparationApproval.confirm(projectId, reviewed.task().id(), new com.novelagent.planning.application.CreationPreparationApprovalService.Confirm(reviewed.task().version(), true, false, List.of()));
-        assertThat(preparationContext.checkpoints(projectId)).allMatch(point -> point.reviewed());
-        var link = preparationContext.links(projectId).getFirst();
-        assertThat(link.stale()).isFalse(); assertThat(link.recorded()).isFalse();
-        assertThat(readerExperiences.get(projectId, plan.plan().id()).history()).isEmpty();
-        var requestId = UUID.randomUUID();
-        assertThatThrownBy(() -> preparationContext.confirmLink(projectId, link.id(), requestId, plan.plan().version(), false)).hasMessageContaining("明确确认");
-        preparationContext.confirmLink(projectId, link.id(), requestId, plan.plan().version(), true);
-        preparationContext.confirmLink(projectId, link.id(), requestId, plan.plan().version(), true);
-        var updated = readerExperiences.get(projectId, plan.plan().id());
-        assertThat(updated.state().name()).isEqualTo("SET_UP"); assertThat(updated.history()).hasSize(1);
-        assertThat(preparationContext.links(projectId)).allMatch(item -> item.recorded() && !item.stale());
-        readerExperiences.update(projectId, plan.plan().id(), new com.novelagent.writing.domain.ReaderExperiencePlanInput(UUID.randomUUID(), updated.plan().version(),
-                updated.plan().kind(), updated.plan().title(), "作者修改了期待", updated.plan().setup(), updated.plan().payoff(), updated.plan().aftermath(), updated.plan().plannedChapter()));
-        assertThat(preparationContext.links(projectId)).allMatch(item -> item.stale() && !item.recorded());
-        assertThatThrownBy(() -> preparationContext.confirmLink(projectId, link.id(), UUID.randomUUID(), updated.plan().version() + 1, true)).hasMessageContaining("失效");
-    }
+
 
     @Test void databasePresetsAreLiveButAppliedProjectStyleIsAnIndependentSnapshot() throws Exception {
         var presets = styles.presets(projectId);

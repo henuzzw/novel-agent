@@ -135,7 +135,7 @@ public class AutomationService {
                         null,
                         null,
                         manuscript,
-                        writing.latestReview(projectId, chapter).orElse(null),
+                        null,
                         canon.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapter)
                                 .map(commit -> commit.getManuscriptVersionId()).orElse(null),
                         run.isQualityReviewEnabled(), qualityReport, run.getMaxAutoRevisionRounds(),
@@ -158,7 +158,6 @@ public class AutomationService {
                     case QUALITY_REVIEW -> quality.generate(projectId, chapter, run.getProvider(), run.getInstruction()).id();
                     case QUALITY_REVISION -> quality.revise(projectId, chapter, qualityReport.id(), decision.issueIds(),
                             run.getProvider(), run.getInstruction()).id();
-                    case REVIEW -> writing.generateReview(projectId, chapter, request).id();
                     default -> throw new IllegalStateException("无效的自动生成阶段");
                 };
                 store.update(projectId, id, attempt, value -> value.completeStep(artifact));

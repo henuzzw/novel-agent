@@ -1,4 +1,5 @@
 import { apiRequest } from '@/api/http'
+import { createUuid } from '@/lib/uuid'
 
 export type ModelProvider = 'LOCAL_CODEX' | 'DEEPSEEK' | 'LOCAL_TEMPLATE'
 export type GenerationMode = 'REVISE' | 'REGENERATE'
@@ -203,7 +204,7 @@ export function generateStoryDirections(
 ): Promise<StoryDirectionSet> {
   return apiRequest(`/api/v1/projects/${projectId}/story-directions/actions/generate`, {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': createUuid() },
     body: JSON.stringify({ instruction: instruction.trim() || null, provider, mode }),
   })
 }
@@ -241,7 +242,7 @@ export function generateStoryBible(
 ): Promise<StoryBibleVersion> {
   return apiRequest(`/api/v1/projects/${projectId}/story-bibles/actions/generate`, {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': createUuid() },
     body: JSON.stringify({ instruction: instruction.trim() || null, provider, mode,
       baseBibleVersionId: mode === 'REVISE' ? baseBibleVersionId : null }),
   })
@@ -319,7 +320,7 @@ export function generateOutline(
 ): Promise<OutlineVersion> {
   return apiRequest(`/api/v1/projects/${projectId}/outlines/actions/generate`, {
     method: 'POST',
-    headers: { 'Idempotency-Key': crypto.randomUUID() },
+    headers: { 'Idempotency-Key': createUuid() },
     body: JSON.stringify({
       instruction: instruction.trim() || null,
       provider,

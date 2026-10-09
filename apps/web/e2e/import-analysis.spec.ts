@@ -3,7 +3,7 @@ import { createModelSettingsFixture } from './model-settings-fixture'
 import type { AnalysisView } from '../src/api/importAnalyses'
 
 for (const mode of ['ADAPT_SOURCE', 'CONTINUE_MANUSCRIPT'] as const) {
-  test(`reviews evidence and confirms ${mode} before generating planning drafts`, async ({ page }, info) => {
+  test(`reviews evidence and confirms ${mode} before generating planning drafts`, async ({ page }) => {
     const models = createModelSettingsFixture()
     const chapters = [{ id: 'c1', ordinal: 1, title: '纸条', content: '林安把纸条夹进数学书。', characterCount: 12, contentType: 'MANUSCRIPT', selected: true }, { id: 'c2', ordinal: 2, title: '字迹', content: '林安发现纸条的字迹很熟悉。', characterCount: 13, contentType: 'MANUSCRIPT', selected: true }]
     const work = { id: 'import', projectId: 'test-project', originalFilename: '纸条.txt', mediaType: 'text/plain', sizeBytes: 80, sha256: '', parserVersion: '', detectedContentType: 'MANUSCRIPT', status: 'PARSED', planningStatus: 'NOT_STARTED', planningMode: null, generatedBibleVersionId: null, generatedOutlineVersionId: null, planningError: null, warnings: [], chapters, createdAt: '', confirmedAt: null }
@@ -54,8 +54,7 @@ for (const mode of ['ADAPT_SOURCE', 'CONTINUE_MANUSCRIPT'] as const) {
     expect(confirms).toHaveLength(1); expect(confirms[0]!.mode).toBe(mode); expect(confirms[0]!.authorConfirmed).toBe(true)
     expect(versions.every(v => v.expected === v.actual)).toBe(true)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.screenshot({ path: info.outputPath('import-analysis-confirmed.png'), fullPage: true })
-    await page.getByRole('button', { name: '生成小说规划', exact: true }).click()
+await page.getByRole('button', { name: '生成小说规划', exact: true }).click()
     await expect(page.getByRole('alert')).toContainText('测试停在规划调用边界')
     expect(planning).toEqual([{ provider: expect.any(String), instruction: null, mode, analysisId: 'analysis', analysisVersion: 5 }])
   })

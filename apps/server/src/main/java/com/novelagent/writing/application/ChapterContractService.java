@@ -13,7 +13,9 @@ import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -87,9 +89,7 @@ public class ChapterContractService {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     public ChapterContractResponse generateContract(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
-        contexts.requireOwnedProject(projectId);
-        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
-                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+        throw retiredStage(projectId);
     }
 
     /**
@@ -115,9 +115,7 @@ public class ChapterContractService {
      */
     public ChapterContractReviewResponse generateContractReview(UUID projectId, int chapterNumber,
             GenerateWritingRequest request) {
-        contexts.requireOwnedProject(projectId);
-        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
-                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+        throw retiredStage(projectId);
     }
 
     /**
@@ -131,9 +129,7 @@ public class ChapterContractService {
     @Transactional
     public ChapterContractReviewResponse approveContractReview(UUID projectId, UUID id, long expected,
             ChapterContractReviewContent content) {
-        contexts.requireOwnedProject(projectId);
-        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
-                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+        throw retiredStage(projectId);
     }
 
     /**
@@ -146,9 +142,7 @@ public class ChapterContractService {
      */
     @Transactional
     public ChapterContractResponse updateContract(UUID projectId, UUID id, long expected, ChapterContractContent content) {
-        contexts.requireOwnedProject(projectId);
-        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
-                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+        throw retiredStage(projectId);
     }
 
     /**
@@ -160,9 +154,12 @@ public class ChapterContractService {
      */
     @Transactional
     public ChapterContractResponse approveContract(UUID projectId, UUID id, long expected) {
-        contexts.requireOwnedProject(projectId);
-        throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE,
-                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+        throw retiredStage(projectId);
     }
 
+    private ResponseStatusException retiredStage(UUID projectId) {
+        contexts.requireOwnedProject(projectId);
+        return new ResponseStatusException(HttpStatus.GONE,
+                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+    }
 }

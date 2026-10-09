@@ -13,9 +13,140 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class CodexAppServerClientTest {
+
+    @ParameterizedTest
+    @ValueSource(strings = {"item/agentMessage/delta", "item/reasoning/textDelta",
+            "item/reasoning/summaryTextDelta", "thread/tokenUsage/updated", "item/completed"})
+    @Timeout(5)
+    void ongoingGenerationOutlivesTheOriginalDeadlineWithoutInterruptOrRetry(String method,
+            @TempDir Path temp) throws Exception {
+        var mapper = new ObjectMapper();
+        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+                temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
+        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        var streamed = new java.util.ArrayList<String>();
+        var counter = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            org.mockito.Mockito.doAnswer(call -> {
+                scheduled.scheduleAtFixedRate(() -> {
+                    int sequence = counter.incrementAndGet();
+                    var event = mapper.createObjectNode().put("method", method);
+                    var params = event.putObject("params").put("threadId", "thread").put("turnId", "turn");
+                    if (method.equals("thread/tokenUsage/updated")) {
+                        params.putObject("tokenUsage").putObject("last").put("inputTokens", 10)
+                                .put("outputTokens", 0).put("reasoningOutputTokens", sequence);
+                    } else if (method.equals("item/completed")) {
+                        params.putObject("item").put("id", "item-" + sequence)
+                                .put("type", "agentMessage").put("text", "partial-" + sequence);
+                    } else {
+                        params.put("itemId", "item").put("delta",
+                                method.equals("item/agentMessage/delta") ? "x" : "PRIVATE");
+                    }
+                    client.handleMessage(event);
+                }, 50, 150, java.util.concurrent.TimeUnit.MILLISECONDS);
+                scheduled.schedule(() -> client.handleMessage(completedTurn(mapper)),
+                        1600, java.util.concurrent.TimeUnit.MILLISECONDS);
+                return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
+            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            var result = client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode(),
+                    client.effectiveSettings(), streamed::add);
+            assertThat(result.output()).isEqualTo("{\"ok\":true}");
+            assertThat(counter.get()).isGreaterThan(1);
+            assertThat(streamed).doesNotContain("PRIVATE");
+            org.mockito.Mockito.verify(client, org.mockito.Mockito.never())
+                    .interruptTimedOutTurn(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+            org.mockito.Mockito.verify(client, org.mockito.Mockito.times(1))
+                    .request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+        } finally {
+            scheduled.shutdownNow();
+            scheduled.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    @Timeout(5)
+    void streamingThenStallingTimesOutFromTheLastProgressAndKeepsPartialOutput(@TempDir Path temp)
+            throws Exception {
+        var mapper = new ObjectMapper();
+        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+                temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
+        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        var streamed = new java.util.ArrayList<String>();
+        org.mockito.Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
+        try {
+            var progress = mapper.readTree("""
+                    {"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn",
+                    "itemId":"item","delta":"partial"}}
+                    """);
+            org.mockito.Mockito.doAnswer(call -> {
+                scheduled.schedule(() -> client.handleMessage(progress), 500, java.util.concurrent.TimeUnit.MILLISECONDS);
+                return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
+            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            long started = System.nanoTime();
+            assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input",
+                    mapper.createObjectNode(), client.effectiveSettings(), streamed::add))
+                    .hasCauseInstanceOf(java.util.concurrent.TimeoutException.class)
+                    .hasMessageContaining("连续无新进展等待上限 1 秒");
+            assertThat(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
+                    .isGreaterThanOrEqualTo(1400);
+            assertThat(streamed).containsExactly("partial");
+            org.mockito.Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
+            assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()))
+                    .hasMessageContaining("不能复用");
+        } finally {
+            scheduled.shutdownNow();
+            scheduled.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"other-thread", "old-turn", "empty-delta", "heartbeat", "duplicate-usage"})
+    @Timeout(5)
+    void unrelatedEmptyOrRepeatedNotificationsCannotKeepAStalledTurnAlive(String kind,
+            @TempDir Path temp) throws Exception {
+        var mapper = new ObjectMapper();
+        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+                temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
+        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        org.mockito.Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
+        try {
+            var event = mapper.createObjectNode().put("method",
+                    kind.equals("heartbeat") ? "thread/status/changed"
+                            : kind.equals("duplicate-usage") ? "thread/tokenUsage/updated" : "item/agentMessage/delta");
+            var params = event.putObject("params")
+                    .put("threadId", kind.equals("other-thread") ? "other" : "thread")
+                    .put("turnId", kind.equals("old-turn") ? "old" : "turn")
+                    .put("itemId", "item").put("delta", kind.equals("empty-delta") ? "" : "irrelevant");
+            if (kind.equals("duplicate-usage")) {
+                params.putObject("tokenUsage").putObject("last").put("inputTokens", 10).put("outputTokens", 1);
+            }
+            org.mockito.Mockito.doAnswer(call -> {
+                scheduled.scheduleAtFixedRate(() -> client.handleMessage(event),
+                        50, 150, java.util.concurrent.TimeUnit.MILLISECONDS);
+                return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
+            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()))
+                    .hasMessageContaining("连续无新进展等待上限 1 秒");
+            org.mockito.Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
+        } finally {
+            scheduled.shutdownNow();
+            scheduled.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
+
+    private static JsonNode completedTurn(ObjectMapper mapper) {
+        var message = mapper.createObjectNode().put("method", "turn/completed");
+        var turn = message.putObject("params").put("threadId", "thread").putObject("turn")
+                .put("id", "turn").put("status", "completed");
+        turn.putArray("items").addObject().put("type", "agentMessage").put("text", "{\"ok\":true}");
+        return message;
+    }
 
     @Test void cancellationInterruptsTheExactRemoteTurnAndBlocksPrematureReuse(@TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
@@ -23,6 +154,10 @@ class CodexAppServerClientTest {
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
         var started = new java.util.concurrent.CountDownLatch(1);
         org.mockito.Mockito.doAnswer(call -> {
+            client.handleMessage(mapper.readTree("""
+                    {"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn",
+                    "itemId":"item","delta":"still generating"}}
+                    """));
             started.countDown();
             return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
         }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
@@ -262,6 +397,8 @@ class CodexAppServerClientTest {
         assertThat(params.path("effort").asText()).isEqualTo("xhigh");
         assertThat(params.path("input").get(0).path("text").asText()).isEqualTo("写小说");
         assertThat(params.path("outputSchema").isObject()).isTrue();
+        var plain = client.structuredTurnParams("thread-1", UUID.randomUUID(), "写小说", com.fasterxml.jackson.databind.node.NullNode.getInstance());
+        assertThat(plain.has("outputSchema")).isFalse();
     }
 
     @Test

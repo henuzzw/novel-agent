@@ -30,8 +30,7 @@ class WritingStyleCraftAnalysisTest {
         var profile = analyzed("她拿起书包。");
         var parsed = new WritingModelOutputParser(mapper).analyzedStyle(mapper.writeValueAsString(profile), "她拿起书包。然后坐下。");
         assertThat(parsed).isEqualTo(profile);
-        assertThat(WritingStyleGuide.render(parsed)).contains("表达规律：", "段落组织：")
-                .doesNotContain("她拿起书包。");
+        assertThat(WritingStyleGuide.render(parsed)).doesNotContain("她拿起书包。");
     }
 
     @Test void rejectsInventedEvidenceAndPretendedPresetIdentity() throws Exception {
@@ -43,14 +42,12 @@ class WritingStyleCraftAnalysisTest {
                 .isInstanceOf(ModelProviderException.class);
     }
 
-    @Test void schemaAndPromptRequireMechanicsAndVerifiableEvidence() {
+    @Test void schemaBoundsMechanicsAndEvidence() {
         var schema = new WritingOutputSchemas(mapper).writingStyle();
         var fields = schema.path("properties").path("craft").path("properties");
         assertThat(fields.path("paragraphMoves").path("maxLength").asInt()).isEqualTo(1000);
         assertThat(fields.path("examples").path("maxItems").asInt()).isZero();
         assertThat(fields.path("evidence").path("minItems").asInt()).isEqualTo(1);
-        var prompt = new WritingPromptFactory(mapper, null, null, null, null).styleAnalysis("测试文本");
-        assertThat(prompt.user()).contains("段落起笔、展开、转折和收束", "逐字存在的连续原文", "必须为空数组");
     }
 
     @Test void oldJsonStillDeserializesAndRejectsInvalidMetadataOrOversizedCraft() throws Exception {

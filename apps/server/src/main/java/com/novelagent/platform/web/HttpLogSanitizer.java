@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 public class HttpLogSanitizer {
     private static final Set<String> PRIVATE_TEXT = Set.of("body", "text", "content", "quote", "sourcetext",
             "sample", "sampletext", "instruction", "instructions", "prompt", "systemprompt", "userprompt",
-            "guidance", "defaultsystemprompt", "protectedrules",
+            "guidance", "defaultsystemprompt", "sessionsystemprompt", "defaultsessionsystemprompt", "protectedrules",
             "core", "characters", "world", "plot", "developmentnotes", "sceneoutline",
             "responsetext", "detail", "errordetail", "errormessage", "planningerror", "excerpt", "snippet",
             "evidence", "existingbasis", "gap", "candidatedesign", "impact", "suggestion", "reason", "description", "summary", "changesummary");

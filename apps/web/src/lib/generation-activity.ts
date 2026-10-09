@@ -1,7 +1,9 @@
 import { shallowRef } from 'vue'
+import { createUuid } from '@/lib/uuid'
 import type { AgentRun } from '@/api/agentRuns'
 
 export const generationStages: Record<string, string> = {
+  BOOK_TITLE: '自动书名',
   STORY_DIRECTION: '故事方向', STORY_BIBLE: '故事圣经', OUTLINE: '分层大纲',
   CHAPTER_CONTRACT: '章节合同', CHAPTER_CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文',
   CHAPTER_REVIEW: '章节审稿', QUALITY_REVIEW: '质量检查', IMPORT_PLANNING: '导入规划',
@@ -18,6 +20,7 @@ const routes: [RegExp, string][] = [
   [/^story-bibles\/[^/]+\/actions\/complete-characters$/, 'CHARACTER_DESIGN'],
   [/^outlines\/actions\/generate$/, 'OUTLINE'],
   [/^imports\/[^/]+\/actions\/reverse-plan$/, 'IMPORT_PLANNING'],
+  [/^imports\/[^/]+\/actions\/prepare-directions$/, 'IMPORT_PLANNING'],
   [/^imports\/[^/]+\/analyses\/[^/]+\/actions\/run-next$/, 'IMPORT_SOURCE_ANALYSIS'],
   [/^chapters\/\d+\/contracts\/actions\/generate$/, 'CHAPTER_CONTRACT'],
   [/^chapters\/\d+\/contract-reviews\/actions\/generate$/, 'CHAPTER_CONTRACT_REVIEW'],
@@ -50,7 +53,7 @@ export function beginGenerationRequest(url: string, method = 'GET') {
   const stage = routes.find(([pattern]) => pattern.test(match[2]!))?.[1]
   if (!stage) return null
   const entry: GenerationActivity = {
-    id: crypto.randomUUID(), projectId: match[1]!, stage, status: 'RUNNING',
+    id: createUuid(), projectId: match[1]!, stage, status: 'RUNNING',
     startedAt: new Date().toISOString(), completedAt: null, errorMessage: null, source: 'request',
     chapter: match[2]!.match(/^chapters\/(\d+)\//)?.[1] ? Number(match[2]!.split('/')[1]) : null,
   }

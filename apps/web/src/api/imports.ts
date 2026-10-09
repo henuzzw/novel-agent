@@ -1,5 +1,5 @@
 import { apiRequest } from '@/api/http'
-import type { ModelProvider, OutlineVersion, StoryBibleVersion } from '@/api/planning'
+import type { ModelProvider, StoryDirectionSet } from '@/api/planning'
 
 export interface ImportedChapter {
   id: string
@@ -21,7 +21,7 @@ export interface WorkImport {
   parserVersion: string
   detectedContentType: 'MANUSCRIPT' | 'OUTLINE' | 'MATERIALS'
   status: 'PARSED' | 'CONFIRMED'
-  planningStatus: 'NOT_STARTED' | 'GENERATING' | 'GENERATED' | 'FAILED'
+  planningStatus: 'NOT_STARTED' | 'GENERATING' | 'GENERATED' | 'DIRECTIONS_READY' | 'FAILED' | 'CANCELLED'
   planningMode: ImportPlanningMode | null
   generatedBibleVersionId: string | null
   generatedOutlineVersionId: string | null
@@ -40,26 +40,24 @@ export async function uploadWork(projectId: string, file: File): Promise<WorkImp
   return apiRequest(`/api/v1/projects/${projectId}/imports`, { method: 'POST', body })
 }
 
+export function pasteWork(projectId: string, text: string): Promise<WorkImport> {
+  return apiRequest(`/api/v1/projects/${projectId}/imports/text`, { method: 'POST', body: JSON.stringify({ text }) })
+}
+
+export function prepareImportedDirections(projectId: string, importId: string,
+  provider: Exclude<ModelProvider, 'LOCAL_TEMPLATE'>, mode: ImportPlanningMode, instruction: string,
+  analysisId: string, analysisVersion: number, targetWords: number, expandScenes: boolean): Promise<StoryDirectionSet> {
+  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/prepare-directions`, {
+    method: 'POST', body: JSON.stringify({ provider, mode, instruction, analysisId, analysisVersion, targetWords, expandScenes }),
+  })
+}
+
 export async function listWorkImports(projectId: string): Promise<WorkImport[]> {
   return apiRequest(`/api/v1/projects/${projectId}/imports`)
 }
 
 export async function confirmWorkImport(projectId: string, importId: string): Promise<WorkImport> {
   return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/confirm`, { method: 'POST' })
-}
-
-export interface ReversePlanResult {
-  storyBible: StoryBibleVersion
-  outline: OutlineVersion
-}
-
-export async function reversePlanFromImport(projectId: string, importId: string,
-  provider: Exclude<ModelProvider, 'LOCAL_TEMPLATE'>, mode: ImportPlanningMode,
-  instruction: string, analysisId: string, analysisVersion: number): Promise<ReversePlanResult> {
-  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/reverse-plan`, {
-    method: 'POST',
-    body: JSON.stringify({ provider, mode, instruction: instruction.trim() || null, analysisId, analysisVersion }),
-  })
 }
 
 export function workImportSourceUrl(projectId: string, importId: string) {

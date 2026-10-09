@@ -43,6 +43,12 @@ public class OutlineService {
     private final ProjectAccessService access;
     private final CharacterNameService characterNames;
     private final PlanningMaterialSyncService materials;
+    private com.novelagent.ingest.application.ImportedOutlineGenerator importedGenerator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setImportedGenerator(com.novelagent.ingest.application.ImportedOutlineGenerator generator) {
+        this.importedGenerator = generator;
+    }
 
     public OutlineService(
             NovelProjectRepository projects,
@@ -90,8 +96,12 @@ public class OutlineService {
         StoryBibleContent promptBible = characterNames.render(projectId, bible.getContent(), StoryBibleContent.class);
         OutlineContent previousContent = base == null ? null
                 : characterNames.render(projectId, base.getContent(), OutlineContent.class);
-        GeneratedOutline generated = workflow.generate(projectId, promptBible, budget, provider,
-                previousContent, normalize(request.instruction()), CreativeStrategyPolicy.from(project));
+        GeneratedOutline generated = importedGenerator != null && bible.getSourceImportId() != null
+                && bible.getSourceDirectionSetId() != null
+                ? importedGenerator.generate(projectId, bible, budget, provider, previousContent,
+                        normalize(request.instruction()), CreativeStrategyPolicy.from(project))
+                : workflow.generate(projectId, promptBible, budget, provider,
+                        previousContent, normalize(request.instruction()), CreativeStrategyPolicy.from(project));
         int generation = latest
                 .map(value -> value.getGenerationNumber() + 1).orElse(1);
         OutlineVersion version = OutlineVersion.create(UUID.randomUUID(), projectId, generation,

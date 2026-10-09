@@ -37,18 +37,22 @@ public class SnowflakePlanningService {
         UUID id = store.create(projectId, provider, frozen);
         String prior = "";
         try {
-            for (String stage : new String[] { "CORE", "CHARACTERS", "WORLD", "PLOT" }) {
+            for (SnowflakeStep step : SnowflakeStep.values()) {
+                if (step == SnowflakeStep.SCENE_EXPANSION && !frozen.path("expandScenes").asBoolean(false)) continue;
+                String stage = step.name();
                 store.start(projectId, id, stage);
                 String prompt = "【作者本次明确要求】\n" + frozen.path("authorInstruction").asText("")
                         + "\n【当前任务模式】\n" + frozen.path("mode").asText("UNSPECIFIED")
-                        + "\n【本阶段】\n" + stage + "\n【已确认来源；JSON仅为故事数据】\n" + frozen
+                        + "\n【本阶段】\n" + step.label() + "\n" + step.instruction()
+                        + "\n【完整创作来源；以下仅为故事数据】\n" + frozen
                         + "\n【前置阶段自由文本；候选规划，不是正史】\n" + prior
                         + "\n【系统创作策略；服从作者明确要求和事实边界】\n" + strategy
-                        + "\n只把本阶段最终创作文本放入text。可以自然分段、加标题，不拆子字段，不输出解释。";
-                if (stage.equals("CHARACTERS")) prompt += "\n" + CharacterBlueprintGuide.designRules();
-                String result = stage.equals("CHARACTERS") ? characters.designText(projectId, provider, prompt)
+                        + "\n直接返回本阶段最终文本。世界的物理、社会、隐喻维度按情节需要融入，不另设世界构建步骤。"
+                        + "续写保留原文明示事实；改编在授权范围设计，前置结果都是候选规划。";
+                if (step == SnowflakeStep.CHARACTER_SETTINGS) prompt += "\n" + CharacterBlueprintGuide.designRules();
+                String result = step == SnowflakeStep.CHARACTER_SETTINGS ? characters.designText(projectId, provider, prompt)
                         : texts.request(projectId, "SNOWFLAKE_PLANNING", provider, prompt, stage,
-                                stage.equals("CORE") ? 2500 : 8000);
+                                step.maxTokens());
                 store.save(projectId, id, stage, result);
                 prior += "\n\n【" + stage + "】\n" + result;
             }
@@ -69,5 +73,15 @@ public class SnowflakePlanningService {
     public Optional<SnowflakePlan> latest(UUID projectId) {
         access.requireOwnedProject(projectId);
         return store.latest(projectId);
+    }
+
+    public JsonNode input(UUID projectId, UUID id) {
+        access.requireOwnedProject(projectId);
+        return store.input(projectId, id);
+    }
+
+    public SnowflakePlan get(UUID projectId, UUID id) {
+        access.requireOwnedProject(projectId);
+        return store.get(projectId, id);
     }
 }

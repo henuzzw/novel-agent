@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createUuid } from '@/lib/uuid'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Play, Square, LoaderCircle } from 'lucide-vue-next'
@@ -14,7 +15,7 @@ const selected = ref('')
 const writeFirst = ref(props.manuscript?.status !== 'DRAFT')
 const maxRounds = ref(10)
 const error = ref('')
-let requestKey = crypto.randomUUID()
+let requestKey = createUuid()
 const query = useQuery({ queryKey: key, queryFn: () => listDraftLoops(props.projectId, props.chapter), retry: false,
   refetchInterval: q => q.state.data?.some(draftLoopActive) ? 2000 : false, refetchIntervalInBackground: true })
 const run = computed(() => query.data.value?.find(r => r.id === selected.value) ?? query.data.value?.[0])
@@ -28,7 +29,7 @@ const start = useMutation({ mutationFn: () => {
   return startDraftLoop(props.projectId, props.chapter, props.provider, writeFirst.value, maxRounds.value, requestKey)
 }, onSuccess: value => {
   client.setQueryData(key, [value, ...(query.data.value ?? []).filter(r => r.id !== value.id)])
-  selected.value = value.id; error.value = ''; requestKey = crypto.randomUUID()
+  selected.value = value.id; error.value = ''; requestKey = createUuid()
 }, onError: (failure: Error) => { error.value = failure.message; void query.refetch() } })
 const stop = useMutation({ mutationFn: () => {
   const current = query.data.value?.find(draftLoopActive)

@@ -9,6 +9,7 @@ import PlanningMaterialSyncButton from './PlanningMaterialSyncButton.vue'
 import { listPlanningCharacters } from '@/api/planningMaterials'
 import EntityFactsPanel from './EntityFactsPanel.vue'
 import CharacterRelationsPanel from './CharacterRelationsPanel.vue'
+import RelationshipPanel from './RelationshipPanel.vue'
 import { completeStoryBibleCharacters, getLatestStoryBible } from '@/api/planning'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { materialViews, useWorkspaceChoice } from '@/composables/useWorkspaceLocation'
@@ -252,6 +253,7 @@ function entityTypeLabel(value: string) {
       <button type="button" :aria-pressed="view === 'profiles'" :class="{ active: view === 'profiles' }" @click="view = 'profiles'"><ContactRound :size="16" />人物档案</button>
       <button type="button" :aria-pressed="view === 'entities'" :class="{ active: view === 'entities' }" @click="view = 'entities'"><BookUser :size="16" />非人物实体</button>
       <button type="button" :aria-pressed="view === 'timeline'" :class="{ active: view === 'timeline' }" @click="view = 'timeline'"><Clock3 :size="16" />事件时间线</button>
+      <button type="button" :aria-pressed="view === 'relations'" :class="{ active: view === 'relations' }" @click="view = 'relations'"><ContactRound :size="16" />人物关系</button>
       <button type="button" :aria-pressed="view === 'foreshadows'" :class="{ active: view === 'foreshadows' }" @click="view = 'foreshadows'"><Flag :size="16" />伏笔</button>
       <button type="button" :aria-pressed="view === 'style'" :class="{ active: view === 'style' }" @click="view = 'style'"><WandSparkles :size="16" />写作风格</button>
     </div>
@@ -367,6 +369,7 @@ function entityTypeLabel(value: string) {
       <div v-else class="timeline-list"><article v-for="item in timelineQuery.data.value" :key="item.id"><div class="timeline-marker">{{ item.chapterNumber }}</div><div><header><strong>{{ item.title }}</strong><span>正史 V{{ item.canonVersionFrom }}</span></header><p>{{ item.summary }}</p><small>{{ item.storyTime || `第 ${item.chapterNumber} 章` }}<template v-if="item.evidence"> · {{ item.evidence }}</template></small></div></article></div>
     </template>
 
+    <RelationshipPanel v-else-if="view === 'relations'" :project-id="projectId" />
     <template v-else>
       <ReaderExperiencePanel :project-id="projectId" />
     </template>

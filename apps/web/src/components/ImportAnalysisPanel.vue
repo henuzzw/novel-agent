@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createUuid } from '@/lib/uuid'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Check, RefreshCw, Sparkles, Square, RotateCcw } from 'lucide-vue-next'
@@ -6,7 +7,7 @@ import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import type { ImportedChapter, ImportPlanningMode } from '@/api/imports'
 import { listImportAnalyses, createImportAnalysis, importAnalysisAction, confirmImportAnalysis, getImportAnalysis, type AnalysisView, type AnalysisDecision, type AnalysisProof, type AnalysisEvidence } from '@/api/importAnalyses'
 
-const props = defineProps<{ projectId: string; importId: string; mode: ImportPlanningMode; chapters: ImportedChapter[]; disabled?: boolean }>()
+const props = defineProps<{ projectId: string; importId: string; mode: ImportPlanningMode; chapters: ImportedChapter[]; disabled?: boolean; autoStart?: boolean }>()
 const emit = defineEmits<{ ready: [proof: AnalysisProof | null]; confirmed: [] }>()
 const client = useQueryClient()
 const { provider } = useGlobalModelSettings()
@@ -24,6 +25,13 @@ onBeforeUnmount(() => { alive = false; operation++; stopping.value = true })
 const category = ref('ALL')
 const scope = computed(() => `${props.projectId}:${props.importId}`)
 const query = useQuery({ queryKey: computed(() => ['import-analyses', props.projectId, props.importId]), queryFn: () => listImportAnalyses(props.projectId, props.importId), refetchInterval: q => q.state.data?.some(v => v.report.status === 'RUNNING') ? 1500 : false })
+let autoStarted = false
+watch(() => query.data.value, values => {
+  if (props.autoStart && values && !values.length && !autoStarted && !props.disabled) {
+    autoStarted = true
+    void run(true)
+  }
+}, { immediate: true })
 const categories: Record<string, string> = { ALL: '全部', CHARACTER: '人物', WORLD: '世界观', RELATIONSHIP: '关系', EVENT: '事件', CLUE: '埋点与线索', FORESHADOW: '伏笔' }
 const certainties = { FACT: '原文明确信息', INFERENCE: '分析推测', UNKNOWN: '未知' }
 const statuses = { READY: '待解析', RUNNING: '正在解析', FAILED: '解析失败', REVIEW: '待审核', CONFIRMED: '已确认', CANCELLED: '已取消' }
@@ -68,7 +76,7 @@ async function run(create: boolean, resume = false) {
   busy.value = true; error.value = ''; stopping.value = false
   try {
     if (provider.value === 'LOCAL_TEMPLATE' && create) throw new Error('原文分析需要选择 ChatGPT 或 DeepSeek。')
-    let value = create ? await createImportAnalysis(p, i, provider.value, crypto.randomUUID()) : current.value!
+    let value = create ? await createImportAnalysis(p, i, provider.value, createUuid()) : current.value!
     if (!alive || operation !== op || scope.value !== key) return
     load(value)
     if (resume) { value = await importAnalysisAction(p, i, value, 'resume'); if (!alive || operation !== op || scope.value !== key) return; load(value) }

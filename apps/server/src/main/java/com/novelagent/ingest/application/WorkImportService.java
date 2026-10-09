@@ -40,6 +40,25 @@ public class WorkImportService {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final List<String> ALLOWED_EXTENSIONS = List.of("txt", "md", "docx", "pdf");
 
+    @Transactional
+    public WorkImportResponse paste(UUID projectId, String text) {
+        if (text == null || text.isBlank()) throw new IllegalArgumentException("请粘贴故事文字");
+        return upload(projectId, new PastedStory(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    private record PastedStory(byte[] bytes) implements MultipartFile {
+        @Override public String getName() { return "file"; }
+        @Override public String getOriginalFilename() { return "粘贴故事.txt"; }
+        @Override public String getContentType() { return "text/plain; charset=UTF-8"; }
+        @Override public boolean isEmpty() { return bytes.length == 0; }
+        @Override public long getSize() { return bytes.length; }
+        @Override public byte[] getBytes() { return bytes; }
+        @Override public java.io.InputStream getInputStream() { return new ByteArrayInputStream(bytes); }
+        @Override public void transferTo(java.io.File dest) throws IOException {
+            java.nio.file.Files.write(dest.toPath(), bytes);
+        }
+    }
+
     private final ProjectAccessService access;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;

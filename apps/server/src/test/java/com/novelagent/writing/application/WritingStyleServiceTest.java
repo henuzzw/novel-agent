@@ -32,7 +32,7 @@ class WritingStyleServiceTest {
         var profile = WritingStylePresets.all().getFirst();
         service.apply(id, profile, 0);
         assertThat(service.get(id).profile()).isEqualTo(profile);
-        assertThat(service.promptContext(id)).contains(profile.name(), "事实与硬约束优先");
+        assertThat(service.promptContext(id)).contains(profile.name());
         assertThat(service.promptContext(id)).endsWith(WritingStyleGuide.render(profile));
         assertThatThrownBy(() -> service.apply(id, null, 7)).isInstanceOf(ResourceVersionConflictException.class);
         service.apply(id, null, 0);

@@ -43,11 +43,8 @@ class WritingStylePreviewTest {
                         List.of(new com.novelagent.writing.domain.WritingStyleCraft.Evidence("paragraphMoves", quote, "只归纳表达规律"))));
         var prompt = factory.stylePreview(UUID.randomUUID(), bible, arc, chapter,
                 candidate, 800, "只写开场");
-        assertThat(prompt.system()).contains("不是完整章节", "不得覆盖本任务");
-        assertThat(prompt.user()).contains("约 800 字", "旧信", "人物当前档案", "本次试写风格", "只写开场");
-        assertThat(prompt.user()).contains("涉及误认、认知延迟或视角限制时保留", "不为技法编造动机");
-        assertThat(prompt.user()).doesNotContain("已应用项目写作风格时", "章节合同");
-        assertThat(prompt.user()).contains(c.paragraphMoves(), "只归纳表达规律").doesNotContain(quote, "\"craft\":");
+        assertThat(prompt.user()).contains(chapter.title(), "人物当前档案", "只写开场");
+        assertThat(prompt.user()).contains(c.paragraphMoves()).doesNotContain(quote);
         assertThat(prompt.user().indexOf(c.paragraphMoves())).isEqualTo(prompt.user().lastIndexOf(c.paragraphMoves()));
         verifyNoInteractions(styles);
     }

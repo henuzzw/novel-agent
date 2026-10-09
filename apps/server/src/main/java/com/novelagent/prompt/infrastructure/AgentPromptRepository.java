@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 public class AgentPromptRepository {
     private static final RowMapper<PromptConfiguration> MAPPER = (rs, row) -> new PromptConfiguration(
             rs.getString("template_key"), rs.getString("system_prompt"), rs.getString("guidance"),
-            rs.getLong("row_version"), rs.getTimestamp("updated_at").toInstant());
+            rs.getLong("row_version"), rs.getTimestamp("updated_at").toInstant(), rs.getString("session_system_prompt"));
     private final JdbcTemplate jdbc;
 
     public AgentPromptRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
@@ -30,20 +30,25 @@ public class AgentPromptRepository {
 
     /** 首次插入防重复，后续更新要求作者看到的版本仍有效；失败时不追加虚假的历史。 */
     public boolean save(UUID userId, String key, String system, String guidance, long expected, String operation) {
+        return save(userId, key, system, null, guidance, expected, operation);
+    }
+
+    public boolean save(UUID userId, String key, String system, String sessionSystem,
+            String guidance, long expected, String operation) {
         int changed = expected == 0
                 ? jdbc.update("""
-                    INSERT INTO user_agent_prompt(user_id, template_key, system_prompt, guidance)
-                    VALUES (?, ?, ?, ?) ON CONFLICT (user_id, template_key) DO NOTHING
-                    """, userId, key, system, guidance)
+                    INSERT INTO user_agent_prompt(user_id, template_key, system_prompt, session_system_prompt, guidance)
+                    VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, template_key) DO NOTHING
+                    """, userId, key, system, sessionSystem, guidance)
                 : jdbc.update("""
-                    UPDATE user_agent_prompt SET system_prompt = ?, guidance = ?, row_version = row_version + 1,
+                    UPDATE user_agent_prompt SET system_prompt = ?, session_system_prompt = ?, guidance = ?, row_version = row_version + 1,
                         updated_at = now() WHERE user_id = ? AND template_key = ? AND row_version = ?
-                    """, system, guidance, userId, key, expected);
+                    """, system, sessionSystem, guidance, userId, key, expected);
         if (changed != 1) return false;
         jdbc.update("""
-                INSERT INTO user_agent_prompt_revision(user_id, template_key, revision, system_prompt, guidance, operation)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """, userId, key, expected + 1, system, guidance, operation);
+                INSERT INTO user_agent_prompt_revision(user_id, template_key, revision, system_prompt, session_system_prompt, guidance, operation)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, userId, key, expected + 1, system, sessionSystem, guidance, operation);
         return true;
     }
 
@@ -52,7 +57,8 @@ public class AgentPromptRepository {
                 SELECT * FROM user_agent_prompt_revision WHERE user_id = ? AND template_key = ?
                 ORDER BY revision DESC LIMIT 50
                 """, (rs, row) -> new PromptRevision(rs.getLong("revision"), rs.getString("system_prompt"),
-                        rs.getString("guidance"), rs.getString("operation"), rs.getTimestamp("created_at").toInstant()),
+                        rs.getString("guidance"), rs.getString("operation"), rs.getTimestamp("created_at").toInstant(),
+                        rs.getString("session_system_prompt")),
                 userId, key);
     }
 }

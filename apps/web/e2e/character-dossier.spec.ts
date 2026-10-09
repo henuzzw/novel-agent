@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 import { bible, character } from '../src/__tests__/character-blueprint-fixtures'
 
-test('unifies character details, relations and facts while preserving independent non-character entities', async ({ page }, info) => {
+test('unifies character details, relations and facts while preserving independent non-character entities', async ({ page }) => {
   const models = createModelSettingsFixture()
   const blueprint = character()
   let name = '江澈', version = 0, nameSaves = 0, paidCalls = 0
@@ -52,9 +52,6 @@ test('unifies character details, relations and facts while preserving independen
   await expect(page.locator('.profile-picker')).toContainText('江明')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.evaluate(() => scrollTo(0, 0))
-  await page.screenshot({ path: info.outputPath('character-dossier.png'), fullPage: true })
-  await page.screenshot({ path: info.outputPath('dossier-viewport.png') })
-  await page.getByRole('region', { name: '人物关系与认知', exact: true }).screenshot({ path: info.outputPath('dossier-relations.png') })
   await page.getByRole('button', { name: '非人物实体', exact: true }).click()
   await expect(page.getByLabel('实体列表')).toContainText('细框眼镜')
   await expect(page.getByLabel('实体列表')).not.toContainText('江明')

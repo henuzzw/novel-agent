@@ -46,22 +46,25 @@ import WritingStylePanel from '@/components/WritingStylePanel.vue'
 import ProjectSettingsPanel from '@/components/ProjectSettingsPanel.vue'
 import ReaderExperiencePanel from '@/components/ReaderExperiencePanel.vue'
 import BookScanPanel from '@/components/BookScanPanel.vue'
-import CreationPreparationPanel from '@/components/CreationPreparationPanel.vue'
+import { useRoute } from 'vue-router'
 import type { AutomationChapterTarget } from '@/api/automation'
 
 const props = defineProps<{ projectId: string }>()
+const route = useRoute()
 const generationBusy = ref(false)
 const queryClient = useQueryClient()
 const targetChapter = useWorkspaceChapter()
-const targetWritingView = useWorkspaceChoice('writing', writingViews, 'contract')
+const targetWritingView = useWorkspaceChoice('writing', writingViews, 'manuscript')
 function openAutomationChapter(target: AutomationChapterTarget) {
   targetChapter.value = target.chapter
   targetWritingView.value = target.mode
   activeSection.value = 'writing'
 }
-const defaultSection = ref<(typeof workspaceSections)[number]>('outline')
+const defaultSection = ref<(typeof workspaceSections)[number]>('imports')
 const activeSection = useWorkspaceChoice('section', workspaceSections, () => defaultSection.value)
-const planningView = useWorkspaceChoice('planning', planningViews, 'directions')
+const planningView = useWorkspaceChoice('planning', planningViews, 'outline')
+const displayedPlanningView = computed(() => activeSection.value === 'directions' ? 'directions'
+  : activeSection.value === 'bible' ? 'bible' : planningView.value === 'style' ? 'style' : 'outline')
 const selectedCandidateId = ref<string | null>(null)
 const instruction = ref('')
 const { provider: modelProvider } = useGlobalModelSettings()
@@ -98,10 +101,11 @@ function loadIntent(project: ProjectSummary) {
 const projectQuery = useQuery({
   queryKey: computed(() => ['project', props.projectId]),
   queryFn: () => getProject(props.projectId),
+  refetchInterval: query => query.state.data?.name === '待生成书名' ? 3000 : false,
 })
 
 watch(() => projectQuery.data.value, (project) => {
-  defaultSection.value = project?.entryMode === 'MANUSCRIPT' ? 'imports' : 'outline'
+  defaultSection.value = 'imports'
 
   if (project?.creativeIntent && intentLoadedProjectId.value !== project.id) {
     loadIntent(project)
@@ -135,12 +139,12 @@ watch(
 )
 
 const navigation = [
-  { value: 'writing', label: '写作', icon: PenLine, disabled: false },
-  { value: 'outline', label: '大纲', icon: ListTree, disabled: false },
-  { value: 'materials', label: '故事资料', icon: BookOpen, disabled: false },
-  { value: 'experience', label: '伏笔与承诺', icon: GitBranch, disabled: false },
-  { value: 'relations', label: '关系', icon: Share2, disabled: false },
   { value: 'imports', label: '导入', icon: Upload, disabled: false },
+  { value: 'directions', label: '故事方向', icon: ListTree, disabled: false },
+  { value: 'bible', label: '圣经', icon: ScrollText, disabled: false },
+  { value: 'outline', label: '大纲', icon: ListTree, disabled: false },
+  { value: 'materials', label: '资料', icon: BookOpen, disabled: false },
+  { value: 'experience', label: '伏笔和承诺', icon: GitBranch, disabled: false },
   { value: 'runs', label: '任务', icon: Activity, disabled: false },
   { value: 'settings', label: '设置', icon: Settings, disabled: false },
 ] as const
@@ -302,6 +306,7 @@ const selectMutation = useMutation({
   onSuccess: (value) => {
     updateDirectionsCache(value)
     actionError.value = ''
+    activeSection.value = 'bible'
   },
   onError: (error: Error) => {
     actionError.value = error.message
@@ -343,25 +348,22 @@ const selectMutation = useMutation({
       <GenerationStatusPanel :key="projectId" :project-id="projectId" @busy="generationBusy = $event" @open-tasks="activeSection = 'runs'" />
 
       <WritingWorkbench v-if="activeSection === 'writing'" :key="projectId" :project-id="projectId" />
-      <StoryMaterialsPanel v-else-if="activeSection === 'materials'" :key="projectId" :project-id="projectId" @open-bible="activeSection = 'outline'; planningView = 'bible'" />
+      <StoryMaterialsPanel v-else-if="activeSection === 'materials'" :key="projectId" :project-id="projectId" @open-bible="activeSection = 'bible'" />
       <div v-else-if="activeSection === 'experience'" :key="projectId">
         <ReaderExperiencePanel :project-id="projectId" />
         <BookScanPanel :project-id="projectId" />
       </div>
-      <RelationshipPanel v-else-if="activeSection === 'relations'" :project-id="projectId" />
-      <WorkImportPanel v-else-if="activeSection === 'imports'" :project-id="projectId" @planning-generated="activeSection = 'outline'; planningView = 'outline'" />
+      <WorkImportPanel v-else-if="activeSection === 'imports'" :project-id="projectId" :auto-analyze="route.query.analyze === '1'" @planning-generated="activeSection = 'directions'" />
       <AgentRunPanel v-else-if="activeSection === 'runs'" :project-id="projectId" @open-chapter="openAutomationChapter" />
       <ProjectSettingsPanel v-else-if="activeSection === 'settings'" :project-id="projectId" />
 
       <div v-else class="direction-workbench">
-        <div class="planning-tabs" role="group" @keydown="navigateWorkspaceButtons" aria-label="故事规划步骤">
-          <button type="button" :aria-pressed="planningView === 'directions'" :class="{ active: planningView === 'directions' }" @click="planningView = 'directions'"><ListTree :size="16" />故事方向</button>
-          <button type="button" :aria-pressed="planningView === 'bible'" :class="{ active: planningView === 'bible' }" @click="planningView = 'bible'"><ScrollText :size="16" />故事圣经</button>
+        <div v-if="activeSection === 'outline'" class="planning-tabs" role="group" @keydown="navigateWorkspaceButtons" aria-label="大纲与写作">
           <button type="button" :aria-pressed="planningView === 'outline'" :class="{ active: planningView === 'outline' }" @click="planningView = 'outline'"><GitBranch :size="16" />分层大纲</button>
           <button type="button" :aria-pressed="planningView === 'style'" :class="{ active: planningView === 'style' }" @click="planningView = 'style'"><PenLine :size="16" />风格试写</button>
-          <button type="button" :aria-pressed="planningView === 'preparation'" :class="{ active: planningView === 'preparation' }" @click="planningView = 'preparation'"><Sparkles :size="16" />创作准备</button>
+          <button type="button" @click="activeSection = 'writing'; targetWritingView = 'manuscript'"><PenLine :size="16" />章节写作</button>
         </div>
-        <div v-if="planningView === 'directions'">
+        <div v-if="displayedPlanningView === 'directions'">
         <div class="section-heading">
           <div>
             <span class="eyebrow">故事规划</span>
@@ -566,9 +568,8 @@ const selectMutation = useMutation({
           本版本由 {{ directionsQuery.data.value.generatorType }} 生成
         </p>
         </div>
-        <StoryBiblePanel v-else-if="planningView === 'bible'" :project-id="projectId" />
-        <OutlinePanel v-else-if="planningView === 'outline'" :project-id="projectId" @choose-style="planningView = 'style'" />
-        <CreationPreparationPanel v-else-if="planningView === 'preparation'" :project-id="projectId" @outline-created="planningView = 'outline'" />
+        <StoryBiblePanel v-else-if="displayedPlanningView === 'bible'" :project-id="projectId" />
+        <OutlinePanel v-else-if="displayedPlanningView === 'outline'" :project-id="projectId" @choose-style="planningView = 'style'" />
         <WritingStylePanel v-else :project-id="projectId" />
       </div>
     </section>

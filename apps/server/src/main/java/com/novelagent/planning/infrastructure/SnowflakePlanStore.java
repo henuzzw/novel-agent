@@ -34,17 +34,29 @@ public class SnowflakePlanStore {
     }
 
     public void save(UUID projectId, UUID id, String stage, String text) {
-        String column = switch (stage) {
-            case "CORE" -> "core";
-            case "CHARACTERS" -> "characters";
-            case "WORLD" -> "world";
-            case "PLOT" -> "plot";
-            default -> throw new IllegalArgumentException("未知雪花规划阶段");
-        };
-        requireUpdated(jdbc.update("UPDATE snowflake_planning_run SET " + column
-                + " = ?, updated_at = CURRENT_TIMESTAMP WHERE project_id = ? AND id = ?"
-                + " AND status = 'RUNNING' AND active_stage = ?", text, projectId, id, stage));
+        try {
+            com.novelagent.planning.application.SnowflakeStep.valueOf(stage);
+            requireUpdated(jdbc.update("""
+                    UPDATE snowflake_planning_run SET steps = jsonb_set(steps, ARRAY[?]::text[], to_jsonb(?::text)),
+                        core = CASE WHEN ? = 'CORE' THEN ? ELSE core END,
+                        characters = CASE WHEN ? = 'CHARACTER_SETTINGS' THEN ? ELSE characters END,
+                        plot = CASE WHEN ? = 'DETAILED_OUTLINE' THEN ? ELSE plot END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE project_id = ? AND id = ? AND status = 'RUNNING' AND active_stage = ?
+                    """, stage, text, stage, text, stage, text, stage, text, projectId, id, stage));
+            return;
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("未知雪花规划阶段", exception);
+        }
     }
+
+    public JsonNode input(UUID projectId, UUID id) {
+        String value = jdbc.queryForObject("SELECT input_snapshot::text FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
+                String.class, projectId, id);
+        try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException exception) { throw new IllegalStateException("雪花来源无法读取", exception); }
+    }
+
 
     public void finish(UUID projectId, UUID id, String status, String error) {
         requireUpdated(jdbc.update("""
@@ -68,7 +80,16 @@ public class SnowflakePlanStore {
                 rs.getString("mode"), ModelProvider.valueOf(rs.getString("provider")), rs.getString("status"),
                 rs.getString("active_stage"), rs.getString("core"), rs.getString("characters"), rs.getString("world"),
                 rs.getString("plot"), rs.getString("error_message"), rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant());
+                rs.getTimestamp("updated_at").toInstant(), steps(rs.getString("steps")));
+    }
+
+    private static java.util.Map<String, String> steps(String value) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(value,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() { });
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException("雪花步骤记录无法读取", exception);
+        }
     }
 
     private static void requireUpdated(int count) {

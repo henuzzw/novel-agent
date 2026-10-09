@@ -2,22 +2,27 @@ package com.novelagent.prompt.application;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/** 当前工作流的可编辑系统指令；两项导入工作流各分改编、续写模板，避免互相覆盖。 */
+/** 当前工作流的配对提示词目录；导入分别区分改编、续写模板，避免互相覆盖。 */
 @Component
 public class AgentPromptCatalog {
+    private static final Set<String> SHARED_PLANNING = Set.of("BOOK_TITLE", "IMPORT_SOURCE_ANALYSIS",
+            "SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "STORY_DIRECTION", "STORY_BIBLE", "OUTLINE",
+            "IMPORT_REVERSE_BIBLE", "IMPORT_REVERSE_OUTLINE", "PLANNING_CHECKPOINT");
+
+    public static boolean sharesConversation(String workflow) { return SHARED_PLANNING.contains(workflow); }
     private final List<Definition> definitions = List.of(
+            define("BOOK_TITLE", "自动书名", "导入"),
             define("STORY_DIRECTION", "故事方向", "规划"),
             define("STORY_BIBLE", "故事圣经", "规划"),
             define("OUTLINE", "分层大纲", "规划"),
             define("SNOWFLAKE_PLANNING", "雪花渐进规划", "规划"),
             define("CHARACTER_DESIGN", "统一人物设计", "规划"),
             define("PLANNING_CHECKPOINT", "分块规划", "规划"),
-            define("CREATION_PREPARATION_PLOT", "创作准备 · 剧情协同", "创作准备"),
-            define("CREATION_PREPARATION_REVIEW", "创作准备 · 复核", "创作准备"),
             define("MANUSCRIPT", "正文创作与润色", "写作"),
-            define("CHAPTER_REVIEW", "章节审稿与事实抽取", "审阅"),
+            define("CHAPTER_REVIEW", "发布后记忆整理", "记忆"),
             define("QUALITY_REVIEW", "文字质量检查", "审阅"),
             define("DRAFT_JUDGE_REVISION", "自动裁决与修订 · C", "审阅"),
             define("FIRST_THREE_CHAPTERS_REVIEW", "前三章连读", "审阅"),

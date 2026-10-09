@@ -7,11 +7,9 @@ afterEach(() => { generationRequests.value = []; vi.unstubAllGlobals(); vi.useRe
 describe('generation request state', () => {
   it.each([
     ['story-bibles/actions/generate', 'STORY_BIBLE'], ['outlines/actions/generate', 'OUTLINE'],
-    ['chapters/2/contracts/actions/generate', 'CHAPTER_CONTRACT'],
-    ['chapters/2/contract-reviews/actions/generate', 'CHAPTER_CONTRACT_REVIEW'],
     ['chapters/2/manuscripts/actions/generate', 'MANUSCRIPT'],
     ['chapters/2/reviews/actions/generate', 'CHAPTER_REVIEW'],
-    ['imports/i/actions/reverse-plan', 'IMPORT_PLANNING'],
+    ['imports/i/actions/prepare-directions', 'IMPORT_PLANNING'],
   ])('immediately tracks %s without storing request text', (path, stage) => {
     beginGenerationRequest(`/api/v1/projects/p/${path}`, 'POST')
     expect(generationRequests.value[0]).toMatchObject({ stage, status: 'RUNNING', projectId: 'p' })

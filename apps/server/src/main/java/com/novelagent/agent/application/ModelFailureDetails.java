@@ -16,7 +16,9 @@ public record ModelFailureDetails(String type, String category, String summary, 
             summary = "模型已返回内容，但原文解析结构或证据校验未通过，请查看具体字段与响应；未保存为有效报告。";
         } else if (hasTimeoutCause(exception) || normalized.contains("timeout") || normalized.contains("超时")) {
             category = "TIMEOUT";
-            summary = "模型生成等待超时；未完成响应不能作为规划结果。可降低推理强度或调整等待上限后手动重试。";
+            summary = text.contains("连续无新进展")
+                    ? "模型长时间没有新的生成进展，等待超时；未完成响应不能作为规划结果。请检查连接或调整空闲等待上限后手动重试。"
+                    : "模型生成等待超时；未完成响应不能作为规划结果。可降低推理强度或调整等待上限后手动重试。";
         } else if (normalized.contains("usage limit") || normalized.contains("quota") || normalized.contains("429")) {
             category = "USAGE_LIMIT"; summary = "模型额度不足或请求受限，请检查额度后手动重试。";
         } else if (normalized.contains("401") || normalized.contains("403") || normalized.contains("authentication")) {

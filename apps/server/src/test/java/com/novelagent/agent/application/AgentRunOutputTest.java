@@ -50,6 +50,15 @@ class AgentRunOutputTest {
         assertThat(ModelFailureDetails.from(new IllegalStateException("You hit your usage limit")).category()).isEqualTo("USAGE_LIMIT");
     }
 
+    @Test void stalledGenerationExplainsIdleTimeoutRatherThanAStreamingDeadline() {
+        var error = ModelFailureDetails.from(new CodexAppServerException(
+                "等待 Codex 完成生成超时（连续无新进展等待上限 1200 秒）", new TimeoutException()));
+        assertThat(error.category()).isEqualTo("TIMEOUT");
+        assertThat(error.summary()).contains("没有新的生成进展", "空闲等待上限")
+                .doesNotContain("降低推理强度");
+        assertThat(error.detail()).contains("连续无新进展", "1200 秒");
+    }
+
     @Test void recorderKeepsPartialFailedResponseWithoutPublishingOrLoggingIt() {
         var jdbc = mock(JdbcTemplate.class);
         var buffer = new AgentRunOutputBuffer();

@@ -1,9 +1,28 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, apiRequest } from '@/api/http'
+import { updateCreativeIntent, type ProjectSummary } from '@/api/projects'
 
 describe('apiRequest', () => {
   afterEach(() => vi.unstubAllGlobals())
+
+  it('returns null for an empty 204 response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))
+    await expect(apiRequest<null>('/api/empty')).resolves.toBeNull()
+  })
+
+  it('creates a missing creative intent with version zero', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: 'project-1' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    await updateCreativeIntent({ id: 'project-1', creativeIntent: null } as ProjectSummary, {
+      premise: '故事', genres: ['校园'], protagonistBrief: '主角', centralConflict: '冲突',
+      tones: ['真实'], targetWords: 120000, mustHave: [], avoid: [], stylePreferences: [],
+    })
+    const [url, init] = fetchMock.mock.calls[0]! as [string, RequestInit]
+    expect(url).toBe('/api/v1/projects/project-1/creative-intent')
+    expect(init.method).toBe('PUT')
+    expect(new Headers(init.headers).get('If-Match')).toBe('"0"')
+  })
 
   it('adds JSON content type while preserving caller headers', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) })
@@ -45,15 +64,15 @@ describe('apiRequest', () => {
     expect(init.headers).toBeUndefined()
   })
 
-  it('normalizes problem details errors', async () => {
+  it.each([403, 409])('normalizes problem details errors with HTTP %i', async (status) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
-      status: 403,
+      status,
       json: async () => ({ detail: '禁止访问', code: 'FORBIDDEN' }),
     }))
 
     const error = await apiRequest('/api/test').catch((reason) => reason)
     expect(error).toBeInstanceOf(ApiError)
-    expect(error).toMatchObject({ message: '禁止访问', status: 403, code: 'FORBIDDEN' })
+    expect(error).toMatchObject({ message: '禁止访问', status, code: 'FORBIDDEN' })
   })
 })

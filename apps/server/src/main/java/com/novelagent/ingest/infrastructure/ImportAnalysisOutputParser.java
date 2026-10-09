@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.ingest.domain.ImportAnalysis;
+import java.util.HashSet;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
@@ -30,12 +31,20 @@ public class ImportAnalysisOutputParser {
             throw invalid("根节点：必须包含字符串 summary 和数组 items", null);
         }
         if (root.path("items").size() > 80) throw invalid("items：单段解析项不能超过 80 项", null);
+        var keys = new HashSet<String>();
         for (int i = 0; i < root.path("items").size(); i++) {
             JsonNode item = root.path("items").get(i);
             String path = "items[" + i + "]";
             for (String field : Set.of("key", "category", "certainty", "title", "description", "progress")) {
                 if (!item.path(field).isTextual()) throw invalid(path + "." + field + "：必须是字符串", null);
             }
+            // Keys are technical handles, not evidence; normalize dotted notation without changing story data.
+            String key = item.path("key").asText().replace('.', '_');
+            if (!key.matches("[A-Za-z0-9_-]{1,76}")) {
+                throw invalid(path + ".key：解析项标识无效；须为1至76位英文字母、数字、下划线或短横线", null);
+            }
+            if (!keys.add(key)) throw invalid(path + ".key：解析项标识重复（含点号归一化后的冲突），不能合并或覆盖条目", null);
+            ((ObjectNode) item).put("key", key);
             if (!item.path("subjects").isArray() || !item.path("evidence").isArray()) {
                 throw invalid(path + "：subjects 和 evidence 必须是数组", null);
             }

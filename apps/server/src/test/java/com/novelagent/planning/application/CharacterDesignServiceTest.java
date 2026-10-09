@@ -49,26 +49,4 @@ class CharacterDesignServiceTest {
         assertThatThrownBy(() -> service.design(project, null, mapper.createObjectNode())).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(models);
     }
-
-    @Test void promptKeepsTheThreeDrivesArcAndPermissionModesTogether() {
-        assertThat(AgentPromptDefaults.system("CHARACTER_DESIGN")).contains("表面追求", "深层渴望", "灵魂需求",
-                "初始状态 → 触发事件 → 认知失调 → 蜕变节点 → 最终状态", "至少两人的价值冲突",
-                "合作纽带", "潜在背叛", "CONTINUE_MANUSCRIPT", "ADAPT_SOURCE", "COMPLETE_MISSING", "REVISE_AUTHORIZED",
-                "不为数量造人", "不把弧光、秘密、背叛设计成既往事实", "只补空白", "不解释");
-    }
-
-    @Test void separatesCreativePermissionFromEvidenceExtractionWithoutBlanketBan() {
-        String prompt = AgentPromptDefaults.system("CHARACTER_DESIGN");
-        assertThat(prompt).contains("NEW_STORY：这是创作设计", "ADAPT_SOURCE：按作者确认的 KEEP/REWORK/DROP",
-                "具体姓名", "不把合法的新设计一律留空", "明确属于新增设计", "作者明确要求匿名",
-                "具体经历 → 形成的应对方式", "主线或爱情之外的生活目标", "不限制为一两句",
-                "不为旧人物补造过去", "COMPLETE_MISSING 和准备模式不获得全面重设计权限");
-        assertThat(prompt).doesNotContain("未知留空或提出待确认问题，不编造依据。",
-                "未知或待作者确认的信息不得擅自坐实，不为修补剧情新增能力、经历、道具或秘密。");
-        assertThat(com.novelagent.prompt.application.AgentPromptService.PROTECTED_RULES)
-                .contains("仅当本次任务明确为原创人物设计或授权素材改编时", "不能借此扩大其他阶段职责",
-                        "原文提炼、续写既往事实、审阅和正文修订");
-        assertThat(AgentPromptDefaults.system("IMPORT_SOURCE_ANALYSIS"))
-                .contains("不编造设定或未来情节").doesNotContain("这是创作设计");
-    }
 }

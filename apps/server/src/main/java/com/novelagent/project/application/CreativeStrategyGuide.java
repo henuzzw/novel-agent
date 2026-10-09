@@ -60,18 +60,6 @@ public final class CreativeStrategyGuide {
                 """;
     }
 
-    public static String contractRules() {
-        return """
-                \n【强开篇合同落点】
-                仅 FANQIE_GRIPPING 的新创作第 1～3 章适用；STANDARD 和后续章不套首章节奏。
-                第一章 requiredBeats 的首个节拍明确入场即发生的问题、主角欲望、此刻回应的压力与第一步行动，不用背景介绍或无关远期预告开场。
-                后续主要节拍明确阻力如何改变选择、哪次互动给出局部回报、expectedExitState 中何种变化有行动依据；hook 承接这次变化而非另造不相干悬念。
-                标明哪些日常步骤可概述、哪个关键回应必须展开；讲题步骤只有会影响关系、认知或选择才详细写，不能把做对题本身冒充情感推进。
-                第二、三章分别执行后果升级和有铺垫的阶段兑现，不重复开场介绍。只细化大纲授权内容，不越过未来揭示或自行更换核心事件。
-                若大纲只有日常流程、没有支持开场压力或回报的依据，在相关节拍注明上游缺口待作者确认，不编造危机来伪装合同达标。
-                """;
-    }
-
     public static String manuscriptRules() {
         return """
                 \n【强开篇正文落点】

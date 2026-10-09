@@ -1,6 +1,6 @@
 # Java 服务端当前架构
 
-最后更新：2026-10-07。
+最后更新：2026-10-09。
 
 本文描述已实现的职责划分。业务能力与后续路线仍以 `apps/server/AGENTS.md` 和自动化待办为准。
 
@@ -13,7 +13,7 @@
 | project | 项目、当前作者、创作意图、项目访问权限 |
 | prompt | 全局阶段提示词、默认目录、用户配置与版本历史 |
 | planning | 故事方向、圣经、大纲及相关模型适配 |
-| writing | 合同、合同审阅、正文版本、正史审稿、质量检查、风格 |
+| writing | 正文版本、审稿与质量检查、风格、自动编辑循环；合同仅保留历史读取与退役接口 |
 | writing 风格试写 | WritingStylePreviewService 读取同项目已保存大纲第一章，WritingGenerationWorkflow 的独立 STYLE_PREVIEW Graph 生成临时样例；不通过 ManuscriptService 保存、不修改风格和正史 |
 | writing 试写编辑 | StylePreviewEditingController → StylePreviewEditingService → Workflow 的独立检查/修订 Graph；StylePreviewReviewStore 保存依据与报告、锁内单次认领、生成后复核，不回调写作门面 |
 | writing 风格推荐 | WritingStyleRecommendationService 复用 StoryBibleService 的权限与版本读取，独立 STYLE_RECOMMENDATION Graph 校验规范预设及圣经证据；前后校验源快照、不应用风格或改变权威数据 |
@@ -65,14 +65,15 @@ WritingController / AutomationService
 QualityReviewService -> ManuscriptService（生成润色候选）
                     -> QualityReviewStore（校验来源并保存）
 
-三个写作用例服务 -> WritingContextService
-                -> WritingGenerationWorkflow -> WritingGenerationGateway
+活动写作用例 -> WritingContextService
+           -> WritingGenerationWorkflow -> WritingGenerationGateway
+ChapterContractService -> 历史读取；退役写入统一返回 410
 ```
 
 | 类 | 职责 |
 | --- | --- |
-| WritingService | 保留原有 22 个公共业务方法，委托专用服务；不注入 Repository，不持有事务 |
-| ChapterContractService | 合同生成、版本读取、编辑、独立审阅、审阅确认与合同确认 |
+| WritingService | 兼容公共入口，委托专用服务；不注入 Repository，不持有事务 |
+| ChapterContractService | 历史版本读取；旧写入先检查权限，再统一返回 410，不调用模型 |
 | ManuscriptService | 正文生成与基准版本、编辑、人工修订、作者确认、渲染导出、准备质量修订候选 |
 | ChapterReviewService | 已确认正文审稿、候选事实决策、审稿确认、打回生成及原子保存 |
 | WritingContextService | 按已发布大纲查找卷章和圣经，检查访问权限，组装记忆召回输入 |
@@ -80,6 +81,14 @@ QualityReviewService -> ManuscriptService（生成润色候选）
 | QualityReviewService / Store | 保持原有生成与持久化分离，不再反向依赖写作门面 |
 
 专用服务不回调 `WritingService`。其他模块可继续使用兼容入口，不需要感知内部拆分。
+
+### 退役链路与复用
+
+- 合同生成与合同审阅已无活动用例调用，删除对应 Graph、生成节点、输出校验、网关方法、动态 Prompt、Schema、Parser 和本地合同模板。启动不再编译这两张退役图。
+- `WritingGenerationWorkflow` 的正文、风格推荐、试写及试写编辑复用基础输入校验；各阶段特有的章节、字数和逐字证据检查保留。
+- `WritingOutputSchemas` 共用问题字段构造，审稿仍允许 BLOCKING 和自由类别，质量检查仍只允许 WARNING/INFO 与四个质量维度；输出字段与顺序不变。
+- 前端删除无人使用的合同 API 函数及版本类型；公共 HTTP 入口、正文修订、版本冲突与请求状态处理不变。
+- `ChapterContractContent` 仍被写作依据使用，不能连同退役生成器一并删除。本次不删除数据库表、历史项目数据或已保存提示词，不改变模型预算、活动 Prompt 或作者确认权限。
 
 ## 3. 查询与权限
 

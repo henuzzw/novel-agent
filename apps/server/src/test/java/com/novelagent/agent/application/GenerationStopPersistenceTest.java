@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.ingest.application.ImportAnalysisStore;
 import com.novelagent.ingest.application.WorkImportService;
 import com.novelagent.ingest.infrastructure.ImportAnalysisOutputParser;
-import com.novelagent.planning.application.CreationPreparationStore;
+
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.project.application.ProjectAccessService;
 import java.util.UUID;
@@ -34,19 +34,5 @@ class GenerationStopPersistenceTest {
         assertThat(values.getAllValues().get(1)[0]).isEqualTo("FAILED");
     }
 
-    @Test void preparationCancellationUsesExistingTerminalStateAndKeepsProjectAndVersionGuards() {
-        var jdbc = mock(JdbcTemplate.class);
-        var store = new CreationPreparationStore(mock(ProjectAccessService.class), jdbc, new ObjectMapper(), mock(CharacterNameService.class));
-        var task = mock(CreationPreparationStore.Task.class);
-        UUID project = UUID.randomUUID();
-        when(task.id()).thenReturn(UUID.randomUUID());
-        when(task.projectId()).thenReturn(project);
-        when(task.version()).thenReturn(4L);
-        store.fail(task, new GenerationStoppedException());
-        var values = ArgumentCaptor.forClass(Object[].class);
-        verify(jdbc).update(argThat(sql -> sql.contains("project_id = ? AND row_version = ? AND status = 'RUNNING'")), values.capture());
-        assertThat(values.getValue()[0]).isEqualTo("CANCELLED");
-        assertThat(values.getValue()[3]).isEqualTo(project);
-        assertThat(values.getValue()[4]).isEqualTo(4L);
-    }
+
 }

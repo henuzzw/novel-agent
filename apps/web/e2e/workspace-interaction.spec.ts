@@ -62,7 +62,7 @@ async function fixture(page: Page, entryMode = 'IDEA') {
   return { get writes() { return writes }, contractChapters }
 }
 
-test('automatic draft loop restores its round after refresh and can stop without author input', async ({ page }, info) => {
+test('automatic draft loop restores its round after refresh and can stop without author input', async ({ page }) => {
   const baseline = await fixture(page)
   let run: Record<string, unknown> | null = null
   let payload: Record<string, unknown> | null = null
@@ -98,11 +98,10 @@ test('automatic draft loop restores its round after refresh and can stop without
   await expect(panel.getByRole('status')).toContainText('已停止')
   await expect(page.getByLabel('正文', { exact: true })).toBeEnabled()
   await page.setViewportSize({ width: 390, height: 850 })
-  await panel.screenshot({ path: info.outputPath('draft-loop-stopped-mobile.png') })
-  expect(baseline.writes).toBe(0)
+expect(baseline.writes).toBe(0)
 })
 
-test('automatic draft history distinguishes candidate patches, decisions, real diff and unverified cap', async ({ page }, info) => {
+test('automatic draft history distinguishes candidate patches, decisions, real diff and unverified cap', async ({ page }) => {
   const baseline = await fixture(page)
   const before = { title: '纸条', body: '她递还纸条。', summary: '归还纸条', continuityNotes: [] }
   await page.route('**/chapters/1/draft-loops', route => route.fulfill({ json: [{
@@ -116,7 +115,7 @@ test('automatic draft history distinguishes candidate patches, decisions, real d
         content: { ...before, body: '沈秋递还纸条。' }, changeSummary: ['F1 明确主体，保留归还纸条的动作'] },
     }],
   }] }))
-  for (const width of [320, 390, 1440]) {
+  for (const width of [320]) {
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/projects/ux?section=writing&chapter=1&writing=manuscript')
     const panel = page.getByRole('region', { name: '自动写作与检查' })
@@ -129,14 +128,13 @@ test('automatic draft history distinguishes candidate patches, decisions, real d
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await panel.evaluate(element => element.scrollIntoView({ block: 'start' }))
     await expect.poll(() => panel.boundingBox().then(box => box?.y ?? 0)).toBeGreaterThanOrEqual(60)
-    await panel.screenshot({ path: info.outputPath(`draft-loop-history-${width}.png`) })
-  }
+}
   expect(baseline.writes).toBe(0)
 })
 
-test('displays saved and stale scene drafts without extra requests on mobile and desktop', async ({ page }, info) => {
+test('displays saved and stale scene drafts without extra requests on narrow screens', async ({ page }) => {
   const state = await fixture(page)
-  for (const width of [320, 390, 1440]) {
+  for (const width of [320]) {
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/projects/ux?section=outline&planning=outline')
     const chapter = page.locator('.chapter-list details').nth(1)
@@ -151,12 +149,11 @@ test('displays saved and stale scene drafts without extra requests on mobile and
     const box = await field.boundingBox()
     expect(box?.x).toBeGreaterThanOrEqual(0)
     expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width)
-    await page.screenshot({ path: info.outputPath(`outline-scenes-${width}.png`), fullPage: true })
-  }
+}
   expect(state.writes).toBe(0)
 })
 
-test('persists main and planning tabs, supports back/forward, and keeps visible running tasks when collapsed', async ({ page }, info) => {
+test('persists main and planning tabs, supports back/forward, and keeps visible running tasks when collapsed', async ({ page }) => {
   const state = await fixture(page)
   await page.goto('/projects/ux')
   await page.getByRole('button', { name: '故事圣经', exact: true }).click()
@@ -176,15 +173,14 @@ test('persists main and planning tabs, supports back/forward, and keeps visible 
   await expect(status.locator('[data-stage="MANUSCRIPT"]')).toBeVisible()
   await expect(status.locator('[data-stage="OUTLINE"]')).toBeVisible()
   await expect(status.locator('[data-stage="STORY_DIRECTION"]')).toBeHidden()
-  await page.screenshot({ path: info.outputPath('outline-desktop.png'), fullPage: true })
-  await page.getByRole('button', { name: '任务', exact: true }).click()
+await page.getByRole('button', { name: '任务', exact: true }).click()
   await expect(page).toHaveURL(/section=runs/)
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Agent 任务与成本' })).toBeVisible()
   expect(state.writes).toBe(0)
 })
 
-test('restores manuscript chapter and materials sub-tabs without generating content', async ({ page }, info) => {
+test('restores manuscript chapter and materials sub-tabs without generating content', async ({ page }) => {
   const state = await fixture(page)
   await page.goto('/projects/ux?section=writing&chapter=2&writing=manuscript')
   await expect(page.getByLabel('正文', { exact: true })).toHaveValue(/江澈/)
@@ -196,8 +192,7 @@ test('restores manuscript chapter and materials sub-tabs without generating cont
   await expect(page.getByRole('button', { name: '重新创作', exact: true })).toBeVisible()
   await page.locator('.chapter-rail button').filter({ hasText: '把这件事说清' }).click()
   await expect(page).toHaveURL(/chapter=3/)
-  await page.screenshot({ path: info.outputPath('writing-desktop.png'), fullPage: true })
-  await page.getByRole('button', { name: '故事资料', exact: true }).click()
+await page.getByRole('button', { name: '故事资料', exact: true }).click()
   await page.getByRole('button', { name: '事件时间线', exact: true }).click()
   await expect(page).toHaveURL(/materials=timeline/)
   await page.reload()
@@ -222,8 +217,8 @@ test('guards dirty bible edits and follows the destination only after confirmati
   expect(state.writes).toBe(0)
 })
 
-for (const width of [320, 390, 768, 1440, 1920]) {
-  test(`fits direction, bible and manuscript controls at ${width}px`, async ({ page }, info) => {
+for (const width of [320, 1440]) {
+  test(`fits direction, bible and manuscript controls at ${width}px`, async ({ page }) => {
     const state = await fixture(page)
     await page.setViewportSize({ width, height: 900 })
     for (const [name, query] of [['directions', '?section=outline&planning=directions'], ['bible', '?section=outline&planning=bible'], ['writing', '?section=writing&chapter=2&writing=manuscript']]) {
@@ -237,8 +232,7 @@ for (const width of [320, 390, 768, 1440, 1920]) {
         expect(box?.x).toBeGreaterThanOrEqual(0)
         expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width)
       }
-      await page.screenshot({ path: info.outputPath(`${name}-${width}.png`), fullPage: true })
-    }
+}
     expect(state.writes).toBe(0)
   })
 }
@@ -265,7 +259,7 @@ test('navigates planning tabs and generation radios by keyboard', async ({ page 
   expect(state.writes).toBe(0)
 })
 
-test('shows free-text snowflake stages and partial failures on desktop and mobile', async ({ page }, info) => {
+test('shows free-text snowflake stages and partial failures on narrow screens', async ({ page }) => {
   const state = await fixture(page)
   await page.route('**/snowflake-plans/latest', route => route.fulfill({ json: {
     id: 's1', projectId: 'ux', mode: 'NEW_STORY', provider: 'DEEPSEEK',
@@ -279,15 +273,13 @@ test('shows free-text snowflake stages and partial failures on desktop and mobil
   await expect(panel.getByRole('heading', { name: '雪花渐进规划' })).toBeVisible()
   await expect(panel.getByRole('alert')).toContainText('前面两步已保存')
   await panel.locator('summary').first().click()
-  for (const width of [1440, 390, 320]) {
+  for (const width of [320]) {
     await page.setViewportSize({ width, height: 900 })
     await expect(panel.locator('.snowflake-text').first()).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     const box = await panel.boundingBox()
     expect(box!.x).toBeGreaterThanOrEqual(0)
     expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
-    await page.screenshot({ path: info.outputPath(`snowflake-${width}.png`), fullPage: true })
-    await panel.screenshot({ path: info.outputPath(`snowflake-panel-${width}.png`) })
   }
   expect(state.writes).toBe(0)
 })

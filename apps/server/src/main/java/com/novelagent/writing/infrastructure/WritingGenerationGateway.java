@@ -7,7 +7,6 @@ import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.domain.ChapterContractContent;
-import com.novelagent.writing.domain.ChapterContractReviewContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.QualityReviewContent;
@@ -46,16 +45,18 @@ public class WritingGenerationGateway {
         this.styleMetrics = styleMetrics;
     }
 
-    public ChapterContractContent contract(UUID projectId, StoryBibleContent bible, OutlineArc arc,
-            ChapterPlan chapter, NovelMemoryContext memory, ChapterContractContent previousContract,
-            ModelProvider provider, String instruction) {
+    /** Extract from an immutable published body without future planning or literary review. */
+    public ChapterReviewContent publishedMemory(UUID projectId, ManuscriptContent manuscript,
+            EntityCatalogContext catalog, ModelProvider provider) {
         if (provider == ModelProvider.LOCAL_TEMPLATE) {
-            return local.contract(chapter, previousContract, instruction);
+            return new ChapterReviewContent("本地模板不执行语义事实抽取；已发布正文可直接用于后续写作。",
+                    java.util.List.of(), java.util.List.of());
         }
-        String output = models.request(projectId, "CHAPTER_CONTRACT", provider,
-                prompts.contract(projectId, bible, arc, chapter, memory, previousContract, instruction), schemas.contract(),
-                "chapter_contract", 3000);
-        return parser.contract(output);
+        String output = models.request(projectId, "CHAPTER_REVIEW", provider,
+                prompts.publishedMemory(projectId, manuscript, catalog), schemas.review(), "chapter_review", 5000);
+        var result = parser.review(output);
+        if (!result.issues().isEmpty()) throw new IllegalArgumentException("发布后记忆整理不能包含正文审稿或返工要求");
+        return result;
     }
 
     public GeneratedManuscript manuscript(UUID projectId, StoryBibleContent bible, OutlineArc arc,
@@ -69,18 +70,6 @@ public class WritingGenerationGateway {
                 schemas.manuscript(),
                 "manuscript", Math.max(5000, contract.suggestedMaxWords() * 2));
         return parser.manuscript(output);
-    }
-
-    public ChapterContractReviewContent contractReview(UUID projectId, StoryBibleContent bible, OutlineArc arc,
-            ChapterPlan chapter, ChapterContractContent contract, NovelMemoryContext memory,
-            ModelProvider provider, String instruction) {
-        if (provider == ModelProvider.LOCAL_TEMPLATE) {
-            return new ChapterContractReviewContent("本地模板未发现明确的合同冲突，请由作者复核。", java.util.List.of());
-        }
-        String output = models.request(projectId, "CHAPTER_CONTRACT_REVIEW", provider,
-                prompts.contractReview(projectId, bible, arc, chapter, contract, memory, instruction),
-                schemas.contractReview(), "chapter_contract_review", 2500);
-        return parser.contractReview(output);
     }
 
     public ChapterReviewContent review(UUID projectId, StoryBibleContent bible,

@@ -9,6 +9,27 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WritingQualityTest {
+    @Test void sharedIssueSchemaPreservesReviewAndQualityPermissions() {
+        var schemas = new WritingOutputSchemas(new ObjectMapper());
+        var review = schemas.review().path("properties").path("issues").path("items");
+        var quality = schemas.qualityReview().path("properties").path("issues").path("items");
+        assertThat(review.path("additionalProperties").booleanValue()).isFalse();
+        assertThat(quality.path("additionalProperties").booleanValue()).isFalse();
+        assertThat(review.path("required")).isEqualTo(quality.path("required"));
+        assertThat(review.path("required")).hasSize(7);
+        for (String field : List.of("id", "description", "evidence", "suggestion", "resolved")) {
+            assertThat(review.path("properties").path(field))
+                    .isEqualTo(quality.path("properties").path(field));
+        }
+        assertThat(review.path("properties").path("severity").path("enum").toString())
+                .isEqualTo("[\"BLOCKING\",\"WARNING\",\"INFO\"]");
+        assertThat(quality.path("properties").path("severity").path("enum").toString())
+                .isEqualTo("[\"WARNING\",\"INFO\"]");
+        assertThat(review.path("properties").path("category").has("enum")).isFalse();
+        assertThat(quality.path("properties").path("category").path("enum").toString())
+                .isEqualTo("[\"STYLE\",\"FLUENCY\",\"LOGIC\",\"SCENE\"]");
+    }
+
     @Test void localChecksAreEvidenceBoundAndDoNotPretendToJudgeLogic() {
         String paragraph = "然后他走到门口，接着看见纸条，随后停下来。。";
         var manuscript = new ManuscriptContent("门口", paragraph + "\n" + paragraph, "摘要", List.of());
@@ -26,13 +47,5 @@ class WritingQualityTest {
         assertThatThrownBy(() -> parser.qualityReview(json, new ManuscriptContent("标题", "他停下来。", "摘要", List.of())))
                 .isInstanceOf(ModelProviderException.class);
         assertThat(parser.qualityReview(json, new ManuscriptContent("标题", "他停下来。。", "摘要", List.of())).issues()).hasSize(1);
-    }
-    @Test void metricsAndAnalysisPromptKeepSampleSeparateFromStoryFacts() {
-        var profile = new LocalStyleAnalyzer().analyze("他走到门口。她停下来。".repeat(20));
-        assertThat(profile.narrativeVoice()).contains("不能推断");
-        assertThat(profile.avoidPatterns()).contains("移植样本人物、情节或设定");
-        var prompt = new WritingPromptFactory(new ObjectMapper(), null, null, null, null).styleAnalysis("样本文字");
-        assertThat(prompt.user()).contains("样本文字");
-        assertThat(prompt.system()).contains("样本");
     }
 }

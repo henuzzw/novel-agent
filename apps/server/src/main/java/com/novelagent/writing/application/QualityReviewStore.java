@@ -47,7 +47,6 @@ public class QualityReviewStore {
     private final CharacterProfileService profiles;
     private final WritingStyleService styles;
     private final EntityManager entityManager;
-    private final com.novelagent.planning.application.CreationPreparationContextService preparation;
 
     public QualityReviewStore(
             OutlineVersionRepository outlines,
@@ -60,22 +59,6 @@ public class QualityReviewStore {
             CharacterProfileService profiles,
             WritingStyleService styles,
             EntityManager entityManager) {
-        this(outlines, bibles, contracts, manuscripts, reports, access, names, profiles, styles, entityManager, null);
-    }
-
-    @org.springframework.beans.factory.annotation.Autowired
-    public QualityReviewStore(
-            OutlineVersionRepository outlines,
-            StoryBibleVersionRepository bibles,
-            ChapterContractVersionRepository contracts,
-            ManuscriptVersionRepository manuscripts,
-            QualityReviewVersionRepository reports,
-            ProjectAccessService access,
-            CharacterNameService names,
-            CharacterProfileService profiles,
-            WritingStyleService styles,
-            EntityManager entityManager,
-            com.novelagent.planning.application.CreationPreparationContextService preparation) {
         this.outlines = outlines;
         this.bibles = bibles;
         this.contracts = contracts;
@@ -86,7 +69,6 @@ public class QualityReviewStore {
         this.profiles = profiles;
         this.styles = styles;
         this.entityManager = entityManager;
-        this.preparation = preparation;
     }
 
     public record Snapshot(NovelProject project, ManuscriptVersion manuscript, com.novelagent.writing.domain.ManuscriptBasis writingBasis,
@@ -124,8 +106,7 @@ public class QualityReviewStore {
         }
         ManuscriptContent rendered = names.render(projectId, manuscript.getContent());
         String profile = names.render(projectId, profiles.promptContext(projectId));
-        String prepared = preparation == null ? "" : preparation.context(projectId, outline.getId(), chapter);
-        if (!prepared.isEmpty()) profile += "\n作者确认的创作准备资料；规划不等于正史或角色已知信息：\n" + prepared;
+        String prepared = "";
         String style = styles.promptContext(projectId);
         var context = WritingContextService.resolve(outline, bible, chapter, CreativeStrategyPolicy.from(project));
         context = new WritingContextService.Context(outline, bible, context.arc(), context.chapter(),

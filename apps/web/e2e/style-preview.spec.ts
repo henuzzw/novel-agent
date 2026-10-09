@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 import type { StylePreviewInput, WritingStyleProfile } from '../src/api/writingQuality'
 import { readFileSync } from 'node:fs'
 
-test('tries first-chapter styles from planning and adopts the selected sample explicitly', async ({ page }, testInfo) => {
+test('tries first-chapter styles from planning and adopts the selected sample explicitly', async ({ page }) => {
   const first: WritingStyleProfile = { name: '现实细腻', narrativeVoice: '贴近感知', sentenceRhythm: '长短交错',
     descriptionFocus: '生活细节', dialogueStyle: '自然口语', emotionalExpression: '动作反应', pacing: '重要互动展开', avoidPatterns: ['重复解释'],
     basePresetId: 'realistic', basePresetVersion: 1,
@@ -121,7 +121,5 @@ test('tries first-chapter styles from planning and adopts the selected sample ex
   await page.getByRole('button', { name: '风格试写', exact: true }).click()
   await expect(page.locator('.preview-result')).toHaveCount(3)
   await page.getByLabel('叙述立场', { exact: true }).scrollIntoViewIfNeeded()
-  await page.screenshot({ path: testInfo.outputPath('style-craft-viewport.png'), scale: 'css' })
-  await page.screenshot({ path: testInfo.outputPath('style-preview.png'), fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

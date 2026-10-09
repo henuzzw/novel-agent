@@ -27,7 +27,7 @@ public class CanonCommit {
     @Column(name = "manuscript_version_id", nullable = false)
     private UUID manuscriptVersionId;
 
-    @Column(name = "review_version_id", nullable = false, unique = true)
+    @Column(name = "review_version_id", unique = true)
     private UUID reviewVersionId;
 
     @Column(name = "canon_version", nullable = false)
@@ -105,5 +105,18 @@ public class CanonCommit {
         if (!active) throw new IllegalStateException("这条正史已被替换");
         active = false;
         supersededByCommitId = replacementId;
+    }
+
+    /** Derived memory can be added only while this published source remains active. */
+    public void addMemoryFacts(List<FactProposal> facts) {
+        if (!active) throw new IllegalStateException("这条正史已被替换");
+        var combined = new java.util.ArrayList<>(acceptedFacts);
+        for (var fact : facts) {
+            if (combined.stream().anyMatch(existing -> existing.id().equals(fact.id()))) {
+                throw new IllegalStateException("记忆条目已保存");
+            }
+            combined.add(fact);
+        }
+        acceptedFacts = List.copyOf(combined);
     }
 }

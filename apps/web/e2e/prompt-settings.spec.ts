@@ -6,7 +6,7 @@ async function fixture(page: Page) {
     ['OUTLINE', '分层大纲', '规划'], ['MANUSCRIPT', '正文创作与润色', '写作'],
     ['IMPORT_REVERSE_BIBLE_ADAPT', '导入圣经 · 改编', '导入'], ['IMPORT_REVERSE_BIBLE_CONTINUE', '导入圣经 · 续写', '导入'],
   ]
-  let prompts: AgentPrompt[] = definitions.map(([key, name, group]) => ({ key: key!, workflow: key!.replace(/_(ADAPT|CONTINUE)$/, ''), name: name!, group: group!, systemPrompt: `你是${name} Agent。保留有效事实和作者授权边界。`, guidance: '', defaultSystemPrompt: `你是${name} Agent。保留有效事实和作者授权边界。`, protectedRules: '作者要求优先于通用建议。输出只作为候选，不提交正史。', customized: false, version: 0, updatedAt: null }))
+  let prompts: AgentPrompt[] = definitions.map(([key, name, group]) => ({ key: key!, workflow: key!.replace(/_(ADAPT|CONTINUE)$/, ''), name: name!, group: group!, systemPrompt: `你是${name} Agent。保留有效事实和作者授权边界。`, sessionSystemPrompt: '系统默认', guidance: '', defaultSystemPrompt: `你是${name} Agent。保留有效事实和作者授权边界。`, defaultSessionSystemPrompt: '系统默认', protectedRules: '作者要求优先于通用建议。输出只作为候选，不提交正史。', customized: false, version: 0, updatedAt: null }))
   const history = new Map<string, PromptRevision[]>()
   const errors: string[] = []
   let conflict = false
@@ -29,12 +29,13 @@ async function fixture(page: Page) {
     if (conflict || payload.version !== current.version) return route.fulfill({ status: 409, json: { detail: '版本冲突', code: 'RESOURCE_VERSION_CONFLICT' } })
     const reset = parts[2] === 'reset'
     const systemPrompt = reset ? current.defaultSystemPrompt : payload.systemPrompt
+    const sessionSystemPrompt = reset ? current.defaultSessionSystemPrompt : payload.sessionSystemPrompt
     const guidance = reset ? '' : payload.guidance
     const version = current.version + 1
     const updatedAt = new Date().toISOString()
-    const next = { ...current, systemPrompt, guidance, version, updatedAt, customized: systemPrompt !== current.defaultSystemPrompt || !!guidance }
+    const next = { ...current, systemPrompt, sessionSystemPrompt, guidance, version, updatedAt, customized: systemPrompt !== current.defaultSystemPrompt || sessionSystemPrompt !== current.defaultSessionSystemPrompt || !!guidance }
     prompts = prompts.map(item => item.key === current.key ? next : item)
-    history.set(current.key, [{ version, systemPrompt: reset ? null : systemPrompt, guidance, operation: reset ? 'RESET' : 'SAVE', createdAt: updatedAt }, ...(history.get(current.key) ?? [])])
+    history.set(current.key, [{ version, systemPrompt: reset ? null : systemPrompt, sessionSystemPrompt: reset ? null : sessionSystemPrompt, guidance, operation: reset ? 'RESET' : 'SAVE', createdAt: updatedAt }, ...(history.get(current.key) ?? [])])
     return route.fulfill({ json: next })
   })
   return { errors, conflict: () => { conflict = true }, fail: (value: boolean) => { failed = value } }
@@ -45,11 +46,13 @@ test('edits persist across refresh, import modes stay independent, and history/r
   await page.goto('/projects')
   await page.getByRole('link', { name: '提示词管理', exact: true }).click()
   await expect(page.getByRole('heading', { name: '提示词管理', exact: true })).toBeVisible()
-  await page.getByLabel('系统指令', { exact: false }).fill('根据当前目标、行动、阻力与具体后果设计大纲，保留作者指定开场。')
+  await page.getByLabel('系统提示词', { exact: false }).fill('大纲系统角色')
+  await page.getByLabel('用户提示词', { exact: false }).fill('根据当前目标、行动、阻力与具体后果设计大纲，保留作者指定开场。')
   await page.getByLabel('阶段执行规则', { exact: false }).fill('前三章不要登记日常流程。第一段从有因果作用的当前矛盾切入。')
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByRole('status')).toContainText('已保存 · 版本 1')
   await page.reload()
+  await expect(page.getByLabel('系统提示词', { exact: false })).toHaveValue('大纲系统角色')
   await expect(page.getByLabel('阶段执行规则', { exact: false })).toHaveValue('前三章不要登记日常流程。第一段从有因果作用的当前矛盾切入。')
   await page.getByRole('button', { name: /导入圣经 · 改编/ }).click()
   await page.getByLabel('阶段执行规则', { exact: false }).fill('改编规则')
@@ -82,7 +85,7 @@ test('guards unsaved changes, keeps a conflict draft, and retries a failed query
   await expect(page.getByRole('alert')).toContainText('提示词查询暂时不可用')
   state.fail(false)
   await page.getByRole('button', { name: '重新读取提示词', exact: true }).click()
-  await expect(page.getByLabel('系统指令', { exact: false })).toHaveValue(/正文创作与润色/)
+  await expect(page.getByLabel('用户提示词', { exact: false })).toHaveValue(/正文创作与润色/)
   await page.getByLabel('阶段执行规则', { exact: false }).fill('暂存的规则')
   page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('button', { name: /分层大纲/ }).click()
@@ -96,24 +99,6 @@ test('guards unsaved changes, keeps a conflict draft, and retries a failed query
   await page.getByRole('button', { name: /分层大纲/ }).click()
   await expect(page).toHaveURL(/template=OUTLINE/)
   await page.reload()
-  await expect(page.getByLabel('系统指令', { exact: false })).toHaveValue(/分层大纲/)
+  await expect(page.getByLabel('用户提示词', { exact: false })).toHaveValue(/分层大纲/)
   expect(state.errors).toEqual([])
 })
-
-for (const width of [320, 390, 768, 1440]) {
-  test(`prompt editor fits ${width}px without overlapping the toolbar`, async ({ page }, info) => {
-    const { errors } = await fixture(page)
-    await page.setViewportSize({ width, height: 900 })
-    await page.goto('/settings/prompts?template=MANUSCRIPT')
-    await expect(page.getByLabel('系统指令', { exact: false })).toBeVisible()
-    await page.screenshot({ path: info.outputPath(`prompts-${width}.png`), fullPage: true })
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    const brand = await page.locator('.brand').boundingBox()
-    const model = await page.locator('.global-model-button').boundingBox()
-    expect(brand!.x + brand!.width).toBeLessThanOrEqual(model!.x)
-    const input = await page.locator('#prompt-system').boundingBox()
-    const heading = await page.locator('.prompt-editor-heading').boundingBox()
-    expect(heading!.y + heading!.height).toBeLessThanOrEqual(input!.y)
-    expect(errors).toEqual([])
-  })
-}

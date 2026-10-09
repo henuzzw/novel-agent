@@ -20,7 +20,6 @@ import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
-import com.novelagent.project.application.CreativeStrategyGuide;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -35,10 +34,8 @@ class FirstThreeChaptersModelAdapterTest {
                 .thenReturn(mapper.writeValueAsString(unassessed()));
         adapter.check(source, ModelProvider.LOCAL_CODEX, "author instruction");
         var input = ArgumentCaptor.forClass(String.class);
-        var system = ArgumentCaptor.forClass(String.class);
         verify(gateway, times(1)).request(eq(PROJECT), eq("FIRST_THREE_CHAPTERS_REVIEW"), eq(ModelProvider.LOCAL_CODEX),
-                system.capture(), input.capture(), any(), eq("opening_review_v1"), eq(6000), eq(CodexSessionPolicy.NEW_THREAD));
-        assertThat(system.getValue()).contains(CreativeStrategyGuide.reviewRules());
+                anyString(), input.capture(), any(), eq("opening_review_v1"), eq(6000), eq(CodexSessionPolicy.NEW_THREAD));
         var json = mapper.readTree(input.getValue());
         for (int n = 0; n < 3; n++) assertThat(json.path("completeChapters").get(n).path("body").asText()).isEqualTo(source.chapters().get(n).body());
         assertThat(input.getValue()).contains("complete outline", "complete bible", "style", "profiles", "future secret", "author instruction");

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 import { character } from '../src/__tests__/character-blueprint-fixtures'
 
-test('shows planning separately and shares the ledger across both pages', async ({ page }, testInfo) => {
+test('shows planning separately and shares the ledger across both pages', async ({ page }) => {
   const models = createModelSettingsFixture()
   const blueprint = character()
   const characterId = 'character-1'
@@ -48,8 +48,7 @@ test('shows planning separately and shares the ledger across both pages', async 
   await expect(page.getByText('规划关系 · 未作为正文事实确认')).toBeVisible()
   await expect(page.getByText('暂无已确认的人物关系。')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('planned-relations.png'), fullPage: true })
-  await page.getByRole('button', { name: '伏笔与承诺', exact: true }).click()
+await page.getByRole('button', { name: '伏笔与承诺', exact: true }).click()
   await expect(page.locator('.entry')).toContainText('故事圣经规划')
   await expect(page.locator('.entry')).toContainText('计划中')
   await page.locator('.entry').click()
@@ -64,5 +63,4 @@ test('shows planning separately and shares the ledger across both pages', async 
   await expect.poll(() => syncs).toBe(1)
   expect(generations).toBe(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('shared-ledger.png'), fullPage: true })
 })

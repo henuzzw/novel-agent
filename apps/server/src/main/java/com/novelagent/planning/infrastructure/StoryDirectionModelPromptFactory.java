@@ -45,8 +45,7 @@ public class StoryDirectionModelPromptFactory {
                 生成前逐条检查“必须包含”。每个候选方向都要让这些事实在 premise、centralConflict、
                 protagonistArc、structure、endingDirection 或 distinctiveFeatures 中得到具体体现。
 
-                返回对象格式：
-                {"directions":[{...三个方向...}],"questionsForAuthor":[],"changeSummary":[]}
+                按本次纯文本保存标题输出三个完整故事方向、待确认问题和实际修改说明。
                 """.formatted(
                 value(intent.premise()),
                 intent.genres(),

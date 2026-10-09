@@ -216,17 +216,18 @@ public class CodexAppServerClient {
         }
 
         Instant startedAt = Instant.now();
-        log.info("Codex turn starting projectId={} threadId={} model={} effort={} timeoutSeconds={}",
+        log.info("Codex turn starting projectId={} threadId={} model={} effort={} idleTimeoutSeconds={}",
                 projectId, threadId, choice.model(), choice.effort(), turnTimeout.toSeconds());
         try {
             ObjectNode params = structuredTurnParams(threadId, projectId, prompt, outputSchema, choice);
             JsonNode result = request("turn/start", params);
             activeTurn.turnId = requiredText(result, "/turn/id", "Codex 未返回 turn ID");
             synchronized (activeTurn) {
+                activeTurn.markActivity();
                 for (var event : activeTurn.earlyEvents) handleTurnEvent(event.method(), event.params());
                 activeTurn.earlyEvents.clear();
             }
-            String output = await(activeTurn.completion, "等待 Codex 完成生成", turnTimeout);
+            String output = awaitTurnCompletion(activeTurn);
             if (output == null || output.isBlank()) {
                 throw new CodexAppServerException("Codex 已结束生成，但没有返回正文内容");
             }
@@ -297,7 +298,7 @@ public class CodexAppServerClient {
         params.set("sandboxPolicy", readOnlySandbox());
         params.set("environments", objectMapper.createArrayNode());
         params.set("disabledPluginIds", objectMapper.createArrayNode());
-        params.set("outputSchema", outputSchema);
+        if (outputSchema != null && !outputSchema.isNull()) params.set("outputSchema", outputSchema);
         ArrayNode input = params.putArray("input");
         input.addObject().put("type", "text").put("text", prompt);
         return params;
@@ -522,7 +523,8 @@ public class CodexAppServerClient {
         }
         switch (method) {
             case "thread/tokenUsage/updated" -> handleTokenUsage(message.path("params"));
-            case "item/agentMessage/delta", "item/completed", "turn/completed" ->
+            case "item/agentMessage/delta", "item/reasoning/textDelta", "item/reasoning/summaryTextDelta",
+                    "item/completed", "turn/completed" ->
                     handleTurnEvent(method, message.path("params"));
             default -> {
                 // Reasoning and tool content are deliberately not exposed as model responses.
@@ -545,6 +547,10 @@ public class CodexAppServerClient {
             if (!active.turnId.equals(turnId)) return;
             switch (method) {
                 case "item/agentMessage/delta" -> active.append(params.path("itemId").asText(), params.path("delta").asText());
+                case "item/reasoning/textDelta", "item/reasoning/summaryTextDelta" -> {
+                    // Reasoning advances the wait deadline without entering the public response buffer.
+                    if (!params.path("delta").asText().isEmpty()) active.markActivity();
+                }
                 case "item/completed" -> handleItemCompleted(params);
                 case "turn/completed" -> handleTurnCompleted(params);
                 default -> { }
@@ -564,6 +570,7 @@ public class CodexAppServerClient {
         JsonNode item = params.path("item");
         if (activeTurn != null && "agentMessage".equals(item.path("type").asText())) {
             activeTurn.output = item.path("text").asText("");
+            if (!activeTurn.output.isEmpty()) activeTurn.markActivity();
             activeTurn.publish(activeTurn.output);
         }
     }
@@ -633,6 +640,36 @@ public class CodexAppServerClient {
         return await(future, action, timeout);
     }
 
+    private String awaitTurnCompletion(ActiveTurn activeTurn) {
+        while (true) {
+            long remaining = turnTimeout.toNanos() - (System.nanoTime() - activeTurn.lastActivityNanos);
+            try {
+                return activeTurn.completion.get(Math.max(1, remaining), TimeUnit.NANOSECONDS);
+            } catch (TimeoutException exception) {
+                synchronized (activeTurn) {
+                    // Recheck under the event lock: progress or completion can race with the timed wait.
+                    if (activeTurn.completion.isDone()
+                            || System.nanoTime() - activeTurn.lastActivityNanos < turnTimeout.toNanos()) {
+                        continue;
+                    }
+                    throw new CodexAppServerException("等待 Codex 完成生成超时（连续无新进展等待上限 "
+                            + turnTimeout.toSeconds() + " 秒）；持续生成时会自动续期，不限制总生成时长。"
+                            + "可检查模型连接或调整空闲等待上限 CODEX_TURN_TIMEOUT_SECONDS 后手动重试；"
+                            + "协议等待上限 CODEX_CLI_TIMEOUT_SECONDS", exception);
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new CodexAppServerException("等待 Codex 完成生成被中断", exception);
+            } catch (ExecutionException exception) {
+                Throwable cause = exception.getCause();
+                if (cause instanceof CodexAppServerException codexException) {
+                    throw codexException;
+                }
+                throw new CodexAppServerException("等待 Codex 完成生成失败", cause);
+            }
+        }
+    }
+
     // Obtain the turn ID before honoring an interrupt so a just-started remote turn can be stopped.
     JsonNode awaitTurnStart(CompletableFuture<JsonNode> future) {
         long deadline = System.nanoTime() + timeout.toNanos();
@@ -660,7 +697,7 @@ public class CodexAppServerClient {
         }
         catch (TimeoutException exception) {
             throw new CodexAppServerException(action + "超时（等待上限 " + limit.toSeconds()
-                    + " 秒），可降低推理强度或切换模型后手动重试；生成上限配置 CODEX_TURN_TIMEOUT_SECONDS，协议上限 CODEX_CLI_TIMEOUT_SECONDS", exception);
+                    + " 秒），可检查连接后手动重试；生成空闲上限配置 CODEX_TURN_TIMEOUT_SECONDS，协议上限 CODEX_CLI_TIMEOUT_SECONDS", exception);
         }
         catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -807,11 +844,18 @@ public class CodexAppServerClient {
         private final StringBuilder partial = new StringBuilder();
         private volatile String turnId;
         private volatile String output = "";
+        private volatile long lastActivityNanos = System.nanoTime();
+        private long maxOutputTokens;
+        private long maxReasoningTokens;
         private final Map<String, Usage> usages = new ConcurrentHashMap<>();
 
         private ActiveTurn(Consumer<String> progress) { this.progress = progress; }
 
+        private void markActivity() { lastActivityNanos = System.nanoTime(); }
+
         private void append(String id, String delta) {
+            if (delta.isEmpty()) return;
+            markActivity();
             if (!itemId.equals(id)) { itemId = id; partial.setLength(0); }
             int available = com.novelagent.agent.application.AgentRunOutputBuffer.MAX_CHARACTERS + 1 - partial.length();
             if (available > 0) partial.append(delta, 0, Math.min(delta.length(), available));
@@ -825,9 +869,16 @@ public class CodexAppServerClient {
             }
         }
 
-        private void recordUsage(String usageTurnId, Usage usage) {
+        private synchronized void recordUsage(String usageTurnId, Usage usage) {
             if (usage != null && (turnId == null || turnId.equals(usageTurnId))) {
                 usages.put(usageTurnId, usage);
+                long reasoningTokens = usage.reasoningOutputTokens() == null ? 0 : usage.reasoningOutputTokens();
+                if (usageTurnId.equals(turnId)
+                        && (usage.outputTokens() > maxOutputTokens || reasoningTokens > maxReasoningTokens)) {
+                    maxOutputTokens = Math.max(maxOutputTokens, usage.outputTokens());
+                    maxReasoningTokens = Math.max(maxReasoningTokens, reasoningTokens);
+                    markActivity();
+                }
             }
         }
 
