@@ -62,15 +62,15 @@ public class QualityReviewService {
         var source = store.snapshot(projectId, chapter);
         ModelProvider selected = provider == null ? ModelProvider.LOCAL_TEMPLATE : provider;
         var budget = budgets.plan(AgentStage.CHAPTER_REVIEW, selected, source.bible().getContent(),
-                source.contract().getContent(), source.rendered(), source.styleContext(), source.profileContext(), instruction);
+                source.writingBasis().plan(), source.rendered(), source.styleContext(), source.profileContext(), instruction);
         var recalled = memory.recall(AgentStage.CHAPTER_REVIEW, projectId, chapter, source.project().getCurrentCanonVersion(),
-                source.rendered().title() + " " + source.contract().getContent().objective(), budget);
+                source.rendered().title() + " " + source.writingBasis().plan().objective(), budget);
         if (source.futureContext() != null && !source.futureContext().isBlank()) {
             recalled = MemoryBudgetAllocator.withFutureContext(recalled,
                     new NovelMemoryContext.SemanticMemory(chapter + 1, NovelMemoryContext.FUTURE_PLAN,
                             1.0, "下一章规划边界（不是既有事实）", source.futureContext()), budget);
         }
-        var generated = workflow.generateQualityReview(projectId, source.bible().getContent(), source.contract().getContent(),
+        var generated = workflow.generateQualityReview(projectId, source.bible().getContent(), source.writingBasis().plan(),
                 source.rendered(), recalled, selected, instruction);
         generated.requireEvidenceIn(source.rendered().body());
         return store.save(source, selected.name(), instruction, generated);

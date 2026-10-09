@@ -15,7 +15,7 @@ public class ImportAnalysisPrompt {
                   "summary":{"type":"string","maxLength":3000},
                   "items":{"type":"array","maxItems":80,"items":{"type":"object","additionalProperties":false,
                     "required":["key","category","certainty","title","description","subjects","progress","evidence"],"properties":{
-                      "key":{"type":"string","maxLength":80},"category":{"type":"string","description":"信息分类，不是可信度；未知关系仍用 RELATIONSHIP，禁止 UNKNOWN 分类","enum":["CHARACTER","WORLD","RELATIONSHIP","EVENT","CLUE","FORESHADOW"]},
+                      "key":{"type":"string","minLength":1,"maxLength":76,"pattern":"^[A-Za-z0-9_-]+$","description":"本段唯一技术标识，只用英文字母、数字、下划线或短横线，例如 character_narrator_identity；不用点号、中文、空格或路径符号。预留服务端分段前缀长度。"},"category":{"type":"string","description":"信息分类，不是可信度；未知关系仍用 RELATIONSHIP，禁止 UNKNOWN 分类","enum":["CHARACTER","WORLD","RELATIONSHIP","EVENT","CLUE","FORESHADOW"]},
                       "certainty":{"type":"string","enum":["FACT","INFERENCE","UNKNOWN"]},"title":{"type":"string","maxLength":200},
                       "description":{"type":"string","maxLength":1800},"subjects":{"type":"array","maxItems":12,"items":{"type":"string","maxLength":100}},
                       "progress":{"type":"string","description":"仅 CLUE 和 FORESHADOW 可标线索进度，其他分类一律 NOT_APPLICABLE，与 certainty 无关","enum":["NOT_APPLICABLE","SET_UP","REINFORCED","PAYOFF","UNRESOLVED","UNKNOWN"]},

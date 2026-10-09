@@ -10,7 +10,7 @@ const Workspace = defineComponent({
     const section = useWorkspaceChoice('section', workspaceSections, 'outline')
     const planning = useWorkspaceChoice('planning', planningViews, 'directions')
     const chapter = useWorkspaceChapter()
-    const writing = useWorkspaceChoice('writing', writingViews, 'contract')
+    const writing = useWorkspaceChoice('writing', writingViews, 'manuscript')
     const dirty = ref(false)
     useUnsavedChanges(dirty, ['section', 'planning', 'chapter'])
     function openChapter() { section.value = 'writing'; chapter.value = 3; writing.value = 'manuscript' }
@@ -56,7 +56,7 @@ describe('workspace URL state', () => {
     expect(router.currentRoute.value.query).toMatchObject({ section: 'writing', planning: 'bible', chapter: '3', writing: 'manuscript', filter: 'keep' })
     expect(wrapper.find('output').text()).toBe('writing/bible/3/manuscript')
     router.back()
-    await vi.waitFor(() => expect(wrapper.find('output').text()).toBe('outline/bible/1/contract'))
+    await vi.waitFor(() => expect(wrapper.find('output').text()).toBe('outline/bible/1/manuscript'))
     wrapper.unmount()
   })
 
@@ -71,7 +71,7 @@ describe('workspace URL state', () => {
     await flushPromises()
     expect(confirm).toHaveBeenCalledOnce()
     expect(router.currentRoute.value.query.section).toBe('outline')
-    expect(wrapper.find('output').text()).toBe('outline/directions/1/contract')
+    expect(wrapper.find('output').text()).toBe('outline/directions/1/manuscript')
     wrapper.unmount()
   })
 

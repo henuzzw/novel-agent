@@ -29,7 +29,7 @@ class CharacterBlueprintCompletionServiceTest {
     private final CharacterBlueprintDraftStore drafts = mock(CharacterBlueprintDraftStore.class);
     private final StructuredModelGateway models = mock(StructuredModelGateway.class);
     private final CharacterBlueprintCompletionService service = new CharacterBlueprintCompletionService(
-            drafts, models, json, new StoryBibleOutputSchema(json));
+            drafts, json, new CharacterDesignService(models, json, new StoryBibleOutputSchema(json), new com.novelagent.planning.infrastructure.FreeTextPlanningRequest(models, json)));
 
     @Test void callsOneAuditedNewSessionOutsideTransactionsThenSavesCandidate() throws Exception {
         var bible = CharacterBlueprintFixtures.bible(List.of());
@@ -37,14 +37,14 @@ class CharacterBlueprintCompletionServiceTest {
         var character = CharacterBlueprintFixtures.character("江澈");
         when(drafts.load(projectId, bibleId, 2)).thenReturn(source);
         var output = json.createObjectNode(); output.set("characterBlueprints", json.valueToTree(List.of(character)));
-        when(models.request(eq(projectId), eq("CHARACTER_BLUEPRINT_COMPLETION"), eq(ModelProvider.DEEPSEEK),
-                anyString(), anyString(), any(), eq("character_blueprint_completion"), eq(8000), eq(CodexSessionPolicy.NEW_THREAD)))
+        when(models.request(eq(projectId), eq("CHARACTER_DESIGN"), eq(ModelProvider.DEEPSEEK),
+                anyString(), anyString(), any(), eq("character_design"), eq(10000), eq(CodexSessionPolicy.NEW_THREAD)))
                 .thenReturn(output.toString());
         service.complete(projectId, bibleId, 2, ModelProvider.DEEPSEEK, "不新增转学");
         var input = ArgumentCaptor.forClass(String.class);
         var schema = ArgumentCaptor.forClass(JsonNode.class);
-        verify(models).request(eq(projectId), eq("CHARACTER_BLUEPRINT_COMPLETION"), eq(ModelProvider.DEEPSEEK),
-                anyString(), input.capture(), schema.capture(), anyString(), eq(8000), eq(CodexSessionPolicy.NEW_THREAD));
+        verify(models).request(eq(projectId), eq("CHARACTER_DESIGN"), eq(ModelProvider.DEEPSEEK),
+                anyString(), input.capture(), schema.capture(), anyString(), eq(10000), eq(CodexSessionPolicy.NEW_THREAD));
         assertThat(json.readTree(input.getValue()).get("storyBible")).isEqualTo(json.valueToTree(bible));
         assertThat(schema.getValue().at("/properties/characterBlueprints/items/properties/knowledgeBoundaries").isObject()).isTrue();
         verify(drafts).save(source, List.of(character), ModelProvider.DEEPSEEK, "不新增转学");

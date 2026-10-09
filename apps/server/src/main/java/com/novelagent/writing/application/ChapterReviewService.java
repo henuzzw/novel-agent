@@ -131,7 +131,7 @@ public class ChapterReviewService {
         }
         StringBuilder feedback = new StringBuilder(mode == GenerationMode.REVISE
                 ? "以审稿关联原稿为底稿，逐条解决以下问题，并在修改说明中对应说明；未涉及的内容尽量保留：\n"
-                : "依据当前故事圣经、章节计划和章节合同重写整章，避免以下旧稿问题；本次不是局部修订，修改说明返回空数组：\n");
+                : "依据当前故事圣经、本章大纲计划重写整章，避免以下旧稿问题；本次不是局部修订，修改说明返回空数组：\n");
         for (String id : selected) {
             ReviewIssue issue = review.getContent().issues().stream()
                     .filter(item -> java.util.Objects.equals(item.id(), id)).findFirst()
@@ -177,14 +177,13 @@ public class ChapterReviewService {
         ManuscriptVersion manuscript = manuscripts.findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(
                 projectId, chapterNumber, ManuscriptStatus.AUTHOR_ACCEPTED)
                 .orElseThrow(() -> new IllegalArgumentException("请先由作者确认本章正文"));
-        ChapterContractVersion contract = contracts.findByIdAndProjectId(manuscript.getSourceContractVersionId(), projectId)
-                .orElseThrow(() -> new IllegalArgumentException("正文关联的章节合同不可用"));
+        var plan = ChapterWritingBasisService.requireCurrent(manuscript, context, contracts).plan();
         ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
         MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.CHAPTER_REVIEW, provider,
-                context.budgetInputs(context.bible().getContent(), contract.getContent(), manuscript.getContent(), request.instruction()));
+                context.budgetInputs(context.bible().getContent(), plan, manuscript.getContent(), request.instruction()));
         NovelMemoryContext recalled = contexts.recall(AgentStage.CHAPTER_REVIEW, context, request.instruction(), budget);
-        ChapterReviewContent generated = workflow.generateReview(projectId, context.bible().getContent(), contract.getContent(),
-                manuscript.getContent(), recalled, entityCatalog.forReview(projectId, contract.getContent()),
+        ChapterReviewContent generated = workflow.generateReview(projectId, context.bible().getContent(), plan,
+                manuscript.getContent(), recalled, entityCatalog.forReview(projectId, plan),
                 provider, context.instructionWithPreparation(normalize(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
         int version = reviews.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)

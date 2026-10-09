@@ -34,7 +34,7 @@ class AutomationServiceTest {
     private final CanonCommitRepository canon = mock(CanonCommitRepository.class);
     private final AutomationRun run = AutomationRun.create(ChapterAutomationPlannerTest.PROJECT,
             ChapterAutomationPlannerTest.OUTLINE, 1, 3, ModelProvider.LOCAL_TEMPLATE, null);
-    private final AtomicReference<ChapterContractResponse> contract = new AtomicReference<>();
+    private final AtomicReference<com.novelagent.writing.api.ManuscriptResponse> manuscript = new AtomicReference<>();
     private final AtomicReference<ChapterContractReviewResponse> contractReview = new AtomicReference<>();
     private AutomationService service;
 
@@ -53,48 +53,43 @@ class AutomationServiceTest {
             mutation.accept(run);
             return run.getStatus() == AutomationStatus.RUNNING;
         });
-        when(writing.latestContract(run.getProjectId(), 1)).thenAnswer(call -> Optional.ofNullable(contract.get()));
-        when(writing.latestContractReview(run.getProjectId(), 1)).thenAnswer(call -> Optional.ofNullable(contractReview.get()));
-        when(writing.generateContract(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
-            contract.set(ChapterAutomationPlannerTest.contract(ChapterContractStatus.DRAFT));
-            return contract.get();
-        });
-        when(writing.generateContractReview(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
-            contractReview.set(ChapterAutomationPlannerTest.contractReview(ChapterAutomationPlannerTest.CONTRACT, 2));
-            return contractReview.get();
+        when(writing.latestManuscript(run.getProjectId(), 1)).thenAnswer(call -> Optional.ofNullable(manuscript.get()));
+        when(writing.generateManuscript(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
+            manuscript.set(ChapterAutomationPlannerTest.manuscript(com.novelagent.writing.domain.ManuscriptStatus.DRAFT));
+            return manuscript.get();
         });
     }
 
     @Test
-    void generatesContractAndReviewThenWaitsWithoutWritingNextChapter() {
+    void generatesManuscriptThenWaitsWithoutWritingNextChapter() {
         var response = service.resume(run.getProjectId(), run.getId());
         assertThat(response.status()).isEqualTo(AutomationStatus.WAITING_FOR_USER);
-        assertThat(response.steps()).hasSize(2).allMatch(step -> step.artifactId() != null);
-        verify(writing, never()).generateManuscript(any(), anyInt(), any());
+        assertThat(response.steps()).hasSize(1).allMatch(step -> step.artifactId() != null);
+        verify(writing).generateManuscript(any(), eq(1), any());
         verify(writing, never()).generateContract(any(), eq(2), any());
+        service.resume(run.getProjectId(), run.getId());
+        assertThat(run.getSteps()).hasSize(1);
+    }
+
+    @Test
+    void recordsFailedStageAndRetriesWithoutRepeatingSavedManuscript() {
+        when(writing.generateManuscript(eq(run.getProjectId()), eq(1), any())).thenThrow(new IllegalStateException("模型不可用"));
+        assertThat(service.resume(run.getProjectId(), run.getId()).status()).isEqualTo(AutomationStatus.FAILED);
+        when(writing.generateManuscript(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
+            manuscript.set(ChapterAutomationPlannerTest.manuscript(com.novelagent.writing.domain.ManuscriptStatus.DRAFT));
+            return manuscript.get();
+        });
+        assertThat(service.resume(run.getProjectId(), run.getId()).status()).isEqualTo(AutomationStatus.WAITING_FOR_USER);
+        assertThat(run.getSteps()).hasSize(2);
         service.resume(run.getProjectId(), run.getId());
         assertThat(run.getSteps()).hasSize(2);
     }
 
     @Test
-    void recordsFailedStageAndRetriesWithoutRepeatingSavedContract() {
-        when(writing.generateContractReview(eq(run.getProjectId()), eq(1), any()))
-                .thenThrow(new IllegalStateException("模型不可用"));
-        assertThat(service.resume(run.getProjectId(), run.getId()).status()).isEqualTo(AutomationStatus.FAILED);
-        when(writing.generateContractReview(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
-            contractReview.set(ChapterAutomationPlannerTest.contractReview(ChapterAutomationPlannerTest.CONTRACT, 2));
-            return contractReview.get();
-        });
-        assertThat(service.resume(run.getProjectId(), run.getId()).status()).isEqualTo(AutomationStatus.WAITING_FOR_USER);
-        verify(writing).generateContract(eq(run.getProjectId()), eq(1), any());
-        assertThat(run.getSteps()).hasSize(3);
-    }
-
-    @Test
     void stopsAfterInFlightGenerationWhenCancelled() {
-        when(writing.generateContract(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
+        when(writing.generateManuscript(eq(run.getProjectId()), eq(1), any())).thenAnswer(call -> {
             run.cancel();
-            return ChapterAutomationPlannerTest.contract(ChapterContractStatus.DRAFT);
+            return ChapterAutomationPlannerTest.manuscript(com.novelagent.writing.domain.ManuscriptStatus.DRAFT);
         });
         assertThat(service.resume(run.getProjectId(), run.getId()).status()).isEqualTo(AutomationStatus.CANCELLED);
         assertThat(run.getSteps().getFirst().status()).isEqualTo("SUCCEEDED");

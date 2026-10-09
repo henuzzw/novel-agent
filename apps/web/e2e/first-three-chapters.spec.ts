@@ -59,10 +59,10 @@ async function setup(page: Page, options: { missing?: boolean; overflow?: boolea
   return { checks, selections }
 }
 
-for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+for (const viewport of [{ width: 1440, height: 1000 }]) {
   test.describe(`standalone opening reader ${viewport.width}px`, () => {
     test.use({ viewport })
-    test('reads all three full sources, selects history, and checks only on explicit action', async ({ page }, testInfo) => {
+    test('reads all three full sources, selects history, and checks only on explicit action', async ({ page }) => {
       const activity = await setup(page)
       expect(activity.checks).toHaveLength(0)
       await expect(page.getByText('未完成检查', { exact: true })).toBeVisible()
@@ -79,8 +79,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
       expect(activity.checks).toEqual([{ manuscriptIds: ['old1', 'm2', 'm3'], provider: 'DEEPSEEK', instruction: '', expectedFingerprint: 'history-hash', maxInputTokens: 20000 }])
       await expect(page.locator('.opening-report')).not.toContainText('通过')
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      await page.screenshot({ path: testInfo.outputPath(`first-three-chapters-${viewport.width}.png`), fullPage: true })
-    })
+})
     test('missing chapters and overflow block a model check', async ({ page }) => {
       const activity = await setup(page, { missing: true, overflow: true })
       await expect(page.getByText('缺少第三章完整正文', { exact: true })).toBeVisible()

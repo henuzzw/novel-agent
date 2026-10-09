@@ -16,7 +16,6 @@ import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.domain.ChapterContractContent;
-import com.novelagent.writing.domain.ChapterContractReviewContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
@@ -37,30 +36,6 @@ class WritingGenerationWorkflowTest {
     }
 
     @Test
-    void runsContractGenerationThroughGraph() {
-        ChapterContractContent generated = contract();
-        when(gateway.contract(any(), any(), any(), any(), any(), any(), eq(ModelProvider.LOCAL_TEMPLATE), any()))
-                .thenReturn(generated);
-
-        ChapterContractContent result = workflow.generateContract(UUID.randomUUID(), bible(), arc(), chapter(),
-                memory(), null, ModelProvider.LOCAL_TEMPLATE, "增强冲突");
-
-        assertThat(result).isEqualTo(generated);
-    }
-
-    @Test
-    void passesSelectedContractThroughGraph() {
-        ChapterContractContent previous = contract();
-        when(gateway.contract(any(), any(), any(), any(), any(), eq(previous),
-                eq(ModelProvider.LOCAL_TEMPLATE), eq("微调"))).thenReturn(previous);
-
-        ChapterContractContent result = workflow.generateContract(UUID.randomUUID(), bible(), arc(), chapter(),
-                memory(), previous, ModelProvider.LOCAL_TEMPLATE, "微调");
-
-        assertThat(result).isEqualTo(previous);
-    }
-
-    @Test
     void runsManuscriptGenerationThroughGraph() {
         ManuscriptContent generated = new ManuscriptContent("第一章", "完整正文", "摘要", List.of());
         GeneratedManuscript generatedResult = new GeneratedManuscript(generated, List.of("增强了对话张力。"));
@@ -71,18 +46,6 @@ class WritingGenerationWorkflowTest {
                 contract(), memory(), null, ModelProvider.LOCAL_TEMPLATE, null);
 
         assertThat(result).isEqualTo(generatedResult);
-    }
-
-    @Test
-    void runsIndependentContractReviewThroughGraph() {
-        ChapterContractReviewContent generated = new ChapterContractReviewContent("合同可执行", List.of());
-        when(gateway.contractReview(any(), any(), any(), any(), any(), any(),
-                eq(ModelProvider.LOCAL_TEMPLATE), eq("检查人物位置"))).thenReturn(generated);
-
-        ChapterContractReviewContent result = workflow.generateContractReview(UUID.randomUUID(), bible(), arc(),
-                chapter(), contract(), memory(), ModelProvider.LOCAL_TEMPLATE, "检查人物位置");
-
-        assertThat(result).isEqualTo(generated);
     }
 
     @Test

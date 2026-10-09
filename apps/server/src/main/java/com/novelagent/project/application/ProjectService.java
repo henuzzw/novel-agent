@@ -51,8 +51,11 @@ public class ProjectService {
         NovelProject project = NovelProject.create(
                 projectId,
                 actorProvider.currentUserId(),
-                request.name(),
+                request.name() == null || request.name().isBlank() ? "待生成书名" : request.name(),
                 request.entryMode());
+        if (request.name() == null || request.name().isBlank()) {
+            project.setSetting("automaticTitle", java.util.Map.of("pending", true));
+        }
         CreativeStrategyPolicy.of(request.creativeStrategy()).applyTo(project);
         projectRepository.saveAndFlush(project);
 

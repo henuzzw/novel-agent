@@ -63,10 +63,10 @@ class RecentChapterSummariesTool implements NovelReadTool {
                       FROM (
                         SELECT m.chapter_number, c.canon_version, m.version_number,
                                m.content->>'summary' AS summary, m.content->>'body' AS body,
-                               ct.content::text AS contract_content, c.accepted_facts::text AS accepted_facts,
+                               COALESCE(m.writing_basis->'plan', ct.content)::text AS contract_content, c.accepted_facts::text AS accepted_facts,
                                m.id::text AS manuscript_id, m.row_version AS manuscript_row_version,
                                ct.id::text AS contract_id, ct.row_version AS contract_row_version,
-                               ct.version_number AS contract_version_number, ct.source_outline_version_id::text AS source_outline_id,
+                               ct.version_number AS contract_version_number, source_o.id::text AS source_outline_id,
                                c.id::text AS commit_id,
                                source_o.row_version AS source_outline_row_version,
                                source_b.id::text AS source_bible_id, source_b.row_version AS source_bible_row_version,
@@ -74,60 +74,44 @@ class RecentChapterSummariesTool implements NovelReadTool {
                           FROM canon_commit c
                           JOIN manuscript_version m ON m.id = c.manuscript_version_id AND m.project_id = c.project_id
                                AND m.chapter_number = c.chapter_number
-                          JOIN chapter_contract_version ct ON ct.id = m.source_contract_version_id AND ct.project_id = m.project_id
+                          LEFT JOIN chapter_contract_version ct ON ct.id = m.source_contract_version_id AND ct.project_id = m.project_id
                                AND ct.chapter_number = m.chapter_number
-                          JOIN outline_version source_o ON source_o.id = ct.source_outline_version_id AND source_o.project_id = ct.project_id
+                          JOIN outline_version source_o ON source_o.id = COALESCE((m.writing_basis->>'outlineId')::uuid, ct.source_outline_version_id) AND source_o.project_id = m.project_id
                           JOIN story_bible_version source_b ON source_b.id = source_o.source_bible_version_id AND source_b.project_id = source_o.project_id
                          WHERE c.project_id = ? AND c.chapter_number = ? AND c.active = TRUE
                            AND c.canon_version <= ?
                         UNION ALL
                         SELECT m.chapter_number, 0 AS canon_version, m.version_number,
                                m.content->>'summary' AS summary, m.content->>'body' AS body,
-                               ct.content::text AS contract_content, NULL::text AS accepted_facts,
+                               COALESCE(m.writing_basis->'plan', ct.content)::text AS contract_content, NULL::text AS accepted_facts,
                                m.id::text AS manuscript_id, m.row_version AS manuscript_row_version,
                                ct.id::text AS contract_id, ct.row_version AS contract_row_version,
-                               ct.version_number AS contract_version_number, ct.source_outline_version_id::text AS source_outline_id,
+                               ct.version_number AS contract_version_number, source_o.id::text AS source_outline_id,
                                NULL::text AS commit_id,
                                source_o.row_version AS source_outline_row_version,
                                source_b.id::text AS source_bible_id, source_b.row_version AS source_bible_row_version,
                                1 AS priority
                           FROM manuscript_version m
-                          JOIN chapter_contract_version ct ON ct.id = m.source_contract_version_id AND ct.project_id = m.project_id
+                          LEFT JOIN chapter_contract_version ct ON ct.id = m.source_contract_version_id AND ct.project_id = m.project_id
                                AND ct.chapter_number = m.chapter_number
-                          JOIN outline_version source_o ON source_o.id = ct.source_outline_version_id AND source_o.project_id = ct.project_id
+                          JOIN outline_version source_o ON source_o.id = COALESCE((m.writing_basis->>'outlineId')::uuid, ct.source_outline_version_id) AND source_o.project_id = m.project_id
                           JOIN story_bible_version source_b ON source_b.id = source_o.source_bible_version_id AND source_b.project_id = source_o.project_id
                          WHERE m.project_id = ? AND m.chapter_number = ? AND m.status = 'AUTHOR_ACCEPTED'
-                        UNION ALL
-                        SELECT ct.chapter_number, -1 AS canon_version, ct.version_number,
-                               '尚无作者已确认正文' AS summary, '' AS body,
-                               ct.content::text AS contract_content, NULL::text AS accepted_facts,
-                               NULL::text AS manuscript_id, 0 AS manuscript_row_version,
-                               ct.id::text AS contract_id, ct.row_version AS contract_row_version,
-                               ct.version_number AS contract_version_number, ct.source_outline_version_id::text AS source_outline_id,
-                               NULL::text AS commit_id,
-                               source_o.row_version AS source_outline_row_version,
-                               source_b.id::text AS source_bible_id, source_b.row_version AS source_bible_row_version,
-                               2 AS priority
-                          FROM chapter_contract_version ct
-                          JOIN outline_version source_o ON source_o.id = ct.source_outline_version_id AND source_o.project_id = ct.project_id
-                          JOIN story_bible_version source_b ON source_b.id = source_o.source_bible_version_id AND source_b.project_id = source_o.project_id
-                         WHERE ct.project_id = ? AND ct.chapter_number = ? AND ct.status = 'APPROVED'
                       ) recent
                      ORDER BY priority, version_number DESC
                      LIMIT 1
                     """, (result, row) -> new RecentChapter(new NovelMemoryContext.SemanticMemory(
                             result.getInt("chapter_number"), result.getLong("canon_version"), 1.0,
                             provenance(result, request) + "\n" + result.getString("summary"),
-                            "章节合同：" + result.getString("contract_content")
+                            "来源写作计划（仅为计划）：" + result.getString("contract_content")
                                     + (result.getString("body") == null || result.getString("body").isBlank()
                                             ? "" : "\n正文：" + result.getString("body")),
                             true, result.getString("contract_content"), result.getString("body")),
                             result.getString("accepted_facts")),
-                    request.projectId(), chapter, request.canonVersion(), request.projectId(), chapter,
-                    request.projectId(), chapter);
+                    request.projectId(), chapter, request.canonVersion(), request.projectId(), chapter);
             if (chapters.isEmpty()) {
                 memories.add(new NovelMemoryContext.SemanticMemory(chapter, -2, 1.0,
-                        "第" + chapter + "章前文缺失：无有效正史正文、作者确认正文或已确认合同。", "", true));
+                        "第" + chapter + "章前文缺失：无有效正史正文或作者确认正文。", "", true));
             }
             for (RecentChapter recent : chapters) {
                 memories.add(recent.memory());
@@ -148,8 +132,7 @@ class RecentChapterSummariesTool implements NovelReadTool {
     private String provenance(java.sql.ResultSet row, NovelToolRequest request) throws java.sql.SQLException {
         return "来源项目=" + request.projectId() + "；提交=" + row.getString("commit_id")
                 + "；正文=" + row.getString("manuscript_id") + "；正文版本=" + row.getInt("version_number")
-                + "；正文行版本=" + row.getLong("manuscript_row_version") + "；合同=" + row.getString("contract_id")
-                + "；合同行版本=" + row.getLong("contract_row_version") + "；合同版本=" + row.getInt("contract_version_number")
+                + "；正文行版本=" + row.getLong("manuscript_row_version")
                 + "；来源大纲=" + row.getString("source_outline_id") + "；内容指纹="
                 + NovelMemoryContext.fingerprint(row.getString("summary") + "\n" + row.getString("body")
                         + "\n" + row.getString("contract_content") + "\n" + row.getString("accepted_facts"))

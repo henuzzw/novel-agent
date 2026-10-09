@@ -1549,6 +1549,20 @@ h2 {
   border-top: 1px solid #e3e7eb;
 }
 
+.chapter-fields .chapter-scene-field {
+  grid-column: 1 / -1;
+}
+
+.scene-outline-status {
+  color: #88601f;
+  font-size: 12px;
+}
+
+.scene-outline-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .chapter-list details + details {
   border-top: 1px solid #e3e7eb;
 }

@@ -17,12 +17,12 @@ class WritingModelRouter {
 
     String request(UUID projectId, String workflow, ModelProvider provider,
             WritingPromptFactory.Prompt prompt, JsonNode schema, String schemaName, int maxTokens) {
-        CodexSessionPolicy policy = "MANUSCRIPT".equals(workflow) || "CHAPTER_CONTRACT".equals(workflow)
-                || "CHAPTER_CONTRACT_REVIEW".equals(workflow) || "QUALITY_REVIEW".equals(workflow)
-                || "STYLE_ANALYSIS".equals(workflow) || "STYLE_PREVIEW".equals(workflow)
-                || "STYLE_RECOMMENDATION".equals(workflow) || "STYLE_PREVIEW_REVIEW".equals(workflow)
-                || "STYLE_PREVIEW_REVISION".equals(workflow)
-                        ? CodexSessionPolicy.NEW_THREAD : CodexSessionPolicy.REUSE_THREAD;
+        CodexSessionPolicy policy = switch (workflow) {
+            case "MANUSCRIPT", "CHAPTER_REVIEW", "QUALITY_REVIEW", "STYLE_ANALYSIS",
+                    "STYLE_PREVIEW", "STYLE_RECOMMENDATION", "STYLE_PREVIEW_REVIEW",
+                    "STYLE_PREVIEW_REVISION" -> CodexSessionPolicy.NEW_THREAD;
+            case null, default -> CodexSessionPolicy.REUSE_THREAD;
+        };
         return models.request(projectId, workflow, provider, prompt.system(), prompt.user(), schema,
                 schemaName, maxTokens, policy);
     }

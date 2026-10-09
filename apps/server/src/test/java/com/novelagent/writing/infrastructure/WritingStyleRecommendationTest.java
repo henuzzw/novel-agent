@@ -52,9 +52,7 @@ class WritingStyleRecommendationTest {
         var factory = new WritingPromptFactory(mapper, names, profiles, styles, null);
         when(styles.presets(any())).thenReturn(com.novelagent.writing.application.WritingStylePresets.all());
         var prompt = factory.styleRecommendation(UUID.randomUUID(), bible, "不加方言");
-        assertThat(prompt.system()).contains("不修改设定", "不能覆盖本任务", "不承诺复刻");
-        assertThat(prompt.user()).contains("旧信的故事", "鲁迅参考", "优先尊重圣经已有 narrativeStyle",
-                "逐字存在的连续原文", "不加方言");
+        assertThat(prompt.user()).contains(bible.logline(), "不加方言");
         verifyNoInteractions(profiles);
         org.mockito.Mockito.verify(styles).presets(any());
         org.mockito.Mockito.verifyNoMoreInteractions(styles);

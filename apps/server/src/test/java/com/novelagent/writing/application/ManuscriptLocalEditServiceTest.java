@@ -29,7 +29,7 @@ class ManuscriptLocalEditServiceTest {
 
     private ManuscriptLocalEditStore.Snapshot snapshot() {
         var snapshot = new ManuscriptLocalEditStore.Snapshot(project, 1, sourceId, 3, UUID.randomUUID(),
-                new ManuscriptContent("title", "before old after", "summary", List.of()), "contract/style", "hash");
+                new ManuscriptContent("title", "before old after", "summary", List.of()), "contract/style", "hash", null);
         when(store.snapshot(project, 1, sourceId, 3)).thenReturn(snapshot);
         return snapshot;
     }

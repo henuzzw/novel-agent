@@ -61,6 +61,12 @@ public class StoryDirectionSet {
     @Column(name = "selected_candidate_id")
     private UUID selectedCandidateId;
 
+    @Column(name = "source_snowflake_id")
+    private UUID sourceSnowflakeId;
+
+    public UUID getSourceSnowflakeId() { return sourceSnowflakeId; }
+    public void linkSnowflake(UUID id) { sourceSnowflakeId = id; }
+
     @Version
     @Column(name = "row_version", nullable = false)
     private long rowVersion;

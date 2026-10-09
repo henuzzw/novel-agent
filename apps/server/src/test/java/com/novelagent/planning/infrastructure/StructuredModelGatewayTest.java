@@ -1,288 +1,184 @@
 package com.novelagent.planning.infrastructure;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.RequestSnapshot;
-import com.novelagent.agent.application.AgentRunRecorder.Usage;
+import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.prompt.application.AgentPromptService;
+import com.novelagent.prompt.application.AgentPromptDefaults;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class StructuredModelGatewayTest {
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final JsonNode schema = mapper.createObjectNode().put("type", "object")
+            .set("properties", mapper.createObjectNode().set("text", mapper.createObjectNode().put("type", "string")));
+    private final JsonNode absentSchema = NullNode.getInstance();
+    private final String wireStage = "system" + new PlainTextOutputProtocol(schema).instructions();
+    private final String wireSystem = AgentPromptDefaults.sessionSystemPrompt() + "\n\n" + AgentPromptService.PROTECTED_RULES;
+    private final String wireUser = "【本轮服务端执行规范】\n" + wireStage + "\n【本轮创作资料】\nuser";
+    private final UUID project = UUID.randomUUID();
     private final CodexAppServerClient codex = mock(CodexAppServerClient.class);
     private final CodexAgentSessionRepository sessions = mock(CodexAgentSessionRepository.class);
     private final DeepSeekStructuredOutputClient deepSeek = mock(DeepSeekStructuredOutputClient.class);
     private final AgentRunRecorder runs = mock(AgentRunRecorder.class);
-    private final StructuredModelGateway gateway = new StructuredModelGateway(codex, sessions, deepSeek, runs);
-    private final UUID projectId = UUID.randomUUID();
-    private final JsonNode schema = new ObjectMapper().createObjectNode();
-    private final EffectiveSettings codexSettings = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "gpt-6-sol", "high", 4L);
-    private final EffectiveSettings deepSeekSettings = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 4L);
+    private final EffectiveSettings settings = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "gpt-6-sol", "high", 4L);
+    private final EffectiveSettings deepSettings = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 4L);
+    private final StructuredModelGateway gateway = gateway(new ModelContextProperties(), null);
 
-    @BeforeEach
-    void recordInvokesModelAction() {
-        when(runs.record(any(), anyString(), any(), anyString(), anyString(), any(RequestSnapshot.class), any()))
-                .thenAnswer(call -> ((Supplier<?>) call.getArgument(6)).get());
-        when(codex.effectiveSettings()).thenReturn(codexSettings);
-        when(deepSeek.effectiveSettings()).thenReturn(deepSeekSettings);
-        when(sessions.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+    private StructuredModelGateway gateway(ModelContextProperties context, AgentPromptService prompts) {
+        return new StructuredModelGateway(codex, sessions, deepSeek, runs, context, prompts);
     }
-
-    @Test
-    void newThreadPolicyReplacesAnExistingSessionWithoutResumingIt() {
-        CodexAgentSession existing = CodexAgentSession.create(projectId, "OUTLINE", "older-thread");
-        when(sessions.findByProjectIdAndWorkflowType(projectId, "OUTLINE"))
-                .thenReturn(Optional.of(existing));
-        when(codex.startThread(projectId, "system", codexSettings)).thenReturn("fresh-thread");
-        when(codex.runStructuredTurn(eq("fresh-thread"), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
-                .thenReturn(new CodexAppServerClient.TurnResult("turn-1", "output"));
-
-        String result = request("OUTLINE", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.NEW_THREAD);
-
-        assertThat(result).isEqualTo("output");
-        assertThat(existing.getThreadId()).isEqualTo("fresh-thread");
-        verify(codex, never()).resumeThread(anyString(), any(), anyString(), any());
-        verify(sessions, times(2)).saveAndFlush(existing);
-    }
-
-    @Test
-    void reusePolicyResumesAnExistingSession() {
-        CodexAgentSession existing = CodexAgentSession.create(projectId, "REVIEW", "existing-thread");
-        when(sessions.findByProjectIdAndWorkflowType(projectId, "REVIEW"))
-                .thenReturn(Optional.of(existing));
-        when(codex.runStructuredTurn(eq("existing-thread"), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
-                .thenReturn(new CodexAppServerClient.TurnResult("turn-2", "continued"));
-
-        String result = request("REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.REUSE_THREAD);
-
-        assertThat(result).isEqualTo("continued");
-        verify(codex).resumeThread("existing-thread", projectId, "system", codexSettings);
-        verify(codex, never()).startThread(any(), anyString(), any());
-        verify(sessions).saveAndFlush(existing);
-    }
-
-    @Test
-    void reusePolicyRebuildsAMissingCodexThread() {
-        CodexAgentSession existing = CodexAgentSession.create(projectId, "REVIEW", "missing-thread");
-        when(sessions.findByProjectIdAndWorkflowType(projectId, "REVIEW"))
-                .thenReturn(Optional.of(existing));
-        org.mockito.Mockito.doThrow(new CodexAppServerException("thread not found", -32000))
-                .when(codex).resumeThread("missing-thread", projectId, "system", codexSettings);
-        when(codex.startThread(projectId, "system", codexSettings)).thenReturn("replacement-thread");
-        when(codex.runStructuredTurn(eq("replacement-thread"), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
-                .thenReturn(new CodexAppServerClient.TurnResult("turn-3", "recovered"));
-
-        String result = request("REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.REUSE_THREAD);
-
-        assertThat(result).isEqualTo("recovered");
-        assertThat(existing.getThreadId()).isEqualTo("replacement-thread");
-        verify(sessions, times(2)).saveAndFlush(existing);
-    }
-
-    @Test
-    void deepSeekRequestsAreRecordedWithoutTouchingCodexSessions() {
-        when(deepSeek.effectiveSettings()).thenReturn(
-                new EffectiveSettings(ModelProvider.LOCAL_CODEX, "deepseek-flash", "none", 4L));
-        when(deepSeek.request("schema-name", "system", "user", schema, 4000, deepSeekSettings))
-                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("deepseek-output", new Usage(50, 10, 60L, null, null)));
-
-        String result = request("STORY_DIRECTION", ModelProvider.DEEPSEEK, CodexSessionPolicy.REUSE_THREAD);
-
-        assertThat(result).isEqualTo("deepseek-output");
-        var snapshot = org.mockito.ArgumentCaptor.forClass(RequestSnapshot.class);
-        verify(runs).record(eq(projectId), eq("STORY_DIRECTION"), eq(ModelProvider.DEEPSEEK),
-                eq("system"), eq("user"), snapshot.capture(), any());
-        assertThat(snapshot.getValue().effectiveSettings().provider()).isEqualTo(ModelProvider.DEEPSEEK);
-        verify(deepSeek, times(1)).effectiveSettings();
-        verify(sessions, never()).findByProjectIdAndWorkflowType(any(), anyString());
-        verify(codex, never()).startThread(any(), anyString(), any());
-    }
-
-    @Test
-    void settingsAreCapturedOnceAndSurviveAChangeDuringThreadStart() {
-        EffectiveSettings changed = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "gpt-6-luna", "low", 5L);
-        when(codex.effectiveSettings()).thenReturn(codexSettings, changed);
-        when(codex.startThread(projectId, "system", codexSettings)).thenReturn("frozen-thread");
-        when(codex.runStructuredTurn(eq("frozen-thread"), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
-                .thenReturn(new CodexAppServerClient.TurnResult("turn", "output"));
-
-        assertThat(request("OUTLINE", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.NEW_THREAD)).isEqualTo("output");
-        verify(codex, times(1)).effectiveSettings();
-        var snapshot = org.mockito.ArgumentCaptor.forClass(RequestSnapshot.class);
-        verify(runs).record(eq(projectId), eq("OUTLINE"), eq(ModelProvider.LOCAL_CODEX),
-                eq("system"), eq("user"), snapshot.capture(), any());
-        assertThat(snapshot.getValue().effectiveSettings()).isEqualTo(codexSettings);
-        assertThat(snapshot.getValue().requestedMaxOutputTokens()).isEqualTo(4000);
-        assertThat(snapshot.getValue().maxOutputTokens()).isNull();
-        assertThat(snapshot.getValue().sessionPolicy()).isEqualTo("NEW_THREAD");
-        assertThat(snapshot.getValue().schemaHash()).hasSize(64);
-    }
-
-    @Test
-    void authenticationFailureDoesNotRebuildOrRetryEvenIfErrorMentionsMissingThread() {
-        var existing = CodexAgentSession.create(projectId, "REVIEW", "existing-thread");
-        when(sessions.findByProjectIdAndWorkflowType(projectId, "REVIEW")).thenReturn(Optional.of(existing));
-        org.mockito.Mockito.doThrow(new CodexAppServerException("401 authentication: thread not found", -32000))
-                .when(codex).resumeThread("existing-thread", projectId, "system", codexSettings);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> request("REVIEW", ModelProvider.LOCAL_CODEX,
-                CodexSessionPolicy.REUSE_THREAD)).isInstanceOf(CodexAppServerException.class);
-        verify(codex, never()).startThread(any(), anyString(), any());
-        verify(codex, never()).runStructuredTurn(anyString(), any(), anyString(), any(), any(), any());
-    }
-
-    @Test
-    void rejectsFinalPromptSchemaAndOutputReservationBeforeAnyProviderCall() {
-        var context = new com.novelagent.memory.application.ModelContextProperties();
-        context.getModels().put(ModelProvider.DEEPSEEK,
-                new com.novelagent.memory.application.ModelContextProperties.Capacity(60, 10));
-        var bounded = new StructuredModelGateway(codex, sessions, deepSeek, runs, context);
-        var largeSchema = new ObjectMapper().createObjectNode().put("description", "x".repeat(160));
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bounded.request(projectId, "OUTLINE",
-                ModelProvider.DEEPSEEK, "system", "user", largeSchema, "schema", 10,
-                CodexSessionPolicy.NEW_THREAD)).isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("上下文容量");
-        verify(deepSeek, never()).request(anyString(), anyString(), anyString(), any(),
-                org.mockito.ArgumentMatchers.anyInt(), any());
-        org.mockito.Mockito.verifyNoInteractions(sessions, runs);
-    }
-
-    @Test
-    void doesNotTruncatePromptWhenFinalPromptFitsAndCapturesCapacity() {
-        var context = new com.novelagent.memory.application.ModelContextProperties();
-        context.getModels().put(ModelProvider.DEEPSEEK,
-                new com.novelagent.memory.application.ModelContextProperties.Capacity(100, 10));
-        var bounded = new StructuredModelGateway(codex, sessions, deepSeek, runs, context);
-        String prompt = "汉".repeat(50);
-        when(deepSeek.request("schema", "system", prompt, schema, 10, deepSeekSettings))
-                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("output", null));
-        assertThat(bounded.request(projectId, "OUTLINE", ModelProvider.DEEPSEEK, "system", prompt,
-                schema, "schema", 10, CodexSessionPolicy.NEW_THREAD)).isEqualTo("output");
-        var snapshot = org.mockito.ArgumentCaptor.forClass(RequestSnapshot.class);
-        verify(runs).record(eq(projectId), eq("OUTLINE"), eq(ModelProvider.DEEPSEEK), eq("system"),
-                eq(prompt), snapshot.capture(), any());
-        assertThat(snapshot.getValue().maxOutputTokens()).isEqualTo(10);
-        assertThat(snapshot.getValue().sessionPolicy()).isEqualTo("STATELESS");
-        assertThat(snapshot.getValue().contextBudget().contextWindowTokens()).isEqualTo(100);
-        assertThat(snapshot.getValue().contextBudget().estimatedInputTokens()).isGreaterThan(50);
-    }
-
-    @Test
-    void outputAndSafetyReservationsAreIncludedAtCapacityBoundary() {
-        var context = new com.novelagent.memory.application.ModelContextProperties();
-        int input = com.novelagent.memory.application.MemoryBudgetAllocator.estimateTokens("system\n\nuser\n\n" + schema);
-        var capacity = new com.novelagent.memory.application.ModelContextProperties.Capacity(input + 19, 10);
-        context.getModels().put(ModelProvider.DEEPSEEK, capacity);
-        var bounded = new StructuredModelGateway(codex, sessions, deepSeek, runs, context);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> bounded.request(projectId, "OUTLINE",
-                ModelProvider.DEEPSEEK, "system", "user", schema, "schema", 10, CodexSessionPolicy.NEW_THREAD))
-                .isInstanceOf(IllegalArgumentException.class);
-        org.mockito.Mockito.verifyNoInteractions(runs);
-        capacity.setContextWindowTokens(input + 20);
-        when(deepSeek.request("schema", "system", "user", schema, 10, deepSeekSettings))
-                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("output", null));
-        assertThat(bounded.request(projectId, "OUTLINE", ModelProvider.DEEPSEEK, "system", "user", schema,
-                "schema", 10, CodexSessionPolicy.NEW_THREAD)).isEqualTo("output");
-    }
-
-    private String request(String workflow, ModelProvider provider, CodexSessionPolicy policy) {
-        return gateway.request(projectId, workflow, provider, "system", "user", schema,
-                "schema-name", 4000, policy);
-    }
-
-    @Test
-    void savedPromptIsFrozenOnceAndUsedForDeepSeekRecordingAndProviderDispatch() {
-        var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
-        when(prompts.resolve("MANUSCRIPT", "original"))
-                .thenReturn(new com.novelagent.prompt.application.AgentPromptService.Resolved("edited-v3", "MANUSCRIPT:v3"));
-        var editable = new StructuredModelGateway(codex, sessions, deepSeek, runs,
-                new com.novelagent.memory.application.ModelContextProperties(), prompts);
-        when(deepSeek.request("schema", "edited-v3", "project-data", schema, 4000, deepSeekSettings))
-                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("output", null));
-        assertThat(editable.request(projectId, "MANUSCRIPT", ModelProvider.DEEPSEEK, "original", "project-data",
-                schema, "schema", 4000, CodexSessionPolicy.REUSE_THREAD)).isEqualTo("output");
-        var snapshot = org.mockito.ArgumentCaptor.forClass(RequestSnapshot.class);
-        verify(runs).record(eq(projectId), eq("MANUSCRIPT"), eq(ModelProvider.DEEPSEEK), eq("edited-v3"),
-                eq("project-data"), snapshot.capture(), any());
-        assertThat(snapshot.getValue().requestedMaxOutputTokens()).isEqualTo(4000);
-        verify(prompts, times(1)).resolve("MANUSCRIPT", "original");
-    }
-
-    @Test
-    void editedAndRestoredPromptRevisionsRotateCodexThreadsButSameRevisionCanReuse() {
-        var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
-        var custom = new com.novelagent.prompt.application.AgentPromptService.Resolved("custom-v1", "OUTLINE:v1");
-        var restored = new com.novelagent.prompt.application.AgentPromptService.Resolved("restored-v2", "OUTLINE:v2");
-        when(prompts.resolve("OUTLINE", "original")).thenReturn(custom, custom, restored);
-        var editable = new StructuredModelGateway(codex, sessions, deepSeek, runs,
-                new com.novelagent.memory.application.ModelContextProperties(), prompts);
-        var existing = CodexAgentSession.create(projectId, "OUTLINE", "old-default-thread");
-        when(sessions.findByProjectIdAndWorkflowType(projectId, "OUTLINE")).thenReturn(Optional.of(existing));
-        when(codex.startThread(projectId, "custom-v1", codexSettings)).thenReturn("custom-thread");
-        when(codex.startThread(projectId, "restored-v2", codexSettings)).thenReturn("restored-thread");
-        when(codex.runStructuredTurn(anyString(), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
-                .thenReturn(new CodexAppServerClient.TurnResult("turn", "output"));
-        for (int i = 0; i < 3; i++) {
-            assertThat(editable.request(projectId, "OUTLINE", ModelProvider.LOCAL_CODEX, "original", "user", schema,
-                    "schema", 4000, CodexSessionPolicy.REUSE_THREAD)).isEqualTo("output");
-        }
-        verify(codex).startThread(projectId, "custom-v1", codexSettings);
-        verify(codex).resumeThread("custom-thread", projectId, "custom-v1", codexSettings);
-        verify(codex).startThread(projectId, "restored-v2", codexSettings);
-        assertThat(existing.matchesPromptRevision("OUTLINE:v2")).isTrue();
-        assertThat(existing.getThreadId()).isEqualTo("restored-thread");
-    }
-
-    @Test
-    void configuredPromptIsIncludedInContextCapacityCheckBeforeAnyModelCall() {
-        var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
-        when(prompts.resolve("OUTLINE", "original")).thenReturn(
-                new com.novelagent.prompt.application.AgentPromptService.Resolved("x".repeat(40000), "OUTLINE:v1"));
-        var context = new com.novelagent.memory.application.ModelContextProperties();
-        context.getModels().put(ModelProvider.DEEPSEEK,
-                new com.novelagent.memory.application.ModelContextProperties.Capacity(1000, 100));
-        var editable = new StructuredModelGateway(codex, sessions, deepSeek, runs, context, prompts);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> editable.request(projectId, "OUTLINE", ModelProvider.DEEPSEEK,
-                "original", "user", schema, "schema", 100, CodexSessionPolicy.REUSE_THREAD))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("上下文容量");
-        verify(deepSeek, never()).request(anyString(), anyString(), anyString(), any(), org.mockito.ArgumentMatchers.anyInt(), any());
-        org.mockito.Mockito.verifyNoInteractions(runs, sessions);
-    }
-
-    @Test
-    void validationIsExecutedInsideRecordedActionForBothProviders() {
+    @BeforeEach void setup() {
         when(runs.record(any(), anyString(), any(), anyString(), anyString(), any(RequestSnapshot.class), any(), any()))
                 .thenAnswer(call -> {
                     var result = ((Supplier<?>) call.getArgument(6)).get();
-                    ((java.util.function.Consumer<Object>) call.getArgument(7)).accept(result);
+                    ((Consumer<Object>) call.getArgument(7)).accept(result);
                     return result;
                 });
-        when(deepSeek.request("schema-name", "system", "user", schema, 4000, deepSeekSettings))
-                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("raw", null));
-        when(codex.startThread(projectId, "system", codexSettings)).thenReturn("fresh");
-        when(codex.runStructuredTurn(eq("fresh"), eq(projectId), eq("user"), eq(schema), eq(codexSettings), any()))
-                .thenReturn(new CodexAppServerClient.TurnResult("turn", "raw"));
-        var error = new IllegalArgumentException("原文解析输出校验失败");
-        for (var provider : java.util.List.of(ModelProvider.DEEPSEEK, ModelProvider.LOCAL_CODEX)) {
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> gateway.request(projectId, "IMPORT_SOURCE_ANALYSIS",
-                    provider, "system", "user", schema, "schema-name", 4000, CodexSessionPolicy.NEW_THREAD,
-                    raw -> { assertThat(raw).isEqualTo("raw"); throw error; })).isSameAs(error);
+        when(codex.effectiveSettings()).thenReturn(settings);
+        when(deepSeek.effectiveSettings()).thenReturn(deepSettings);
+        when(sessions.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+    }
+    private String request(String workflow, ModelProvider provider, CodexSessionPolicy policy) {
+        return gateway.request(project, workflow, provider, "system", "user", schema, "schema", 4000, policy);
+    }
+    private void codexOutput(String thread) {
+        when(codex.runStructuredTurn(eq(thread), eq(project), anyString(), eq(absentSchema), eq(settings), any()))
+                .thenReturn(new CodexAppServerClient.TurnResult("turn", "正文文本"));
+    }
+    @Test void standaloneNewThreadReplacesOldSessionAndNeverSendsOutputSchema() {
+        var existing = CodexAgentSession.create(project, "QUALITY_REVIEW", "old");
+        when(sessions.findByProjectIdAndWorkflowType(project, "QUALITY_REVIEW")).thenReturn(Optional.of(existing));
+        when(codex.startThread(project, wireSystem, settings)).thenReturn("fresh");
+        codexOutput("fresh");
+        assertThat(request("QUALITY_REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.NEW_THREAD))
+                .isEqualTo("{\"text\":\"正文文本\"}");
+        assertThat(existing.getThreadId()).isEqualTo("fresh");
+        verify(codex, never()).resumeThread(anyString(), any(), anyString(), any());
+    }
+    @Test void everyPlanningStepUsesSameConversationDespiteDifferentPromptsAndRequestedPolicies() {
+        var existing = CodexAgentSession.create(project, PlanningConversationPolicy.KEY, "shared");
+        existing.usePromptRevision(PlanningConversationPolicy.REVISION);
+        when(sessions.findByProjectIdAndWorkflowType(project, PlanningConversationPolicy.KEY)).thenReturn(Optional.of(existing));
+        codexOutput("shared");
+        for (String workflow : new String[]{"BOOK_TITLE", "IMPORT_SOURCE_ANALYSIS", "SNOWFLAKE_PLANNING",
+                "CHARACTER_DESIGN", "STORY_DIRECTION", "STORY_BIBLE", "OUTLINE", "IMPORT_REVERSE_BIBLE", "IMPORT_REVERSE_OUTLINE"}) {
+            assertThat(request(workflow, ModelProvider.LOCAL_CODEX, CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
         }
-        verify(runs, times(2)).record(eq(projectId), eq("IMPORT_SOURCE_ANALYSIS"), any(), eq("system"), eq("user"),
-                any(RequestSnapshot.class), any(), any());
+        verify(codex, times(9)).resumeThread("shared", project, wireSystem, settings);
+        var prompt = ArgumentCaptor.forClass(String.class);
+        verify(codex, times(9)).runStructuredTurn(eq("shared"), eq(project), prompt.capture(), eq(absentSchema), eq(settings), any());
+        assertThat(prompt.getAllValues()).containsOnly(wireUser);
+        verify(codex, never()).startThread(any(), anyString(), any());
+    }
+    @Test void missingSessionIsRebuiltButAuthenticationFailureIsNotRetried() {
+        var existing = CodexAgentSession.create(project, "QUALITY_REVIEW", "missing");
+        when(sessions.findByProjectIdAndWorkflowType(project, "QUALITY_REVIEW")).thenReturn(Optional.of(existing));
+        doThrow(new CodexAppServerException("thread not found", -32000))
+                .when(codex).resumeThread("missing", project, wireSystem, settings);
+        when(codex.startThread(project, wireSystem, settings)).thenReturn("replacement");
+        codexOutput("replacement");
+        assertThat(request("QUALITY_REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.REUSE_THREAD)).contains("正文文本");
+        doThrow(new CodexAppServerException("401 authentication: thread not found", -32000))
+                .when(codex).resumeThread("replacement", project, wireSystem, settings);
+        assertThatThrownBy(() -> request("QUALITY_REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.REUSE_THREAD))
+                .isInstanceOf(CodexAppServerException.class);
+        verify(codex, times(1)).startThread(project, wireSystem, settings);
+    }
+
+    @Test void pairedPlanningRolesReuseOneThreadUntilTheSharedConfigurationChanges() {
+        var prompts = mock(AgentPromptService.class);
+        var existing = CodexAgentSession.create(project, PlanningConversationPolicy.KEY, "shared");
+        existing.usePromptRevision("planning:v1");
+        when(sessions.findByProjectIdAndWorkflowType(project, PlanningConversationPolicy.KEY)).thenReturn(Optional.of(existing));
+        when(prompts.resolve("STORY_BIBLE", "system")).thenReturn(new AgentPromptService.Resolved("bible phase", "planning:v1", "bible system"));
+        when(prompts.resolve("OUTLINE", "system"))
+                .thenReturn(new AgentPromptService.Resolved("outline phase", "planning:v1", "outline system"))
+                .thenReturn(new AgentPromptService.Resolved("edited phase", "planning:v2", "edited system"));
+        codexOutput("shared");
+        var paired = gateway(new ModelContextProperties(), prompts);
+        for (String workflow : new String[]{"STORY_BIBLE", "OUTLINE"}) {
+            assertThat(paired.request(project, workflow, ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,
+                    CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
+        }
+        verify(codex).resumeThread("shared", project, "bible system\n\n" + AgentPromptService.PROTECTED_RULES, settings);
+        verify(codex).resumeThread("shared", project, "outline system\n\n" + AgentPromptService.PROTECTED_RULES, settings);
+        verify(codex, never()).startThread(any(), anyString(), any());
+        when(codex.startThread(project, "edited system\n\n" + AgentPromptService.PROTECTED_RULES, settings)).thenReturn("fresh");
+        codexOutput("fresh");
+        assertThat(paired.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,
+                CodexSessionPolicy.REUSE_THREAD)).contains("正文文本");
+        assertThat(existing.getThreadId()).isEqualTo("fresh");
+        verify(codex).startThread(project, "edited system\n\n" + AgentPromptService.PROTECTED_RULES, settings);
+    }
+    @Test void deepSeekRecordsRawTextAndNoSchemaOrCodexSession() {
+        when(deepSeek.request("schema", wireSystem, wireUser, absentSchema, 4000, deepSettings))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("纯文本结果", null));
+        assertThat(request("OUTLINE", ModelProvider.DEEPSEEK, CodexSessionPolicy.NEW_THREAD)).contains("纯文本结果");
+        var snapshot = ArgumentCaptor.forClass(RequestSnapshot.class);
+        verify(runs).record(eq(project), eq("OUTLINE"), eq(ModelProvider.DEEPSEEK), eq(wireSystem), eq(wireUser),
+                snapshot.capture(), any(), any());
+        assertThat(snapshot.getValue().schemaName()).isEqualTo("PLAIN_TEXT");
+        assertThat(snapshot.getValue().schemaHash()).isNull();
+        assertThat(snapshot.getValue().sessionPolicy()).isEqualTo("STATELESS");
+        verifyNoInteractions(sessions, codex);
+    }
+    @Test void parsingFailureHappensInsideRecordedAction() {
+        when(deepSeek.request(anyString(), anyString(), anyString(), eq(absentSchema), anyInt(), any()))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("raw", null));
+        var error = new IllegalArgumentException("解析失败");
+        assertThatThrownBy(() -> gateway.request(project, "QUALITY_REVIEW", ModelProvider.DEEPSEEK, "system", "user",
+                schema, "schema", 4000, CodexSessionPolicy.NEW_THREAD, raw -> {
+                    assertThat(raw).isEqualTo("{\"text\":\"raw\"}"); throw error;
+                })).isSameAs(error);
+    }
+    @Test void freezesPromptAndSettingsBeforeDispatchWithoutMutatingSavedTemplate() {
+        var prompts = mock(AgentPromptService.class);
+        when(prompts.resolve("MANUSCRIPT", "system"))
+                .thenReturn(new AgentPromptService.Resolved("edited\n【本阶段返回协议：保留现有结构化接口】\n只输出JSON", "MANUSCRIPT:v3", "custom system"));
+        String effectiveSystem = "custom system\n\n" + AgentPromptService.PROTECTED_RULES;
+        String effectiveUser = "【本轮服务端执行规范】\nedited" + new PlainTextOutputProtocol(schema).instructions() + "\n【本轮创作资料】\nuser";
+        when(deepSeek.request("schema", effectiveSystem, effectiveUser, absentSchema, 4000, deepSettings))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("结果", null));
+        assertThat(gateway(new ModelContextProperties(), prompts).request(project, "MANUSCRIPT", ModelProvider.DEEPSEEK,
+                "system", "user", schema, "schema", 4000, CodexSessionPolicy.NEW_THREAD)).contains("结果");
+        verify(prompts, times(1)).resolve("MANUSCRIPT", "system");
+        verify(deepSeek, times(1)).effectiveSettings();
+        verify(runs).record(eq(project), eq("MANUSCRIPT"), eq(ModelProvider.DEEPSEEK), eq(effectiveSystem),
+                eq(effectiveUser), any(RequestSnapshot.class), any(), any());
+        when(codex.startThread(project, effectiveSystem, settings)).thenReturn("custom-thread");
+        codexOutput("custom-thread");
+        assertThat(gateway(new ModelContextProperties(), prompts).request(project, "MANUSCRIPT", ModelProvider.LOCAL_CODEX,
+                "system", "user", schema, "schema", 4000, CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
+        verify(codex).runStructuredTurn(eq("custom-thread"), eq(project), eq(effectiveUser), eq(absentSchema), eq(settings), any());
+    }
+    @Test void outputAndSafetyReservationsCountAtExactCapacityBoundary() {
+        var context = new ModelContextProperties();
+        int input = com.novelagent.memory.application.MemoryBudgetAllocator.estimateTokens(wireSystem + "\n\n" + wireUser + "\n\n" + absentSchema);
+        var capacity = new ModelContextProperties.Capacity(input + 19, 10);
+        context.getModels().put(ModelProvider.DEEPSEEK, capacity);
+        var bounded = gateway(context, null);
+        assertThatThrownBy(() -> bounded.request(project, "OUTLINE", ModelProvider.DEEPSEEK, "system", "user",
+                schema, "schema", 10, CodexSessionPolicy.NEW_THREAD)).isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(runs, sessions);
+        capacity.setContextWindowTokens(input + 20);
+        when(deepSeek.request("schema", wireSystem, wireUser, absentSchema, 10, deepSettings))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("完整结果", null));
+        assertThat(bounded.request(project, "OUTLINE", ModelProvider.DEEPSEEK, "system", "user", schema, "schema", 10,
+                CodexSessionPolicy.NEW_THREAD)).contains("完整结果");
     }
 }

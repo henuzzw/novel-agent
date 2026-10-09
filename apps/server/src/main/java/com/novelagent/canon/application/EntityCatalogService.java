@@ -37,6 +37,15 @@ public class EntityCatalogService {
                         java.util.stream.Stream.of(contract.pov()), contract.locations().stream())
                 .filter(value -> value != null && !value.isBlank())
                 .collect(Collectors.toSet());
+        return catalog(projectId, relevantNames);
+    }
+
+    @Transactional(readOnly = true)
+    public EntityCatalogContext forPublishedMemory(UUID projectId) {
+        return catalog(projectId, Set.of());
+    }
+
+    private EntityCatalogContext catalog(UUID projectId, Set<String> relevantNames) {
         List<EntityCatalogContext.EntityCatalogEntry> entries = jdbc.query("""
                 SELECT e.id, e.entity_type, e.canonical_name,
                        array_remove(array_agg(DISTINCT a.alias), NULL) AS aliases,

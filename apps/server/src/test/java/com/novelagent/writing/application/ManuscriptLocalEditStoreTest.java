@@ -78,9 +78,11 @@ class ManuscriptLocalEditStoreTest {
         when(outline.getId()).thenReturn(outlineId);
         when(outline.getProjectId()).thenReturn(id);
         when(outline.getStatus()).thenReturn(OutlineStatus.PUBLISHED);
+        when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent("title", "premise", "structure", "pacing", 1000, 2000, List.of()));
+        when(bible.getContent()).thenReturn(com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(List.of()));
         when(bible.getId()).thenReturn(bibleId);
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
-        when(contexts.context(id, 1)).thenReturn(new WritingContextService.Context(outline, bible, null, null));
+        when(contexts.context(id, 1)).thenReturn(new WritingContextService.Context(outline, bible, null, new com.novelagent.planning.domain.ChapterPlan(1, "title", "Alice", "goal", "event", "reveal", "hook", 1000, 2000)));
         when(names.render(eq(id), any(String.class))).thenAnswer(call -> call.getArgument(1));
         when(names.render(eq(id), any(ManuscriptContent.class))).thenAnswer(call -> {
             ManuscriptContent value = call.getArgument(1);

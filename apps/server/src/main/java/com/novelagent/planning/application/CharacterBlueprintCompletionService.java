@@ -1,14 +1,7 @@
 package com.novelagent.planning.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.api.StoryBibleResponse;
-import com.novelagent.planning.domain.CharacterBlueprint;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -20,13 +13,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class CharacterBlueprintCompletionService {
     private final CharacterBlueprintDraftStore drafts;
-    private final StructuredModelGateway models;
+    private final CharacterDesignService designer;
     private final ObjectMapper mapper;
-    private final StoryBibleOutputSchema schemas;
 
-    public CharacterBlueprintCompletionService(CharacterBlueprintDraftStore drafts, StructuredModelGateway models,
-            ObjectMapper mapper, StoryBibleOutputSchema schemas) {
-        this.drafts = drafts; this.models = models; this.mapper = mapper; this.schemas = schemas;
+    public CharacterBlueprintCompletionService(CharacterBlueprintDraftStore drafts,
+            ObjectMapper mapper, CharacterDesignService designer) {
+        this.drafts = drafts; this.designer = designer; this.mapper = mapper;
     }
 
     /**
@@ -44,29 +36,10 @@ public class CharacterBlueprintCompletionService {
             throw new IllegalArgumentException("人物补全请选择真实模型，本地模板不能生成人物设定");
         }
         var source = drafts.load(projectId, bibleId, expectedVersion);
-        try {
-            var schema = mapper.createObjectNode().put("type", "object").put("additionalProperties", false);
-            schema.putArray("required").add("characterBlueprints");
-            schema.putObject("properties").set("characterBlueprints",
-                    schemas.value().at("/properties/content/properties/characterBlueprints"));
-            var input = mapper.createObjectNode();
-            input.set("storyBible", mapper.valueToTree(source.rendered()));
-            input.put("authorInstruction", instruction == null ? "" : instruction);
-            String raw = models.request(projectId, "CHARACTER_BLUEPRINT_COMPLETION", provider,
-                    com.novelagent.prompt.application.AgentPromptDefaults.system("CHARACTER_BLUEPRINT_COMPLETION"),
-                    input.toString(), schema, "character_blueprint_completion", 8000, CodexSessionPolicy.NEW_THREAD);
-            var root = mapper.readTree(raw);
-            if (!root.isObject() || root.size() != 1 || !root.path("characterBlueprints").isArray()) {
-                throw new IllegalArgumentException("人物补全模型输出结构不合法");
-            }
-            List<CharacterBlueprint> proposed = mapper.convertValue(root.get("characterBlueprints"),
-                    new TypeReference<List<CharacterBlueprint>>() { });
-            if (proposed.isEmpty() || proposed.size() > 12 || proposed.stream().anyMatch(java.util.Objects::isNull)) {
-                throw new IllegalArgumentException("模型未返回有效人物底稿");
-            }
-            return drafts.save(source, proposed, provider, instruction);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("人物补全模型输出格式不合法", exception);
-        }
+        var input = mapper.createObjectNode();
+        input.put("mode", "COMPLETE_MISSING");
+        input.set("storyBible", mapper.valueToTree(source.rendered()));
+        input.put("authorInstruction", instruction == null ? "" : instruction);
+        return drafts.save(source, designer.design(projectId, provider, input), provider, instruction);
     }
 }

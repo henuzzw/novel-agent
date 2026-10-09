@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test('global settings persist after reload and drive generation in another project', async ({ page }, testInfo) => {
+test('global settings persist after reload and drive generation in another project', async ({ page }) => {
   let settings = { provider: 'LOCAL_CODEX', codexModel: 'gpt-6.1-sol', codexEffort: 'high', deepSeekModel: 'deepseek-flash', version: 0 }
   let generatedProvider = ''
   const failures: string[] = []
@@ -50,8 +50,7 @@ test('global settings persist after reload and drive generation in another proje
   await page.getByRole('button', { name: '全局模型设置', exact: true }).click()
   await expect(page.getByLabel('DeepSeek 模型')).toHaveValue('deepseek-v4-pro')
   await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: testInfo.outputPath('global-model-settings.png'), fullPage: true })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   const brand = await page.locator('.brand').boundingBox()
   const modelButton = await page.locator('.global-model-button').boundingBox()
   expect(brand!.x + brand!.width).toBeLessThanOrEqual(modelButton!.x)

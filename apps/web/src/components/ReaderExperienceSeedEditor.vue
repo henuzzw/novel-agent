@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createUuid } from '@/lib/uuid'
 import { Plus, Trash2 } from 'lucide-vue-next'
 import type { ReaderExperienceSeed } from '@/api/planning'
 const props = defineProps<{ modelValue: ReaderExperienceSeed[]; disabled?: boolean }>()
@@ -7,7 +8,7 @@ function update(index: number, patch: Partial<ReaderExperienceSeed>) {
   emit('update:modelValue', props.modelValue.map((item, i) => i === index ? { ...item, ...patch } : item))
 }
 function add() {
-  emit('update:modelValue', [...props.modelValue, { key: `plan_${crypto.randomUUID().replace(/-/g, '')}`,
+  emit('update:modelValue', [...props.modelValue, { key: `plan_${createUuid().replace(/-/g, '')}`,
     kind: 'FORESHADOW', title: '', promise: '', setup: '', payoff: '', aftermath: '', plannedChapter: null }])
 }
 </script>

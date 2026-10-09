@@ -18,6 +18,7 @@ import {
   publishOutline,
   updateOutline,
   type GenerationMode,
+  type ChapterPlan,
   type OutlineContent,
   type OutlineVersion,
 } from '@/api/planning'
@@ -60,7 +61,8 @@ function copyContent(value: OutlineContent): OutlineContent {
     readerExperiencePlans: value.readerExperiencePlans?.map(plan => ({ ...plan })),
     arcs: value.arcs.map((arc) => ({
       ...arc,
-      chapters: arc.chapters.map((chapter) => ({ ...chapter })),
+      chapters: arc.chapters.map((chapter) => ({ ...chapter, sceneOutline: chapter.sceneOutline ?? '',
+        sceneOutlineNeedsUpdate: chapter.sceneOutlineNeedsUpdate ?? !chapter.sceneOutline?.trim() })),
     })),
   }
 }
@@ -88,6 +90,23 @@ const currentBaseNumber = computed(() => versionsQuery.data.value?.find(
 )?.generationNumber)
 const isLatestCurrent = computed(() => outlineQuery.data.value?.id === currentOutlineQuery.data.value?.id)
 
+function sceneStatus(chapter: ChapterPlan) {
+  if (!chapter.sceneOutline?.trim()) return '待补充'
+  const original = outlineQuery.data.value?.content
+  const oldArc = original?.arcs.find(arc => arc.chapters.some(value => value.number === chapter.number))
+  const arc = draft.value?.arcs.find(value => value.chapters.some(item => item.number === chapter.number))
+  const previous = oldArc?.chapters.find(value => value.number === chapter.number)
+  if (previous && chapter.sceneOutline !== previous.sceneOutline) return ''
+  const chapterChanged = previous && ['title', 'pov', 'objective', 'coreEvent', 'reveal', 'endingHook', 'status']
+    .some(key => chapter[key as keyof ChapterPlan] !== previous[key as keyof ChapterPlan])
+  const bookChanged = original && draft.value && (original.premise !== draft.value.premise ||
+    original.structureSummary !== draft.value.structureSummary || original.pacingStrategy !== draft.value.pacingStrategy ||
+    JSON.stringify(original.readerExperiencePlans ?? []) !== JSON.stringify(draft.value.readerExperiencePlans ?? []))
+  const arcChanged = arc && oldArc && (arc.objective !== oldArc.objective || arc.mainConflict !== oldArc.mainConflict ||
+    arc.turningPoint !== oldArc.turningPoint || arc.outcome !== oldArc.outcome)
+  return chapter.sceneOutlineNeedsUpdate || chapterChanged || bookChanged || arcChanged ? '依据已变化，场景底稿待核对' : ''
+}
+
 function updateCache(value: OutlineVersion) {
   queryClient.setQueryData(['outline', props.projectId], value)
   queryClient.invalidateQueries({ queryKey: ['outline-versions', props.projectId] })
@@ -98,7 +117,7 @@ function updateCache(value: OutlineVersion) {
 function selectAssembledOutline(value: OutlineVersion) {
   if (value.projectId !== props.projectId) return
   if (draft.value && outlineQuery.data.value &&
-    JSON.stringify(draft.value) !== JSON.stringify(outlineQuery.data.value.content) &&
+    hasUnsavedChanges.value &&
     !window.confirm('当前大纲有未保存修改。确认切换到拼装结果？未保存修改将被丢弃。')) return
   if (outlineQuery.data.value && value.generationNumber < outlineQuery.data.value.generationNumber) {
     baseOutlineVersionId.value = value.id
@@ -149,7 +168,7 @@ const restoreMutation = useMutation({
   mutationFn: async () => {
     const selected = basePreviewQuery.data.value
     if (!selected || selected.id !== baseOutlineVersionId.value) throw new Error('请先选择并加载历史大纲。')
-    if (!window.confirm(`确认将第 ${selected.generationNumber} 版恢复为当前写作大纲？已有章节合同可能需要按此版重新生成并确认；正文和正史不会自动回退。`)) return null
+    if (!window.confirm(`确认将第 ${selected.generationNumber} 版恢复为当前写作大纲？已有正文可能需要按此版调整；正文和正史不会自动回退。`)) return null
     return publishOutline(props.projectId, selected)
   },
   onSuccess: (value) => {
@@ -239,6 +258,7 @@ function formatWords(value: number) {
                 <label><span>核心事件</span><textarea v-model="chapter.coreEvent" :disabled="!editable" rows="2" /></label>
                 <label><span>必要揭示</span><textarea v-model="chapter.reveal" :disabled="!editable" rows="2" /></label>
                 <label><span>结尾钩子</span><textarea v-model="chapter.endingHook" :disabled="!editable" rows="2" /></label>
+                <label class="chapter-scene-field"><span>场景清单与展开</span><textarea v-model="chapter.sceneOutline" :disabled="!editable" rows="8" /><small v-if="sceneStatus(chapter)" class="scene-outline-status" role="status">{{ sceneStatus(chapter) }}</small></label>
               </div>
             </details>
           </div>
@@ -261,7 +281,7 @@ function formatWords(value: number) {
         <section v-for="arc in basePreviewQuery.data.value.content.arcs" :key="arc.ordinal">
           <h4>第 {{ arc.ordinal }} 卷 · {{ arc.title }}</h4>
           <p>{{ arc.objective }} · {{ arc.turningPoint }}</p>
-          <ol><li v-for="chapter in arc.chapters" :key="chapter.number">第 {{ chapter.number }} 章 {{ chapter.title }}：{{ chapter.coreEvent }}</li></ol>
+          <ol><li v-for="chapter in arc.chapters" :key="chapter.number">第 {{ chapter.number }} 章 {{ chapter.title }}：{{ chapter.coreEvent }}<p v-if="chapter.sceneOutline" class="scene-outline-text">{{ chapter.sceneOutline }}</p></li></ol>
         </section>
       </div>
     </details>

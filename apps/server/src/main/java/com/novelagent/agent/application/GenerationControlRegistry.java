@@ -3,6 +3,7 @@ package com.novelagent.agent.application;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -12,14 +13,28 @@ public class GenerationControlRegistry {
     public static final String REQUEST_HEADER = "X-Generation-Request-Id";
     private final Map<UUID, ActiveCall> runs = new ConcurrentHashMap<>();
     private final Map<UUID, ActiveCall> requests = new ConcurrentHashMap<>();
+    private record BackgroundRequest(UUID id, BooleanSupplier cancelled) { }
+    private final ThreadLocal<BackgroundRequest> background = new ThreadLocal<>();
+
+    /** 后台任务逐次复用业务请求编号；取消状态在供应商调用开始前再次核对。 */
+    public AutoCloseable background(UUID id, BooleanSupplier cancelled) {
+        var previous = background.get();
+        background.set(new BackgroundRequest(id, cancelled));
+        return () -> { if (previous == null) background.remove(); else background.set(previous); };
+    }
 
     public ActiveCall start(UUID projectId, UUID runId) {
-        UUID requestId = currentRequestId();
+        var request = background.get();
+        if (request != null && request.cancelled().getAsBoolean()) throw new GenerationStoppedException();
+        UUID requestId = request == null ? currentRequestId() : request.id();
         ActiveCall call = new ActiveCall(projectId, runId, requestId, Thread.currentThread());
         if (requestId != null && requests.putIfAbsent(requestId, call) != null) {
             throw new IllegalStateException("该生成请求编号正在使用，请使用新的请求编号。");
         }
         runs.put(runId, call);
+        try {
+            if (request != null && request.cancelled().getAsBoolean()) throw new GenerationStoppedException();
+        } catch (RuntimeException failure) { call.close(); throw failure; }
         return call;
     }
 

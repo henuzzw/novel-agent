@@ -1,4 +1,5 @@
 import { apiRequest } from '@/api/http'
+import { createUuid } from '@/lib/uuid'
 
 export { ApiError, apiRequest } from '@/api/http'
 
@@ -78,6 +79,15 @@ export interface CreateProjectInput {
   creativeIntent?: CreativeIntentInput
 }
 
+export function createProjectFromStory(input: { name?: string; creativeStrategy: CreativeStrategy; file?: File | null; text?: string }): Promise<ProjectSummary> {
+  const body = new FormData()
+  if (input.name) body.append('name', input.name)
+  body.append('creativeStrategy', input.creativeStrategy)
+  if (input.file) body.append('file', input.file)
+  if (input.text) body.append('text', input.text)
+  return apiRequest('/api/v1/projects/from-story', { method: 'POST', body, headers: { 'Idempotency-Key': createUuid() } })
+}
+
 export function listProjects(): Promise<ProjectSummary[]> {
   return apiRequest('/api/v1/projects')
 }
@@ -103,7 +113,7 @@ export function createProject(input: CreateProjectInput): Promise<ProjectSummary
   return apiRequest('/api/v1/projects', {
     method: 'POST',
     headers: {
-      'Idempotency-Key': crypto.randomUUID(),
+      'Idempotency-Key': createUuid(),
     },
     body: JSON.stringify(input),
   })

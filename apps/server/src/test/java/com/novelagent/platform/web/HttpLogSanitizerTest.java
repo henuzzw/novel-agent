@@ -8,11 +8,24 @@ import org.junit.jupiter.api.Test;
 
 class HttpLogSanitizerTest {
     private final HttpLogSanitizer sanitizer = new HttpLogSanitizer(new ObjectMapper());
+    @Test void hidesSceneDraftsButKeepsTheirStatus() {
+        String log = sanitizer.summarize(Map.of("sceneOutline", "私有场景底稿", "sceneOutlineNeedsUpdate", true));
+        assertThat(log).contains("TEXT chars=", "sceneOutlineNeedsUpdate", "true").doesNotContain("私有场景底稿");
+    }
+    @Test void hidesEvenShortSnowflakeCreativeText() {
+        String log = sanitizer.summarize(Map.of("core", "私有核心", "characters", "私有人物",
+                "world", "私有世界", "plot", "私有情节", "developmentNotes", "私有底稿",
+                "status", "RUNNING", "activeStage", "WORLD"));
+        assertThat(log).contains("RUNNING", "WORLD", "TEXT chars=")
+                .doesNotContain("私有核心", "私有人物", "私有世界", "私有情节", "私有底稿");
+    }
+
     @Test void hidesPromptEditorFieldsWithoutDroppingVersionMetadata() {
         String log = sanitizer.summarize(Map.of("guidance", "私有规则", "defaultSystemPrompt", "默认全文",
-                "protectedRules", "边界全文", "systemPrompt", "私有角色", "key", "MANUSCRIPT", "version", 3));
+                "protectedRules", "边界全文", "systemPrompt", "私有角色", "sessionSystemPrompt", "真实系统角色",
+                "defaultSessionSystemPrompt", "默认系统角色", "key", "MANUSCRIPT", "version", 3));
         assertThat(log).contains("MANUSCRIPT", "version", "TEXT chars=")
-                .doesNotContain("私有规则", "默认全文", "边界全文", "私有角色");
+                .doesNotContain("私有规则", "默认全文", "边界全文", "私有角色", "真实系统角色", "默认系统角色");
     }
     @Test void keepsUsefulParametersAndMasksNestedSecretsAndManuscripts() {
         String log = sanitizer.summarize(Map.of("provider", "LOCAL_CODEX", "analysisVersion", 2,

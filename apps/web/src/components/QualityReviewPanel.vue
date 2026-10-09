@@ -129,7 +129,7 @@ onUnmounted(() => { active = false; unsubscribe(); emit('busy-change', false) })
       <button class="button secondary" type="button" :disabled="busy || externalBusy || skipped" @click="skip"><SkipForward :size="16" />本次跳过</button>
     </div></header>
     <p class="quality-status" role="status">{{ stateLabel }}<span v-if="skipped"> · 未完成检查</span></p>
-    <p class="quality-limit">质量建议不替代作者确认与正史审稿。修订候选的事实、人物知识、关系及退出状态仍需作者核对。</p>
+    <p class="quality-limit">质量检查可以跳过；作者核对后可直接确认并发布。修订候选的事实、人物知识、关系及退出状态仍需作者核对。</p>
     <p v-if="hasUnsavedChanges" class="form-error">正文有未保存修改，请先保存。</p>
     <p v-if="provider === 'LOCAL_TEMPLATE'" class="quality-limit">本地规则仅检查有限文本问题；本地模板生成稿仅验证版本流程，不执行语义润色。</p>
     <p v-if="query.isError.value" class="form-error" role="alert">{{ query.error.value?.message }}；报告来源未核对，不能修订。</p>

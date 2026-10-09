@@ -11,6 +11,22 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 class GenerationControlRegistryTest {
+    @Test void backgroundCancellationIsCheckedBeforeAndAfterRegistrationAndDoesNotLeak() throws Exception {
+        var registry = new GenerationControlRegistry();
+        UUID project = UUID.randomUUID(), request = UUID.randomUUID();
+        try (var scope = registry.background(request, () -> true)) {
+            assertThatThrownBy(() -> registry.start(project, UUID.randomUUID())).isInstanceOf(GenerationStoppedException.class);
+        }
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        try (var scope = registry.background(request, () -> reads.incrementAndGet() > 1)) {
+            assertThatThrownBy(() -> registry.start(project, UUID.randomUUID())).isInstanceOf(GenerationStoppedException.class);
+        }
+        assertThatThrownBy(() -> registry.stopRequest(project, request)).isInstanceOf(GenerationStopConflictException.class);
+        try (var scope = registry.background(request, () -> false); var call = registry.start(project, UUID.randomUUID())) {
+            registry.stopRequest(project, request); assertThat(call.isStopped()).isTrue();
+        }
+        try (var call = registry.start(project, UUID.randomUUID())) { assertThat(call.isStopped()).isFalse(); }
+    }
     @AfterEach void cleanup() { RequestContextHolder.resetRequestAttributes(); Thread.interrupted(); }
 
     @Test void requestAndRunReferToSameCallAndStopIsIdempotentAndProjectScoped() {

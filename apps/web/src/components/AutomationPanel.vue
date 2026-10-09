@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createUuid } from '@/lib/uuid'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
@@ -18,7 +19,7 @@ const maxAutoRevisionRounds = ref(0)
 const maxGenerationSteps = ref(100)
 const busy = ref(false)
 const error = ref('')
-let creationKey = crypto.randomUUID()
+let creationKey = createUuid()
 const runs = useQuery({
   queryKey: computed(() => ['automation-runs', props.projectId]),
   queryFn: () => listAutomationRuns(props.projectId),
@@ -42,7 +43,7 @@ const statusNames = {
 }
 const stageNames = { CONTRACT: '章节合同', CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', QUALITY_REVIEW: '正文质量检查', QUALITY_REVISION: '语句润色', REVIEW: '正文审稿' }
 const stepNames = { RUNNING: '运行中', SUCCEEDED: '完成', FAILED: '失败' }
-watch([firstChapter, lastChapter, provider, instruction, qualityReviewEnabled, maxAutoRevisionRounds, maxGenerationSteps, () => props.projectId], () => { creationKey = crypto.randomUUID() })
+watch([firstChapter, lastChapter, provider, instruction, qualityReviewEnabled, maxAutoRevisionRounds, maxGenerationSteps, () => props.projectId], () => { creationKey = createUuid() })
 watch([qualityReviewEnabled, provider], () => {
   if (!active.value && (!qualityReviewEnabled.value || provider.value === 'LOCAL_TEMPLATE')) maxAutoRevisionRounds.value = 0
 })
@@ -80,14 +81,14 @@ function create() {
       maxAutoRevisionRounds: maxAutoRevisionRounds.value,
       maxGenerationSteps: maxGenerationSteps.value,
     }, creationKey)
-    creationKey = crypto.randomUUID()
+    creationKey = createUuid()
   })
 }
 </script>
 
 <template>
   <section class="automation-panel" aria-label="自动创作任务">
-    <h3>自动创作任务</h3>
+    <h3>章节推进（作者确认并发布后继续）</h3>
     <form class="automation-form" @submit.prevent="create">
       <label>起始章<input v-model.number="firstChapter" type="number" min="1" max="100000" required :disabled="busy || active" /></label>
       <label>结束章<input v-model.number="lastChapter" type="number" :min="firstChapter" :max="Math.min(firstChapter + 19, 100000)" required :disabled="busy || active" /></label>

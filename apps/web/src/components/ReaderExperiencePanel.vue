@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { createUuid } from '@/lib/uuid'
 import { computed, ref, watch } from 'vue'
 import { Check, Plus, RefreshCw, Save, Trash2, X } from 'lucide-vue-next'
 import { ApiError } from '@/api/http'
 import PlanningMaterialSyncButton from './PlanningMaterialSyncButton.vue'
-import ChapterPlanLinkPanel from './ChapterPlanLinkPanel.vue'
 import { listPlanOrigins, type PlanOrigin } from '@/api/planningMaterials'
 import { listForeshadows, type Foreshadow } from '@/api/writing'
 import {
@@ -59,7 +59,7 @@ function blank() {
   return { kind: 'PROMISE' as ReaderExperienceKind, title: '', promise: '', setup: '', payoff: '', aftermath: '', plannedChapter: null as number | null }
 }
 function key(signature: string) {
-  if (!retryKey || retryKey.signature !== signature) retryKey = { signature, id: crypto.randomUUID() }
+  if (!retryKey || retryKey.signature !== signature) retryKey = { signature, id: createUuid() }
   return retryKey.id
 }
 function select(entry: ReaderExperienceEntry | null) {
@@ -178,7 +178,6 @@ defineExpose({ reload: load })
     <p v-if="error" role="alert" class="error">{{ error }}</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="loaded && tab === 'ledger'">
-      <ChapterPlanLinkPanel :project-id="projectId" @recorded="load" />
       <label class="filter">进展筛选<select v-model="filter"><option value="ALL">全部</option><option v-for="(label, state) in labels" :key="state" :value="state">{{ label }}</option></select></label>
       <p v-if="!entries.length" class="empty">暂无承诺或伏笔记录</p>
       <p v-else-if="!visibleEntries.length" class="empty">没有符合筛选的记录</p>

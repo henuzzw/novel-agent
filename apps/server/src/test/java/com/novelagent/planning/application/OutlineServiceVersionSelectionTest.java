@@ -168,6 +168,80 @@ class OutlineServiceVersionSelectionTest {
     }
 
     @Test
+    void importedProjectWithoutIntentRevisesUsingSelectedBudgetAndDoesNotCreateAnIntent() {
+        var older = version(1, "导入大纲");
+        var latestBudget = new OutlineWordBudgetPolicy().plan(50000);
+        var latest = OutlineVersion.create(UUID.randomUUID(), projectId, 2, "LOCAL_TEMPLATE", null,
+                bibleId, latestBudget, content("最新草稿", latestBudget));
+        when(intents.findById(projectId)).thenReturn(Optional.empty());
+        when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
+        when(outlines.findByIdAndProjectId(older.getId(), projectId)).thenReturn(Optional.of(older));
+        when(workflow.generate(projectId, bibleContent(), budget, ModelProvider.LOCAL_TEMPLATE,
+                older.getContent(), "补场景", standardPolicy()))
+                .thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", content("补充场景")));
+
+        var result = service.generate(projectId, new GenerateOutlineRequest(
+                ModelProvider.LOCAL_TEMPLATE, "补场景", GenerationMode.REVISE, older.getId()));
+
+        assertThat(result.wordBudget()).isEqualTo(budget);
+        assertThat(result.baseOutlineVersionId()).isEqualTo(older.getId());
+        verify(budgetPolicy).validate(budget);
+        verify(intents, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void regenerationWithoutIntentReusesLatestCapacityButNotItsStoryContent() {
+        var latest = version(1, "导入大纲");
+        when(intents.findById(projectId)).thenReturn(Optional.empty());
+        when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
+        when(workflow.generate(projectId, bibleContent(), budget, ModelProvider.LOCAL_TEMPLATE,
+                null, null, standardPolicy())).thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", content("新大纲")));
+
+        var result = service.generate(projectId, new GenerateOutlineRequest(
+                ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REGENERATE, null));
+
+        assertThat(result.wordBudget()).isEqualTo(budget);
+        assertThat(result.baseOutlineVersionId()).isNull();
+        verify(workflow).generate(projectId, bibleContent(), budget, ModelProvider.LOCAL_TEMPLATE, null, null, standardPolicy());
+        verify(intents, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void latestImportBudgetIsUsedForDefaultRevisionWithoutIntent() {
+        var latest = version(1, "导入大纲");
+        when(intents.findById(projectId)).thenReturn(Optional.empty());
+        when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
+        when(workflow.generate(projectId, bibleContent(), budget, ModelProvider.LOCAL_TEMPLATE,
+                latest.getContent(), null, standardPolicy())).thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", content("微调")));
+        assertThat(service.generate(projectId, new GenerateOutlineRequest(
+                ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REVISE, null)).wordBudget()).isEqualTo(budget);
+    }
+
+    @Test
+    void explicitAuthorCapacityStillTakesPriorityOverImportedBudget() {
+        var latest = version(1, "导入大纲");
+        var intent = mock(CreativeIntent.class);
+        when(intent.getTargetWords()).thenReturn(50000);
+        var authorBudget = new OutlineWordBudgetPolicy().plan(50000);
+        when(intents.findById(projectId)).thenReturn(Optional.of(intent));
+        when(budgetPolicy.plan(50000)).thenReturn(authorBudget);
+        when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(latest));
+        when(workflow.generate(projectId, bibleContent(), authorBudget, ModelProvider.LOCAL_TEMPLATE,
+                latest.getContent(), null, standardPolicy())).thenReturn(new GeneratedOutline("LOCAL_TEMPLATE", content("微调", authorBudget)));
+        assertThat(service.generate(projectId, new GenerateOutlineRequest(
+                ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REVISE, null)).wordBudget()).isEqualTo(authorBudget);
+    }
+
+    @Test
+    void missingIntentAndOutlineExplainsWhatToSaveBeforeCallingAnyModel() {
+        when(intents.findById(projectId)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.generate(projectId, new GenerateOutlineRequest(
+                ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REGENERATE, null)))
+                .hasMessageContaining("目标字数").hasMessageContaining("故事方向中保存创作要求");
+        verify(workflow, never()).generate(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void rejectsAnotherProjectsOutlineBeforeCallingModel() {
         UUID unavailableId = UUID.randomUUID();
         when(outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId))
@@ -212,6 +286,12 @@ class OutlineServiceVersionSelectionTest {
         OutlineArc arc = new OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果",
                 50_000, 70_000, List.of(chapter));
         return new OutlineContent(title, "前提", "结构", "节奏", 110_000, 130_000, List.of(arc));
+    }
+
+    private static OutlineContent content(String title, OutlineWordBudget capacity) {
+        var sample = content(title);
+        return new OutlineContent(title, sample.premise(), sample.structureSummary(), sample.pacingStrategy(),
+                capacity.acceptableMinWords(), capacity.acceptableMaxWords(), sample.arcs());
     }
 
     private static StoryBibleContent bibleContent() {

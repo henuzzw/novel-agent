@@ -52,7 +52,6 @@ public class DeepSeekStructuredOutputClient {
         Map<String, Object> request = Map.of(
                 "model", frozenSettings.model(), "instructions", instructions, "input", input,
                 "reasoning", Map.of("effort", "none"),
-                "text", Map.of("format", Map.of("type", "json_schema", "name", schemaName, "schema", schema)),
                 "max_output_tokens", maxOutputTokens, "stream", false);
         JsonNode response;
         try {

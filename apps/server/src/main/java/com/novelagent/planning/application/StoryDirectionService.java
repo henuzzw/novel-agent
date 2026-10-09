@@ -30,6 +30,10 @@ public class StoryDirectionService {
     private final StoryDirectionGenerationWorkflow generationWorkflow;
     private final OutlineWordBudgetPolicy wordBudgetPolicy;
     private final ProjectAccessService access;
+    private SnowflakePlanningService snowflake;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSnowflake(SnowflakePlanningService value) { this.snowflake = value; }
 
     public StoryDirectionService(
             CreativeIntentRepository creativeIntentRepository,
@@ -63,8 +67,15 @@ public class StoryDirectionService {
                 request.mode() == GenerationMode.REGENERATE
                         ? List.of()
                         : previous.map(StoryDirectionSet::getDirections).orElseGet(List::of);
+        UUID sourcePlan = previous.map(StoryDirectionSet::getSourceSnowflakeId).orElse(null);
+        String instruction = normalize(request.instruction());
+        if (sourcePlan != null && snowflake != null) {
+            instruction = java.util.Objects.toString(instruction, "") + "\n【已保存雪花规划及确切来源】\n"
+                    + snowflake.get(projectId, sourcePlan).context() + "\n" + snowflake.input(projectId, sourcePlan)
+                    + "\n续写的原文已发生事实不可更改，候选方向不能成为重写授权。";
+        }
         GeneratedStoryDirections generated = generationWorkflow
-                .generate(projectId, snapshot, provider, previousDirections, normalize(request.instruction()));
+                .generate(projectId, snapshot, provider, previousDirections, instruction);
         int generationNumber = previous
                 .map(existing -> existing.getGenerationNumber() + 1)
                 .orElse(1);
@@ -79,8 +90,23 @@ public class StoryDirectionService {
                 generated.directions(),
                 generated.questionsForAuthor(),
                 generated.changeSummary());
+        if (sourcePlan != null) set.linkSnowflake(sourcePlan);
         StoryDirectionSet saved = directionSetRepository.saveAndFlush(set);
         return toResponse(saved);
+    }
+
+    /** Upstream snowflake prose is supplied explicitly, not assumed to survive conversation compaction. */
+    public StoryDirectionSetResponse generateFromSnowflake(UUID projectId, ModelProvider provider,
+            CreativeIntentSnapshot snapshot, String context, UUID planId) {
+        access.requireOwnedProject(projectId);
+        var generated = generationWorkflow.generate(projectId, snapshot, provider, List.of(),
+                "依据以下已保存雪花底稿整理三个可选故事方向，不推翻已确定来源或续写事实。\n" + context);
+        int generation = directionSetRepository.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
+                .map(value -> value.getGenerationNumber() + 1).orElse(1);
+        var set = StoryDirectionSet.create(UUID.randomUUID(), projectId, generation, generated.generatorType(),
+                null, snapshot, generated.directions(), generated.questionsForAuthor(), generated.changeSummary());
+        set.linkSnowflake(planId);
+        return toResponse(directionSetRepository.saveAndFlush(set));
     }
 
     /**

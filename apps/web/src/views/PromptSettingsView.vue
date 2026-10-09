@@ -16,6 +16,7 @@ const error = ref('')
 const conflicted = ref(false)
 const notice = ref('')
 const system = ref('')
+const sessionSystem = ref('')
 const guidance = ref('')
 const showHistory = ref(false)
 const historyLoading = ref(false)
@@ -23,8 +24,10 @@ const historyError = ref('')
 const revisions = ref<PromptRevision[]>([])
 let historyRequest = 0
 const selected = computed(() => templates.value.find(item => item.key === route.query.template) ?? templates.value[0])
-const dirty = computed(() => !!selected.value && (system.value !== selected.value.systemPrompt || guidance.value !== selected.value.guidance))
-const valid = computed(() => !!system.value.trim() && system.value.length <= 40000 && guidance.value.length <= 40000)
+const dirty = computed(() => !!selected.value && (system.value !== selected.value.systemPrompt
+  || sessionSystem.value !== selected.value.sessionSystemPrompt || guidance.value !== selected.value.guidance))
+const valid = computed(() => !!system.value.trim() && !!sessionSystem.value.trim()
+  && system.value.length <= 40000 && sessionSystem.value.length <= 40000 && guidance.value.length <= 40000)
 const workflows = computed(() => new Set(templates.value.map(item => item.workflow)).size)
 const groups = computed(() => {
   const result = new Map<string, AgentPrompt[]>()
@@ -40,6 +43,7 @@ const groups = computed(() => {
 useUnsavedChanges(dirty, ['template'])
 watch(selected, value => {
   system.value = value?.systemPrompt ?? ''
+  sessionSystem.value = value?.sessionSystemPrompt ?? ''
   guidance.value = value?.guidance ?? ''
   revisions.value = []
   showHistory.value = false
@@ -70,7 +74,7 @@ async function load() {
 
 async function reconcile() {
   if (loading.value || saving.value || !selected.value) return
-  const draft = { key: selected.value.key, system: system.value, guidance: guidance.value }
+  const draft = { key: selected.value.key, system: system.value, sessionSystem: sessionSystem.value, guidance: guidance.value }
   loading.value = true
   error.value = ''
   try {
@@ -78,6 +82,7 @@ async function reconcile() {
     await nextTick()
     if (selected.value?.key === draft.key) {
       system.value = draft.system
+      sessionSystem.value = draft.sessionSystem
       guidance.value = draft.guidance
       notice.value = '已读取最新配置 · 当前编辑仍保留'
     }
@@ -95,7 +100,7 @@ async function persist(reset = false) {
   const current = selected.value
   if (!current || saving.value || (!reset && (!dirty.value || !valid.value))) return
   if (reset && !window.confirm(`恢复“${current.name}”的系统默认提示词？本次未保存的修改也将被清除。`)) return
-  const payload = { systemPrompt: system.value, guidance: guidance.value, version: current.version }
+  const payload = { systemPrompt: system.value, sessionSystemPrompt: sessionSystem.value, guidance: guidance.value, version: current.version }
   saving.value = true
   error.value = ''
   notice.value = ''
@@ -134,6 +139,7 @@ function useRevision(revision: PromptRevision) {
   if (saving.value || !selected.value) return
   if (dirty.value && !window.confirm('替换当前未保存的编辑，继续吗？')) return
   system.value = revision.systemPrompt ?? selected.value.defaultSystemPrompt
+  sessionSystem.value = revision.sessionSystemPrompt ?? selected.value.defaultSessionSystemPrompt
   guidance.value = revision.guidance
   notice.value = `已载入版本 ${revision.version} · 尚未保存`
 }
@@ -181,14 +187,17 @@ onMounted(load)
         <div class="prompt-meta"><span>{{ dirty ? '未保存' : `版本 ${selected.version}` }}</span><span>{{ date(selected.updatedAt) }}</span><span>后续生成生效 · 历史结果不变</span></div>
         <p v-if="notice" class="prompt-notice" role="status"><Check :size="16" />{{ notice }}</p>
         <fieldset class="prompt-fields" :disabled="saving || loading">
-          <label for="prompt-system">系统指令<span class="muted">{{ system.length }} / 40,000</span></label>
+          <label for="prompt-session-system">系统提示词<span class="muted">{{ sessionSystem.length }} / 40,000</span></label>
+          <textarea id="prompt-session-system" v-model="sessionSystem" spellcheck="false" rows="7" maxlength="40000" />
+          <label for="prompt-system">用户提示词<span class="muted">{{ system.length }} / 40,000</span></label>
           <textarea id="prompt-system" v-model="system" spellcheck="false" rows="14" maxlength="40000" />
           <label for="prompt-guidance">阶段执行规则<span class="muted">{{ guidance.length }} / 40,000</span></label>
           <textarea id="prompt-guidance" v-model="guidance" spellcheck="false" rows="7" maxlength="40000" />
         </fieldset>
-        <p v-if="!system.trim()" class="form-error">系统指令不能为空。</p>
-        <details v-if="dirty" class="prompt-reference"><summary>当前已保存配置 · 版本 {{ selected.version }}</summary><pre>{{ selected.systemPrompt }}</pre><pre v-if="selected.guidance">{{ selected.guidance }}</pre></details>
-        <details class="prompt-reference"><summary>系统默认指令</summary><pre>{{ selected.defaultSystemPrompt }}</pre></details>
+        <p v-if="!sessionSystem.trim()" class="form-error">系统提示词不能为空。</p>
+        <p v-if="!system.trim()" class="form-error">用户提示词不能为空。</p>
+        <details v-if="dirty" class="prompt-reference"><summary>当前已保存配置 · 版本 {{ selected.version }}</summary><h4>系统提示词</h4><pre>{{ selected.sessionSystemPrompt }}</pre><h4>用户提示词</h4><pre>{{ selected.systemPrompt }}</pre><pre v-if="selected.guidance">{{ selected.guidance }}</pre></details>
+        <details class="prompt-reference"><summary>默认提示词</summary><h4>系统提示词</h4><pre>{{ selected.defaultSessionSystemPrompt }}</pre><h4>用户提示词</h4><pre>{{ selected.defaultSystemPrompt }}</pre></details>
         <details class="prompt-reference"><summary>固定业务边界 · 项目资料、作者本次要求和输出结构单独保留</summary><pre>{{ selected.protectedRules }}</pre></details>
         <section v-if="showHistory" class="prompt-history" aria-label="版本历史">
           <h3>最近 50 个版本</h3>
@@ -197,7 +206,8 @@ onMounted(load)
           <p v-else-if="!revisions.length" class="muted">尚无编辑记录</p>
           <details v-for="revision in revisions" :key="revision.version" class="prompt-reference">
             <summary>版本 {{ revision.version }} · {{ revision.operation === 'RESET' ? '恢复默认' : '保存' }} · {{ date(revision.createdAt) }}</summary>
-            <pre>{{ revision.systemPrompt ?? selected.defaultSystemPrompt }}</pre>
+            <h4>系统提示词</h4><pre>{{ revision.sessionSystemPrompt ?? selected.defaultSessionSystemPrompt }}</pre>
+            <h4>用户提示词</h4><pre>{{ revision.systemPrompt ?? selected.defaultSystemPrompt }}</pre>
             <pre v-if="revision.guidance">{{ revision.guidance }}</pre>
             <button type="button" class="button secondary secondary-button" :disabled="saving" @click="useRevision(revision)"><RotateCcw :size="16" />载入此版本</button>
           </details>

@@ -136,21 +136,7 @@ public class PlanningMaterialSyncService {
      * @param world 已选世界观或其约束内容。
      * @param plot 剧情结构或剧情规划内容。
      */
-    @Transactional
-    public void syncPreparation(UUID projectId, UUID taskId, com.novelagent.planning.domain.CreationPreparation.World world,
-            com.novelagent.planning.domain.CreationPreparation.Plot plot) {
-        access.requireOwnedProject(projectId); lock(projectId);
-        names.initializeFromBlueprints(projectId, taskId, world.characters());
-        for (var blueprint : world.characters()) fillProfile(projectId, characterId(projectId, blueprint.name()), blueprint);
-        for (var entity : world.entities()) {
-            jdbc.update("""
-                    INSERT INTO story_entity(id, project_id, entity_type, canonical_name, status, canon_version_from, evidence_ref)
-                    SELECT ?, ?, ?, ?, 'PLANNED', 0, ? WHERE NOT EXISTS (
-                        SELECT 1 FROM story_entity WHERE project_id = ? AND entity_type = ? AND canonical_name = ? AND canon_version_to IS NULL)
-                    """, UUID.randomUUID(), projectId, entity.type(), entity.name(), "PREPARATION:" + taskId, projectId, entity.type(), entity.name());
-        }
-        for (var seed : plot.readerExperiencePlans()) insertPlan(projectId, "PREPARATION", taskId, seed);
-    }
+
 
     /**
      * 返回查询范围内的人物关系，并保留规划与已发生事实各自的来源，不自动生成新关系。
@@ -171,27 +157,7 @@ public class PlanningMaterialSyncService {
                 """, (rs, n) -> new PlannedRelationship(rs.getObject("id", UUID.class),
                 rs.getObject("source_bible_id", UUID.class), rs.getObject("character_id", UUID.class),
                 names.render(projectId, rs.getString("description"))), projectId, characterId, characterId));
-        for (var row : currentPreparation(projectId)) {
-            var world = readWorld((String) row.get("world_design"));
-            var plot = readPlot((String) row.get("plot_design"));
-            UUID bibleId = (UUID) row.get("source_bible_id"); UUID taskId = (UUID) row.get("id");
-            for (var person : world.characters()) {
-                UUID id = characterId(projectId, person.name());
-                if (characterId != null && !characterId.equals(id)) continue;
-                for (int i = 0; i < person.initialRelationships().size(); i++) {
-                    result.add(new PlannedRelationship(stableId(taskId + ":" + id + ":" + i), bibleId, id,
-                            names.render(projectId, person.initialRelationships().get(i))));
-                }
-            }
-            for (int i = 0; i < plot.relationships().size(); i++) {
-                var relation = plot.relationships().get(i); UUID id = characterId(projectId, relation.source());
-                UUID target = characterId(projectId, relation.target());
-                if (characterId != null && !characterId.equals(id) && !characterId.equals(target)) continue;
-                result.add(new PlannedRelationship(stableId(taskId + ":REL:" + i), bibleId, id,
-                        names.render(projectId, "第" + relation.fromChapter() + "章规划：" + relation.source() + " → " + relation.target()
-                                + "（" + relation.type() + "）" + relation.description())));
-            }
-        }
+
         return result;
     }
 
@@ -211,12 +177,6 @@ public class PlanningMaterialSyncService {
                 ORDER BY s.character_id
                 """, (rs, n) -> new CharacterSnapshot(rs.getObject("source_bible_id", UUID.class),
                 rs.getObject("character_id", UUID.class), blueprint(projectId, rs.getString("blueprint"))), projectId));
-        for (var row : currentPreparation(projectId)) {
-            for (var person : readWorld((String) row.get("world_design")).characters()) {
-                UUID id = characterId(projectId, person.name()); result.removeIf(item -> item.characterId().equals(id));
-                result.add(new CharacterSnapshot((UUID) row.get("source_bible_id"), id, names.render(projectId, person, CharacterBlueprint.class)));
-            }
-        }
         return result;
     }
 
@@ -236,9 +196,7 @@ public class PlanningMaterialSyncService {
                         SELECT 1 FROM outline_version o WHERE o.id = r.source_id AND o.source_bible_version_id = p.current_bible_version_id)
                     WHEN 'CANON' THEN EXISTS (SELECT 1 FROM foreshadow f
                         WHERE f.id = r.source_id AND f.project_id = r.project_id AND f.canon_version_to IS NULL)
-                    WHEN 'PREPARATION' THEN EXISTS (SELECT 1 FROM creation_preparation_current pc
-                        JOIN creation_preparation_task t ON t.id = pc.task_id WHERE pc.project_id = r.project_id
-                        AND t.id = r.source_id AND t.source_bible_id = p.current_bible_version_id AND t.source_outline_id = p.current_outline_version_id)
+                    WHEN 'PREPARATION' THEN FALSE
                     ELSE TRUE END AS current
                 FROM reader_experience_plan r JOIN novel_project p ON p.id = r.project_id
                 WHERE r.project_id = ? AND r.source_kind IS NOT NULL AND NOT r.deleted
@@ -311,22 +269,10 @@ public class PlanningMaterialSyncService {
     private void lock(UUID projectId) {
         jdbc.queryForObject("SELECT id FROM novel_project WHERE id = ? FOR UPDATE", UUID.class, projectId);
     }
-    private List<Map<String, Object>> currentPreparation(UUID projectId) {
-        return jdbc.queryForList("""
-                SELECT t.id, t.source_bible_id, t.world_design::text, t.plot_design::text FROM creation_preparation_current c
-                JOIN creation_preparation_task t ON t.id = c.task_id JOIN novel_project p ON p.id = c.project_id
-                WHERE c.project_id = ? AND t.source_bible_id = p.current_bible_version_id AND t.source_outline_id = p.current_outline_version_id
-                """, projectId);
-    }
-    private com.novelagent.planning.domain.CreationPreparation.World readWorld(String value) {
-        try { return mapper.readValue(value, com.novelagent.planning.domain.CreationPreparation.World.class); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("创作准备人物读取失败", e); }
-    }
-    private com.novelagent.planning.domain.CreationPreparation.Plot readPlot(String value) {
-        try { return mapper.readValue(value, com.novelagent.planning.domain.CreationPreparation.Plot.class); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("创作准备剧情读取失败", e); }
-    }
-    private UUID stableId(String value) { return UUID.nameUUIDFromBytes(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
+
+
+
+
     private String json(Object value) {
         try { return mapper.writeValueAsString(value); }
         catch (JsonProcessingException e) { throw new IllegalStateException("规划资料无法保存", e); }

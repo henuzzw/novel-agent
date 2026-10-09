@@ -20,4 +20,10 @@ public class ImportedPlanningModelGateway {
         return models.request(projectId, workflow, provider, systemPrompt, userPrompt, schema,
                 schemaName, maxTokens, CodexSessionPolicy.REUSE_THREAD);
     }
+
+    public String request(UUID projectId, String workflow, ModelProvider provider, String systemPrompt,
+            String userPrompt, JsonNode schema, String schemaName, int maxTokens, java.util.function.Consumer<String> consume) {
+        return models.request(projectId, workflow, provider, systemPrompt, userPrompt, schema,
+                schemaName, maxTokens, CodexSessionPolicy.REUSE_THREAD, consume);
+    }
 }

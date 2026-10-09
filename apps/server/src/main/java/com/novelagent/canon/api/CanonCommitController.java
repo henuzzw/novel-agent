@@ -57,6 +57,7 @@ public class CanonCommitController {
         return ResponseEntity.created(location).body(response);
     }
 
+
     /**
      * 显式替换本章有效正史，要求新的确认正文、审稿及匹配的当前提交；后续章已有正史时拒绝直接替换。
      *

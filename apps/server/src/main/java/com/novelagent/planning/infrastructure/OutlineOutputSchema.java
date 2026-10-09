@@ -22,10 +22,10 @@ public class OutlineOutputSchema {
                 "mainConflict":{"type":"string"},"turningPoint":{"type":"string"},"outcome":{"type":"string"},
                 "suggestedMinWords":{"type":"integer"},"suggestedMaxWords":{"type":"integer"},
                 "chapters":{"type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,
-                 "required":["number","title","pov","objective","coreEvent","reveal","endingHook","suggestedMinWords","suggestedMaxWords","status"],
+                 "required":["number","title","pov","objective","coreEvent","reveal","endingHook","sceneOutline","suggestedMinWords","suggestedMaxWords","status"],
                  "properties":{"number":{"type":"integer"},"title":{"type":"string"},"pov":{"type":"string"},
                   "objective":{"type":"string"},"coreEvent":{"type":"string"},"reveal":{"type":"string"},
-                  "endingHook":{"type":"string"},"suggestedMinWords":{"type":"integer"},"suggestedMaxWords":{"type":"integer"},
+                  "endingHook":{"type":"string"},"sceneOutline":{"type":"string"},"suggestedMinWords":{"type":"integer"},"suggestedMaxWords":{"type":"integer"},
                   "status":{"type":"string","enum":["OCCURRED","PLANNED"]}}}}
                }}}
              }},

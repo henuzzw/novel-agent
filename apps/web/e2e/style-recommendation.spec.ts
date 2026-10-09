@@ -2,7 +2,7 @@ import { createModelSettingsFixture, selectGlobalProvider } from './model-settin
 import { test, expect } from '@playwright/test'
 import type { WritingStyleProfile } from '../src/api/writingQuality'
 
-test('recommends from a saved bible, loads an unapplied candidate and tries the first chapter', async ({ page }, testInfo) => {
+test('recommends from a saved bible, loads an unapplied candidate and tries the first chapter', async ({ page }) => {
   const first: WritingStyleProfile = { name: '老舍参考：市井幽默', narrativeVoice: '温厚观察', sentenceRhythm: '自然变化',
     descriptionFocus: '人物日常处境', dialogueStyle: '保留身份差异', emotionalExpression: '克制', pacing: '关系推进', avoidPatterns: ['强加方言'] }
   const second = { ...first, name: '现实细腻', narrativeVoice: '贴近人物感知' }
@@ -72,8 +72,7 @@ test('recommends from a saved bible, loads an unapplied candidate and tries the 
   expect(recommendations).toBe(1)
   expect(applied).toBeNull()
   await page.evaluate(() => window.scrollTo(0, 0))
-  await page.screenshot({ path: testInfo.outputPath('recommendation.png'), fullPage: true })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('button', { name: '应用风格', exact: true }).click()
   await expect.poll(() => applied).toEqual(first)
 })

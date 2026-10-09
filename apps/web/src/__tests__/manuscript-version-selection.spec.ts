@@ -15,15 +15,9 @@ vi.mock('@/api/planning', () => ({
 }))
 vi.mock('@/api/projects', () => ({ getProject: vi.fn().mockResolvedValue({ currentCanonVersion: 0 }) }))
 vi.mock('@/api/writing', () => ({
-  getLatestContract: vi.fn().mockResolvedValue({ id: 'contract-1', status: 'APPROVED',
-    content: { chapterTitle: '第一章', pov: '主角', objective: '目标', storyTime: '当天',
-      locations: [], requiredBeats: [], requiredReveals: [], forbiddenFacts: [],
-      expectedExitState: '新状态', foreshadowActions: [], hook: '钩子',
-      suggestedMinWords: 2000, suggestedMaxWords: 3000 } }),
   getLatestManuscript: vi.fn(),
   listManuscriptVersions: vi.fn(),
   getManuscriptVersion: vi.fn(),
-  getLatestReview: vi.fn().mockResolvedValue(null),
   manuscriptExportUrl: vi.fn().mockReturnValue('/export'),
   generateManuscript: vi.fn(),
 }))
@@ -31,7 +25,7 @@ vi.mock('@/api/writing', () => ({
 function manuscript(id: string, versionNumber: number, body: string): ManuscriptVersion {
   return {
     id, projectId: 'project-1', chapterNumber: 1, versionNumber,
-    sourceContractVersionId: 'contract-1', baseManuscriptVersionId: id === 'new' ? 'older' : null,
+    sourceContractVersionId: null, baseManuscriptVersionId: id === 'new' ? 'older' : null,
     sourceReviewVersionId: null,
     schemaVersion: 'manuscript/1', status: 'DRAFT', generatorType: 'LOCAL_CODEX',
     authorInstruction: null, content: { title: '第一章', body, summary: '摘要', continuityNotes: [] },

@@ -85,10 +85,10 @@ class AutomationQualityFlowTest {
         assertThat(run.getSteps().getFirst().status()).isEqualTo("SUCCEEDED");
         verify(writing, never()).generateReview(any(), anyInt(), any());
     }
-    @Test void acceptedManuscriptBypassesLiteraryRecheckAndKeepsCanonReviewGate() {
+    @Test void acceptedManuscriptWaitsOnlyForAuthorPublication() {
         when(writing.latestManuscript(run.getProjectId(), 1)).thenReturn(Optional.of(ChapterAutomationPlannerTest.manuscript(ManuscriptStatus.AUTHOR_ACCEPTED)));
         when(writing.latestReview(run.getProjectId(), 1)).thenReturn(Optional.of(ChapterAutomationPlannerTest.review(ChapterAutomationPlannerTest.MANUSCRIPT, List.of())));
-        assertThat(service.resume(run.getProjectId(), run.getId()).waitingReason()).contains("确认审稿");
+        assertThat(service.resume(run.getProjectId(), run.getId()).waitingReason()).contains("确认并发布");
         verifyNoInteractions(quality);
         assertThat(run.getSteps()).isEmpty();
     }

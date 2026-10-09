@@ -27,7 +27,7 @@ public class LocalStoryBibleGenerator implements StoryBibleGenerator {
                     previousBible.supportingCharacters(), previousBible.relationshipDynamics(),
                     previousBible.centralConflict(), previousBible.stakes(), previousBible.narrativeStyle(),
                     previousBible.endingDirection(), previousBible.hardConstraints(), List.copyOf(questions),
-                    previousBible.characterBlueprints(), previousBible.readerExperiencePlans()),
+                    previousBible.characterBlueprints(), previousBible.readerExperiencePlans(), previousBible.developmentNotes()),
                     List.of(instruction == null || instruction.isBlank()
                             ? "未发现需要修改的内容，沿用原版本。"
                             : "按照本次要求补充了待作者确认事项，其他故事圣经设定保持不变。"));

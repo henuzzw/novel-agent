@@ -117,25 +117,25 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
                     .findByIdAndProjectIdAndChapterNumber(selection.get(number - 1), projectId, number)
                     .orElseThrow(() -> new WritingResourceNotFoundException("正文", selection.get(chapterNumber - 1)));
             if (manuscript != null && lock) em.refresh(manuscript, LockModeType.PESSIMISTIC_READ);
-            var contract = manuscript == null ? null : contracts.findByIdAndProjectIdAndChapterNumber(
-                    manuscript.getSourceContractVersionId(), projectId, number).orElse(null);
-            if (contract != null && lock) em.refresh(contract, LockModeType.PESSIMISTIC_READ);
-            var latestContract = contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, number).orElse(null);
-            if (latestContract != null && lock) em.refresh(latestContract, LockModeType.PESSIMISTIC_READ);
             // Track the heads even for an explicitly selected historical manuscript.
             dependencies.add(latest == null ? "missing manuscript" : List.of(latest.getId(), latest.getRowVersion(), latest.getContent()));
-            dependencies.add(latestContract == null ? "missing contract" : List.of(latestContract.getId(), latestContract.getRowVersion(), latestContract.getContent()));
             if (manuscript == null || manuscript.getContent().body().isBlank()) reasons.add("缺少第" + number + "章完整正文");
-            if (contract == null) reasons.add("第" + number + "章没有对应合同");
-            else if (outline == null || !contract.getSourceOutlineVersionId().equals(outline.getId())
-                    || latestContract == null || !latestContract.getId().equals(contract.getId()))
-                reasons.add("第" + number + "章合同或大纲已更新，来源过期");
+            var sourceOutlineId = manuscript == null ? null : manuscript.getWritingBasis() != null
+                    ? manuscript.getWritingBasis().outlineId()
+                    : contracts.findByIdAndProjectIdAndChapterNumber(manuscript.getSourceContractVersionId(), projectId, chapterNumber)
+                            .map(value -> value.getSourceOutlineVersionId()).orElse(null);
+            if (manuscript != null && (outline == null || !outline.getId().equals(sourceOutlineId)))
+                reasons.add("第" + number + "章来自旧大纲，来源过期");
+            var plan = outline == null ? null : outline.getContent().arcs().stream()
+                    .flatMap(value -> value.chapters().stream()).filter(value -> value.number() == chapterNumber).findFirst().orElse(null);
+            var writingPlan = plan == null || bible == null ? null : com.novelagent.writing.application.ChapterWritingBasisService.capture(
+                    new com.novelagent.writing.application.WritingContextService.Context(outline, bible,
+                            outline.getContent().arcs().stream().filter(value -> value.chapters().contains(plan)).findFirst().orElseThrow(), plan)).plan();
             var text = manuscript == null ? null : names.render(projectId, manuscript.getContent());
             var review = qualityReports.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, number)
                     .map(r -> QualityReviewResponse.from(r, false)).orElse(null);
-            if (review != null && manuscript != null && contract != null && outline != null && latestContract != null
-                    && outline.getStatus() == OutlineStatus.PUBLISHED && latestContract.getId().equals(contract.getId())
-                    && contract.getSourceOutlineVersionId().equals(outline.getId())) {
+            if (review != null && manuscript != null && outline != null && outline.getStatus() == OutlineStatus.PUBLISHED
+                    && outline.getId().equals(sourceOutlineId)) {
                 review = quality.latest(projectId, number).orElse(review);
             }
             boolean qualityCurrent = review != null && review.current() && manuscript != null
@@ -144,9 +144,8 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
             var chapter = new FirstThreeChaptersSource.Chapter(number, manuscript == null ? null : manuscript.getId(),
                     manuscript == null ? 0 : manuscript.getVersionNumber(), manuscript == null ? 0 : manuscript.getRowVersion(),
                     manuscript == null ? "MISSING" : manuscript.getStatus().name(), text == null ? "" : text.title(), text == null ? null : text.body(),
-                    contract == null ? null : contract.getId(), contract == null ? 0 : contract.getVersionNumber(),
-                    contract == null ? 0 : contract.getRowVersion(), contract == null ? "MISSING" : contract.getStatus().name(),
-                    contract == null ? null : names.render(projectId, contract.getContent(), ChapterContractContent.class),
+                    null, 0, 0, "OUTLINE_PLAN",
+                    writingPlan == null ? null : names.render(projectId, writingPlan, ChapterContractContent.class),
                     versions.stream().map(v -> new FirstThreeChaptersSource.Version(v.getId(), v.getVersionNumber(), v.getRowVersion(), v.getStatus().name())).toList(),
                     review == null ? null : review.content(), qualityCurrent);
             chapters.add(chapter);
@@ -200,7 +199,7 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
         em.clear();
         var current = read(source.projectId(), selection, true);
         if (!current.available() || !source.fingerprint().equals(current.fingerprint()))
-            throw new IllegalStateException("检查期间正文、合同或写作依据已变化，请重新检查");
+            throw new IllegalStateException("检查期间正文或写作依据已变化，请重新检查");
         int version = reports.findFirstByProjectIdAndAuthorIdOrderByVersionNumberDesc(source.projectId(), actors.currentUserId())
                 .map(r -> r.getVersionNumber() + 1).orElse(1);
         return reports.saveAndFlush(FirstThreeChaptersReport.create(actors.currentUserId(), version, provider, instruction, source, content, budget));

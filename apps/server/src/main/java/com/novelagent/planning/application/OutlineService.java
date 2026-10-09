@@ -43,6 +43,12 @@ public class OutlineService {
     private final ProjectAccessService access;
     private final CharacterNameService characterNames;
     private final PlanningMaterialSyncService materials;
+    private com.novelagent.ingest.application.ImportedOutlineGenerator importedGenerator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setImportedGenerator(com.novelagent.ingest.application.ImportedOutlineGenerator generator) {
+        this.importedGenerator = generator;
+    }
 
     public OutlineService(
             NovelProjectRepository projects,
@@ -78,9 +84,6 @@ public class OutlineService {
         StoryBibleVersion bible = bibles.findByIdAndProjectId(bibleId, projectId)
                 .filter(value -> value.getStatus() == StoryBibleStatus.PUBLISHED)
                 .orElseThrow(() -> new IllegalArgumentException("项目当前故事圣经不可用，请重新发布"));
-        CreativeIntent intent = intents.findById(projectId)
-                .orElseThrow(() -> new IllegalArgumentException("项目缺少创作意图"));
-        OutlineWordBudget budget = budgetPolicy.plan(intent.getTargetWords());
         ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
         Optional<OutlineVersion> latest = outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId);
         if (request.mode() == GenerationMode.REGENERATE && request.baseOutlineVersionId() != null) {
@@ -89,17 +92,37 @@ public class OutlineService {
         OutlineVersion base = request.mode() == GenerationMode.REGENERATE ? null
                 : request.baseOutlineVersionId() == null ? latest.orElse(null)
                 : requireVersion(projectId, request.baseOutlineVersionId());
+        OutlineWordBudget budget = resolveBudget(projectId, base, latest);
         StoryBibleContent promptBible = characterNames.render(projectId, bible.getContent(), StoryBibleContent.class);
         OutlineContent previousContent = base == null ? null
                 : characterNames.render(projectId, base.getContent(), OutlineContent.class);
-        GeneratedOutline generated = workflow.generate(projectId, promptBible, budget, provider,
-                previousContent, normalize(request.instruction()), CreativeStrategyPolicy.from(project));
+        GeneratedOutline generated = importedGenerator != null && bible.getSourceImportId() != null
+                && bible.getSourceDirectionSetId() != null
+                ? importedGenerator.generate(projectId, bible, budget, provider, previousContent,
+                        normalize(request.instruction()), CreativeStrategyPolicy.from(project))
+                : workflow.generate(projectId, promptBible, budget, provider,
+                        previousContent, normalize(request.instruction()), CreativeStrategyPolicy.from(project));
         int generation = latest
                 .map(value -> value.getGenerationNumber() + 1).orElse(1);
         OutlineVersion version = OutlineVersion.create(UUID.randomUUID(), projectId, generation,
                 generated.generatorType(), normalize(request.instruction()), bibleId,
-                base == null ? null : base.getId(), budget, generated.content(), generated.changeSummary());
+                base == null ? null : base.getId(), budget,
+                generated.content().reviewScenesAgainst(previousContent, base != null && !bibleId.equals(base.getSourceBibleVersionId())),
+                generated.changeSummary());
         return response(outlines.saveAndFlush(version));
+    }
+
+    /** Imported planning can exist without a separate intent; reuse its saved capacity, not invented author preferences. */
+    private OutlineWordBudget resolveBudget(UUID projectId, OutlineVersion base, Optional<OutlineVersion> latest) {
+        Optional<CreativeIntent> intent = intents.findById(projectId);
+        if (intent.isPresent()) return budgetPolicy.plan(intent.get().getTargetWords());
+        OutlineVersion source = base != null ? base : latest.orElse(null);
+        OutlineWordBudget saved = source == null ? null : source.getWordBudget();
+        if (saved == null || saved.targetWords() < 1000) {
+            throw new IllegalArgumentException("项目尚未设置目标字数，也没有可沿用的大纲篇幅；请在故事方向中保存创作要求后再生成大纲");
+        }
+        budgetPolicy.validate(saved);
+        return saved;
     }
 
     /**
@@ -170,7 +193,7 @@ public class OutlineService {
         checkVersion(version, expectedVersion);
         if (version.getStatus() == OutlineStatus.PUBLISHED)
             throw new IllegalArgumentException("已发布的大纲不能直接修改，请生成新版本");
-        version.revise(content);
+        version.revise(content.reviewScenesAgainst(version.getContent(), false));
         return response(outlines.saveAndFlush(version));
     }
 

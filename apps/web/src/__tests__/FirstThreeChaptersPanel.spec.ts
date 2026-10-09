@@ -83,7 +83,7 @@ describe('FirstThreeChaptersPanel', () => {
     const wrapper = render()
     await flushPromises()
     expect(wrapper.text()).toContain('报告已过期')
-    expect(wrapper.text()).toContain('报告对应的原正文与合同')
+    expect(wrapper.text()).toContain('报告对应的原正文与写作计划')
     expect(wrapper.text()).toContain('第3章结尾。')
   })
   it('keeps local source checks explicitly unassessed', async () => {

@@ -35,8 +35,10 @@ class AgentPromptRepositoryDatabaseTest {
         jdbc = new JdbcTemplate(datasource);
         jdbc.execute("CREATE SCHEMA " + schema);
         jdbc.execute("CREATE TABLE codex_agent_session(id uuid PRIMARY KEY)");
-        try (var stream = getClass().getResourceAsStream("/db/migration/V049__agent_prompt_settings.sql")) {
-            jdbc.execute(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+        for (String migration : new String[]{"V049__agent_prompt_settings.sql", "V055__paired_agent_prompts.sql"}) {
+            try (var stream = getClass().getResourceAsStream("/db/migration/" + migration)) {
+                jdbc.execute(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+            }
         }
         repository = new AgentPromptRepository(jdbc);
         transaction = new TransactionTemplate(new DataSourceTransactionManager(datasource));
@@ -46,10 +48,13 @@ class AgentPromptRepositoryDatabaseTest {
         var user = UUID.randomUUID();
         var service = new AgentPromptService(new AgentPromptCatalog(), repository, new CurrentActorProvider(user));
         assertThat(service.list()).allMatch(value -> value.version() == 0);
-        var first = transaction.execute(status -> service.save("OUTLINE", "第一版系统指令", "首段进入矛盾", 0));
+        var first = transaction.execute(status -> service.save("OUTLINE", "第一版阶段指令", "第一版系统角色", "首段进入矛盾", 0));
         assertThat(first.version()).isEqualTo(1);
         assertThat(first.updatedAt()).isNotNull();
-        assertThat(service.resolve("OUTLINE", "默认原文").systemPrompt()).contains("第一版系统指令", "首段进入矛盾");
+        assertThat(service.resolve("OUTLINE", "默认原文").systemPrompt()).contains("第一版阶段指令", "首段进入矛盾");
+        assertThat(service.resolve("OUTLINE", "默认原文").sessionSystemPrompt()).isEqualTo("第一版系统角色");
+        assertThat(repository.find(user, "OUTLINE").orElseThrow().sessionSystemPrompt()).isEqualTo("第一版系统角色");
+        String editedRevision = service.resolve("OUTLINE", "默认原文").revision();
         assertThatThrownBy(() -> transaction.execute(status -> service.save("OUTLINE", "过期覆盖", "", 0)))
                 .isInstanceOf(ResourceVersionConflictException.class);
         assertThat(service.history("OUTLINE")).hasSize(1);
@@ -57,8 +62,12 @@ class AgentPromptRepositoryDatabaseTest {
         assertThat(reset.version()).isEqualTo(2);
         assertThat(reset.customized()).isFalse();
         assertThat(service.history("OUTLINE")).extracting(value -> value.operation()).containsExactly("RESET", "SAVE");
-        assertThat(service.history("OUTLINE").getLast().systemPrompt()).isEqualTo("第一版系统指令");
-        assertThat(service.resolve("OUTLINE", "默认原文").revision()).isEqualTo("OUTLINE:v2");
+        assertThat(service.history("OUTLINE").getLast().systemPrompt()).isEqualTo("第一版阶段指令");
+        assertThat(service.history("OUTLINE").getLast().sessionSystemPrompt()).isEqualTo("第一版系统角色");
+        assertThat(service.history("OUTLINE").getFirst().sessionSystemPrompt()).isNull();
+        assertThat(service.resolve("OUTLINE", "默认原文").sessionSystemPrompt()).isEqualTo(reset.defaultSessionSystemPrompt());
+        assertThat(service.resolve("OUTLINE", "默认原文").revision()).isNotEqualTo(editedRevision)
+                .isEqualTo(service.resolve("STORY_BIBLE", "默认圣经").revision());
     }
 
     @Test void usersAndImportModesAreIsolatedAndFirstInsertCannotOverwrite() {

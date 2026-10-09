@@ -23,21 +23,23 @@ import org.mockito.ArgumentCaptor;
 
 class ManuscriptLocalEditModelTest {
     @Test
-    void usesNewThreadAndOnlyReplacementSchemaWithContractAndStyleBoundaries() {
+    void usesNewThreadAndOnlyReplacementProtocolWithWritingBasis() throws Exception {
         var gateway = mock(StructuredModelGateway.class);
         when(gateway.request(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any()))
                 .thenReturn("{\"replacement\":\"new\"}");
         UUID project = UUID.randomUUID();
-        var source = new ManuscriptLocalEditStore.Snapshot(project, 1, UUID.randomUUID(), 0, UUID.randomUUID(),
-                new ManuscriptContent("title", "old", "summary", List.of()), "contract + style", "hash");
+        var source = new ManuscriptLocalEditStore.Snapshot(project, 1, UUID.randomUUID(), 0, null,
+                new ManuscriptContent("title", "old", "summary", List.of()), "chapter plan + style", "hash", null);
         var model = new ManuscriptLocalEditModel(gateway, new ObjectMapper());
         assertThat(model.replace(project, source, new ManuscriptLocalEditSelection("old", 0, 1), ModelProvider.LOCAL_CODEX, "clarify")).isEqualTo("new");
-        var system = ArgumentCaptor.forClass(String.class);
         var user = ArgumentCaptor.forClass(String.class);
-        verify(gateway).request(eq(project), eq("MANUSCRIPT_LOCAL_EDIT"), eq(ModelProvider.LOCAL_CODEX), system.capture(),
+        verify(gateway).request(eq(project), eq("MANUSCRIPT_LOCAL_EDIT"), eq(ModelProvider.LOCAL_CODEX), anyString(),
                 user.capture(), any(), eq("manuscript_local_edit"), eq(12000), eq(CodexSessionPolicy.NEW_THREAD));
-        assertThat(system.getValue()).contains("合同事实", "当前风格", "不自动确认或提交正史", "不得新增故事事实");
-        assertThat(user.getValue()).contains("contract + style", "offsetUtf16", "occurrence");
+        var input = new ObjectMapper().readTree(user.getValue());
+        assertThat(input.path("basis").asText()).isEqualTo(source.context());
+        assertThat(input.path("selection").asText()).isEqualTo("old");
+        assertThat(input.path("offsetUtf16").asInt()).isZero();
+        assertThat(input.path("occurrence").asInt()).isEqualTo(1);
         when(gateway.request(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any()))
                 .thenReturn("{\"replacement\":\"new\",\"body\":\"overwrite\"}");
         assertThatThrownBy(() -> model.replace(project, source, new ManuscriptLocalEditSelection("old", 0, 1), ModelProvider.LOCAL_CODEX, "clarify"))

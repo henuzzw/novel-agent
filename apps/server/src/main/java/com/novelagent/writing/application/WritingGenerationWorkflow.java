@@ -18,7 +18,6 @@ import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.domain.ChapterContractContent;
-import com.novelagent.writing.domain.ChapterContractReviewContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.QualityReviewContent;
@@ -38,7 +37,6 @@ public class WritingGenerationWorkflow {
     private static final String ARC = "arc";
     private static final String CHAPTER = "chapter";
     private static final String CONTRACT = "contract";
-    private static final String PREVIOUS_CONTRACT = "previousContract";
     private static final String MANUSCRIPT = "manuscript";
     private static final String PREVIOUS_MANUSCRIPT = "previousManuscript";
     private static final String MEMORY = "memory";
@@ -52,10 +50,8 @@ public class WritingGenerationWorkflow {
 
     private final WritingGenerationGateway gateway;
     private final ObjectMapper mapper;
-    private final CompiledGraph contractGraph;
     private final CompiledGraph manuscriptGraph;
     private final CompiledGraph reviewGraph;
-    private final CompiledGraph contractReviewGraph;
     private final CompiledGraph qualityReviewGraph;
     private final CompiledGraph stylePreviewGraph;
     private final CompiledGraph styleRecommendationGraph;
@@ -65,19 +61,15 @@ public class WritingGenerationWorkflow {
     public WritingGenerationWorkflow(WritingGenerationGateway gateway, ObjectMapper mapper) {
         this.gateway = gateway;
         this.mapper = mapper;
-        this.contractGraph = compile("chapter-contract-generation", this::generateContractNode,
-                this::validateContractOutput);
         this.manuscriptGraph = compile("manuscript-generation", this::generateManuscriptNode,
                 this::validateManuscriptOutput);
         this.reviewGraph = compile("chapter-review-generation", this::generateReviewNode,
                 this::validateReviewOutput);
-        this.contractReviewGraph = compile("chapter-contract-review-generation", this::generateContractReviewNode,
-                this::validateContractReviewOutput);
         this.qualityReviewGraph = compile("quality-review-generation", this::generateQualityReviewNode,
                 this::validateQualityReviewOutput);
         this.stylePreviewGraph = compile("writing-style-preview", this::validateStylePreviewInput,
                 this::generateStylePreviewNode, this::validateStylePreviewOutput);
-        this.styleRecommendationGraph = compile("writing-style-recommendation", this::validateStyleRecommendationInput,
+        this.styleRecommendationGraph = compile("writing-style-recommendation", this::validateCommonInput,
                 this::generateStyleRecommendationNode, this::validateStyleRecommendationOutput);
         this.stylePreviewReviewGraph = compile("style-preview-review", this::validatePreviewEditingInput,
                 this::reviewStylePreviewNode, this::validatePreviewReviewOutput);
@@ -100,14 +92,12 @@ public class WritingGenerationWorkflow {
     }
 
     private Map<String, Object> validatePreviewEditingInput(OverAllState state) {
-        UUID.fromString(required(state, PROJECT_ID));
-        read(required(state, BIBLE), StoryBibleContent.class);
+        validateCommonInput(state);
         read(required(state, ARC), OutlineArc.class);
         if (read(required(state, CHAPTER), ChapterPlan.class).number() != 1) {
             throw new IllegalArgumentException("试写编辑仅支持第一章样例");
         }
         read(required(state, PREVIEW_SOURCE), StylePreviewSource.class);
-        ModelProvider.valueOf(required(state, PROVIDER));
         return Map.of();
     }
 
@@ -130,16 +120,6 @@ public class WritingGenerationWorkflow {
         return Map.of();
     }
 
-    public ChapterContractContent generateContract(UUID projectId, StoryBibleContent bible, OutlineArc arc,
-            ChapterPlan chapter, NovelMemoryContext memory, ChapterContractContent previousContract,
-            ModelProvider provider, String instruction) {
-        OverAllState result = invoke(contractGraph, Map.of(
-                PROJECT_ID, projectId.toString(), BIBLE, write(bible), ARC, write(arc), CHAPTER, write(chapter),
-                MEMORY, write(memory), PREVIOUS_CONTRACT, previousContract == null ? "" : write(previousContract),
-                PROVIDER, provider.name(), INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), ChapterContractContent.class);
-    }
-
     public GeneratedManuscript generateManuscript(UUID projectId, StoryBibleContent bible, OutlineArc arc,
             ChapterPlan chapter, ChapterContractContent contract, NovelMemoryContext memory,
             ManuscriptContent previousManuscript, ModelProvider provider, String instruction) {
@@ -149,16 +129,6 @@ public class WritingGenerationWorkflow {
                 PREVIOUS_MANUSCRIPT, previousManuscript == null ? "" : write(previousManuscript),
                 INSTRUCTION, value(instruction)));
         return read(required(result, GENERATED), GeneratedManuscript.class);
-    }
-
-    public ChapterContractReviewContent generateContractReview(UUID projectId, StoryBibleContent bible,
-            OutlineArc arc, ChapterPlan chapter, ChapterContractContent contract, NovelMemoryContext memory,
-            ModelProvider provider, String instruction) {
-        OverAllState result = invoke(contractReviewGraph, Map.of(
-                PROJECT_ID, projectId.toString(), BIBLE, write(bible), ARC, write(arc), CHAPTER, write(chapter),
-                CONTRACT, write(contract), MEMORY, write(memory), PROVIDER, provider.name(),
-                INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), ChapterContractReviewContent.class);
     }
 
     public ChapterReviewContent generateReview(UUID projectId, StoryBibleContent bible,
@@ -200,7 +170,7 @@ public class WritingGenerationWorkflow {
         return read(required(result, GENERATED), WritingStyleRecommendationContent.class);
     }
 
-    private Map<String, Object> validateStyleRecommendationInput(OverAllState state) {
+    private Map<String, Object> validateCommonInput(OverAllState state) {
         UUID.fromString(required(state, PROJECT_ID));
         read(required(state, BIBLE), StoryBibleContent.class);
         ModelProvider.valueOf(required(state, PROVIDER));
@@ -249,20 +219,16 @@ public class WritingGenerationWorkflow {
     }
 
     private Map<String, Object> validateInput(OverAllState state) {
-        UUID.fromString(required(state, PROJECT_ID));
-        read(required(state, BIBLE), StoryBibleContent.class);
+        validateCommonInput(state);
         read(required(state, MEMORY), NovelMemoryContext.class);
-        ModelProvider.valueOf(required(state, PROVIDER));
         return Map.of();
     }
 
     private Map<String, Object> validateStylePreviewInput(OverAllState state) {
-        UUID.fromString(required(state, PROJECT_ID));
-        read(required(state, BIBLE), StoryBibleContent.class);
+        validateCommonInput(state);
         read(required(state, ARC), OutlineArc.class);
         ChapterPlan chapter = read(required(state, CHAPTER), ChapterPlan.class);
         read(required(state, STYLE), WritingStyleProfile.class);
-        ModelProvider.valueOf(required(state, PROVIDER));
         int words = Integer.parseInt(required(state, TARGET_WORDS));
         if (chapter.number() != 1 || words < 300 || words > 1500) {
             throw new IllegalArgumentException("风格试写仅支持第一章，目标字数需要在 300 至 1500 之间");
@@ -282,21 +248,6 @@ public class WritingGenerationWorkflow {
     private Map<String, Object> validateStylePreviewOutput(OverAllState state) {
         read(required(state, GENERATED), WritingStylePreviewContent.class);
         return Map.of();
-    }
-
-    private Map<String, Object> generateContractNode(OverAllState state) {
-        String previousJson = state.value(PREVIOUS_CONTRACT, "");
-        ChapterContractContent previous = previousJson.isBlank() ? null : read(previousJson, ChapterContractContent.class);
-        ChapterContractContent generated = gateway.contract(
-                UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class),
-                read(required(state, ARC), OutlineArc.class),
-                read(required(state, CHAPTER), ChapterPlan.class),
-                read(required(state, MEMORY), NovelMemoryContext.class),
-                previous,
-                ModelProvider.valueOf(required(state, PROVIDER)),
-                optional(state, INSTRUCTION));
-        return Map.of(GENERATED, write(generated));
     }
 
     private Map<String, Object> generateManuscriptNode(OverAllState state) {
@@ -328,18 +279,6 @@ public class WritingGenerationWorkflow {
         return Map.of(GENERATED, write(generated));
     }
 
-    private Map<String, Object> generateContractReviewNode(OverAllState state) {
-        ChapterContractReviewContent generated = gateway.contractReview(
-                UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class),
-                read(required(state, ARC), OutlineArc.class),
-                read(required(state, CHAPTER), ChapterPlan.class),
-                read(required(state, CONTRACT), ChapterContractContent.class),
-                read(required(state, MEMORY), NovelMemoryContext.class),
-                ModelProvider.valueOf(required(state, PROVIDER)), optional(state, INSTRUCTION));
-        return Map.of(GENERATED, write(generated));
-    }
-
     private Map<String, Object> generateQualityReviewNode(OverAllState state) {
         QualityReviewContent generated = gateway.qualityReview(UUID.fromString(required(state, PROJECT_ID)),
                 read(required(state, BIBLE), StoryBibleContent.class),
@@ -353,23 +292,6 @@ public class WritingGenerationWorkflow {
     private Map<String, Object> validateQualityReviewOutput(OverAllState state) {
         QualityReviewContent content = read(required(state, GENERATED), QualityReviewContent.class);
         content.requireEvidenceIn(read(required(state, MANUSCRIPT), ManuscriptContent.class).body());
-        return Map.of();
-    }
-
-    private Map<String, Object> validateContractReviewOutput(OverAllState state) {
-        ChapterContractReviewContent content = read(required(state, GENERATED), ChapterContractReviewContent.class);
-        requireText(content.summary(), "合同审阅摘要");
-        if (content.issues() == null) throw new IllegalStateException("合同审阅缺少问题清单");
-        return Map.of();
-    }
-
-    private Map<String, Object> validateContractOutput(OverAllState state) {
-        ChapterContractContent content = read(required(state, GENERATED), ChapterContractContent.class);
-        requireText(content.chapterTitle(), "章节标题");
-        requireText(content.objective(), "章节目标");
-        if (content.suggestedMinWords() <= 0 || content.suggestedMaxWords() < content.suggestedMinWords()) {
-            throw new IllegalStateException("章节合同字数区间无效");
-        }
         return Map.of();
     }
 

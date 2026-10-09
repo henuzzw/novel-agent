@@ -11,9 +11,7 @@ vi.mock('@/api/planning', () => ({
 }))
 vi.mock('@/api/projects', () => ({ getProject: vi.fn().mockResolvedValue({ currentCanonVersion: 0 }) }))
 vi.mock('@/api/writing', () => ({
-  getLatestContract: vi.fn().mockResolvedValue(null),
   getLatestManuscript: vi.fn().mockResolvedValue(null),
-  getLatestReview: vi.fn().mockResolvedValue(null),
 }))
 
 describe('WritingWorkbench current outline', () => {

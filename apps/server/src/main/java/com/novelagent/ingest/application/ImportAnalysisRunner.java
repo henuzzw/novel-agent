@@ -17,6 +17,9 @@ public class ImportAnalysisRunner {
     private final ImportAnalysisStore store;
     private final StructuredModelGateway models;
     private final ImportAnalysisPrompt prompt;
+    private com.novelagent.project.application.BookTitleService titles;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTitles(com.novelagent.project.application.BookTitleService titles) { this.titles = titles; }
     public ImportAnalysisRunner(ImportAnalysisStore store, StructuredModelGateway models, ImportAnalysisPrompt prompt) {
         this.store = store; this.models = models; this.prompt = prompt;
     }
@@ -31,6 +34,7 @@ public class ImportAnalysisRunner {
     public ImportAnalysisStore.View next(UUID projectId, UUID importId, UUID id, long version) {
         var claim = store.claim(projectId, importId, id, version);
         try {
+            if (titles != null) titles.generateIfNeeded(projectId, importId, claim.report().provider());
             var result = new AtomicReference<ImportAnalysisStore.View>();
             models.request(projectId, "IMPORT_SOURCE_ANALYSIS", claim.report().provider(), ImportAnalysisPrompt.SYSTEM,
                     claim.input(), prompt.schema(), "import_source_analysis", 12000, CodexSessionPolicy.NEW_THREAD,

@@ -60,7 +60,55 @@ class ImportAnalysisOutputParserTest {
         assertThatThrownBy(() -> parser.parse(raw)).hasMessageContaining("items[0].evidence[0]")
                 .hasMessageNotContaining("private manuscript");
     }
-    @Test void promptSeparatesCategoriesCertaintyAndQuoteOrdinals() {
-        assertThat(ImportAnalysisPrompt.SYSTEM).contains("category 绝不能写 UNKNOWN", "不是段落编号", "必须是 0");
+    @Test void normalizesDottedTechnicalKeysWithoutChangingStoryFieldsOrEvidence() {
+        var root = output();
+        item(root).put("key", "character.narrator.identity_and_learning");
+        item(root).put("certainty", "FACT");
+        ((com.fasterxml.jackson.databind.node.ArrayNode) item(root).path("evidence")).addObject()
+                .put("chapterId", "fcd21055-2ab9-4305-a674-5572a4e5302b")
+                .put("quote", "他写下 character.narrator。").put("occurrence", 0);
+        var parsed = parser.parse(root.toString()).items().getFirst();
+        assertThat(parsed.key()).isEqualTo("character_narrator_identity_and_learning");
+        assertThat(parsed.title()).isEqualTo(item(root).path("title").asText());
+        assertThat(parsed.description()).isEqualTo(item(root).path("description").asText());
+        assertThat(parsed.subjects()).containsExactly("甲");
+        assertThat(parsed.certainty()).isEqualTo("FACT");
+        assertThat(parsed.evidence()).singleElement().satisfies(evidence -> {
+            assertThat(evidence.quote()).isEqualTo("他写下 character.narrator。");
+            assertThat(evidence.occurrence()).isZero();
+            assertThat(evidence.chapterId().toString()).isEqualTo("fcd21055-2ab9-4305-a674-5572a4e5302b");
+        });
+        assertThat(parser.parse(root.toString())).isEqualTo(parser.parse(root.toString()));
+    }
+
+    @Test void normalizationCollisionsAndRepeatedKeysFailAtTheExactFieldInsteadOfDroppingItems() {
+        for (String second : new String[] { "character.narrator", "character_narrator" }) {
+            var root = output();
+            item(root).put("key", "character.narrator");
+            ((com.fasterxml.jackson.databind.node.ArrayNode) root.path("items")).add(item(root).deepCopy().put("key", second));
+            assertThatThrownBy(() -> parser.parse(root.toString())).hasMessageContaining("items[1].key")
+                    .hasMessageContaining("标识重复").hasMessageNotContaining("关系未知");
+        }
+    }
+
+    @Test void rejectsInvalidKeyFormatsAndLeavesRoomForThePersistedSegmentPrefix() {
+        for (String key : new String[] { "", "中文标识", "character narrator", "character/narrator", "a".repeat(77) }) {
+            var root = output(); item(root).put("key", key);
+            assertThatThrownBy(() -> parser.parse(root.toString())).hasMessageContaining("items[0].key")
+                    .hasMessageContaining("1至76位").hasMessageNotContaining(key.isEmpty() ? "private manuscript" : key);
+        }
+        var root = output(); item(root).put("key", "a".repeat(76));
+        var content = new com.novelagent.ingest.domain.ImportAnalysis.Content(java.util.List.of(), java.util.List.of())
+                .append(parser.parse(root.toString()), 39);
+        assertThat(content.items().getFirst().key()).hasSize(80).startsWith("b39_");
+    }
+
+    @Test void keySchemaAndPromptDescribeTheSameSafeIdentifierContract() {
+        var schema = new ImportAnalysisPrompt(mapper).schema().path("properties").path("items").path("items")
+                .path("properties").path("key");
+        assertThat(schema.path("minLength").asInt()).isEqualTo(1);
+        assertThat(schema.path("maxLength").asInt()).isEqualTo(76);
+        assertThat(schema.path("pattern").asText()).isEqualTo("^[A-Za-z0-9_-]+$");
+        assertThat(ImportAnalysisPrompt.SYSTEM).contains("1至76位", "不用点号", "不重复", "中文名称放title或subjects");
     }
 }

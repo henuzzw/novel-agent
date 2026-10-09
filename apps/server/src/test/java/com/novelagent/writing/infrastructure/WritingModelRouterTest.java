@@ -17,8 +17,10 @@ class WritingModelRouterTest {
     @Test
     void independentWritingWorkflowsUseFreshCodexThreads() {
         assertPolicy("MANUSCRIPT", CodexSessionPolicy.NEW_THREAD);
-        assertPolicy("CHAPTER_CONTRACT", CodexSessionPolicy.NEW_THREAD);
-        assertPolicy("CHAPTER_CONTRACT_REVIEW", CodexSessionPolicy.NEW_THREAD);
+        assertPolicy("CHAPTER_REVIEW", CodexSessionPolicy.NEW_THREAD);
+        assertPolicy("QUALITY_REVIEW", CodexSessionPolicy.NEW_THREAD);
+        assertPolicy("STYLE_ANALYSIS", CodexSessionPolicy.NEW_THREAD);
+        assertPolicy("STYLE_PREVIEW", CodexSessionPolicy.NEW_THREAD);
         assertPolicy("STYLE_RECOMMENDATION", CodexSessionPolicy.NEW_THREAD);
         assertPolicy("STYLE_PREVIEW_REVIEW", CodexSessionPolicy.NEW_THREAD);
         assertPolicy("STYLE_PREVIEW_REVISION", CodexSessionPolicy.NEW_THREAD);

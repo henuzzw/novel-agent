@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 import { bible, character } from '../src/__tests__/character-blueprint-fixtures'
 
-test('completes legacy character designs and saves edits before explicit publication', async ({ page }, testInfo) => {
+test('completes legacy character designs and saves edits before explicit publication', async ({ page }) => {
   const models = createModelSettingsFixture()
   let current = { ...bible(), projectId: 'test-project', status: 'PUBLISHED' as 'DRAFT' | 'PUBLISHED' }
   delete current.content.characterBlueprints
@@ -68,9 +68,7 @@ test('completes legacy character designs and saves edits before explicit publica
   expect(current.content.characterBlueprints?.[0]?.background).toBe('从小被要求懂事，但仍想保留自己的决定。')
   await expect(page.getByLabel('未来弧光与触发条件（尚未发生）', { exact: true })).toHaveValue(character().characterArc)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('character-blueprints.png'), fullPage: true })
   await page.locator('.blueprint-heading').evaluate(element => element.scrollIntoView({ block: 'start' }))
-  await page.screenshot({ path: testInfo.outputPath('character-blueprints-viewport.png') })
   await page.getByRole('button', { name: '确认并发布', exact: true }).click()
   await expect(page.getByText('第 2 版 · 已发布')).toBeVisible()
   expect(publications).toBe(1)

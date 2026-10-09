@@ -15,26 +15,6 @@ class WritingOutputSchemas {
         this.mapper = mapper;
     }
 
-    JsonNode contract() {
-        ObjectNode root = objectSchema();
-        ObjectNode properties = root.putObject("properties");
-        string(properties, "chapterTitle");
-        string(properties, "pov");
-        string(properties, "objective");
-        string(properties, "storyTime");
-        strings(properties, "locations");
-        strings(properties, "requiredBeats");
-        strings(properties, "requiredReveals");
-        strings(properties, "forbiddenFacts");
-        string(properties, "expectedExitState");
-        strings(properties, "foreshadowActions");
-        string(properties, "hook");
-        integer(properties, "suggestedMinWords");
-        integer(properties, "suggestedMaxWords");
-        required(root, properties);
-        return root;
-    }
-
     JsonNode stylePreview() {
         ObjectNode root = objectSchema();
         ObjectNode properties = root.putObject("properties");
@@ -64,17 +44,7 @@ class WritingOutputSchemas {
         ObjectNode root = objectSchema();
         ObjectNode properties = root.putObject("properties");
         string(properties, "summary");
-        ObjectNode issue = objectSchema();
-        ObjectNode issueProperties = issue.putObject("properties");
-        string(issueProperties, "id");
-        enumString(issueProperties, "severity", "BLOCKING", "WARNING", "INFO");
-        string(issueProperties, "category");
-        string(issueProperties, "description");
-        string(issueProperties, "evidence");
-        string(issueProperties, "suggestion");
-        issueProperties.putObject("resolved").put("type", "boolean");
-        required(issue, issueProperties);
-        properties.putObject("issues").put("type", "array").set("items", issue);
+        reviewIssues(properties, false);
         ObjectNode fact = objectSchema();
         ObjectNode factProperties = fact.putObject("properties");
         string(factProperties, "id");
@@ -93,25 +63,6 @@ class WritingOutputSchemas {
         return root;
     }
 
-    JsonNode contractReview() {
-        ObjectNode root = objectSchema();
-        ObjectNode properties = root.putObject("properties");
-        string(properties, "summary");
-        ObjectNode issue = objectSchema();
-        ObjectNode fields = issue.putObject("properties");
-        string(fields, "id");
-        enumString(fields, "severity", "BLOCKING", "WARNING", "INFO");
-        string(fields, "category");
-        string(fields, "description");
-        string(fields, "evidence");
-        string(fields, "suggestion");
-        fields.putObject("resolved").put("type", "boolean");
-        required(issue, fields);
-        properties.putObject("issues").put("type", "array").set("items", issue);
-        required(root, properties);
-        return root;
-    }
-
     JsonNode qualityReview() {
         ObjectNode root = objectSchema();
         ObjectNode properties = root.putObject("properties");
@@ -124,19 +75,28 @@ class WritingOutputSchemas {
         string(scoreFields, "rationale");
         required(score, scoreFields);
         properties.putObject("scores").put("type", "array").set("items", score);
+        reviewIssues(properties, true);
+        required(root, properties);
+        return root;
+    }
+
+    private void reviewIssues(ObjectNode properties, boolean qualityReview) {
         ObjectNode issue = objectSchema();
         ObjectNode fields = issue.putObject("properties");
         string(fields, "id");
-        enumString(fields, "severity", "WARNING", "INFO");
-        enumString(fields, "category", "STYLE", "FLUENCY", "LOGIC", "SCENE");
+        enumString(fields, "severity", qualityReview
+                ? new String[] { "WARNING", "INFO" } : new String[] { "BLOCKING", "WARNING", "INFO" });
+        if (qualityReview) {
+            enumString(fields, "category", "STYLE", "FLUENCY", "LOGIC", "SCENE");
+        } else {
+            string(fields, "category");
+        }
         string(fields, "description");
         string(fields, "evidence");
         string(fields, "suggestion");
         fields.putObject("resolved").put("type", "boolean");
         required(issue, fields);
         properties.putObject("issues").put("type", "array").set("items", issue);
-        required(root, properties);
-        return root;
     }
 
     JsonNode styleRecommendation(java.util.List<WritingStyleProfile> presets) {

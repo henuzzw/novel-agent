@@ -64,6 +64,7 @@ class QualityReviewStoreTest {
         when(projects.findById(projectId)).thenReturn(Optional.of(project));
         when(manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1)).thenReturn(Optional.of(manuscript));
         when(manuscript.getChapterNumber()).thenReturn(1);
+        when(manuscript.getProjectId()).thenReturn(projectId);
         when(manuscript.getSourceContractVersionId()).thenReturn(contractId);
         when(manuscript.getContent()).thenReturn(content);
         when(contract.getId()).thenReturn(contractId);
@@ -74,9 +75,12 @@ class QualityReviewStoreTest {
         when(outline.getId()).thenReturn(outlineId);
         when(outline.getStatus()).thenReturn(OutlineStatus.PUBLISHED);
         when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent(
-                "小说", "前提", "结构", "节奏", 1000, 2000, List.of()));
+                "小说", "前提", "结构", "节奏", 1000, 2000, List.of(new com.novelagent.planning.domain.OutlineArc(
+                        1, "幕", "目标", "冲突", "转折", "结果", 1000, 2000, List.of(new com.novelagent.planning.domain.ChapterPlan(
+                                1, "章", "主角", "目标", "事件", "揭示", "钩子", 1000, 2000))))));
         when(outline.getSourceBibleVersionId()).thenReturn(bibleId);
         when(outlines.findByIdAndProjectId(outlineId, projectId)).thenReturn(Optional.of(outline));
+        when(bible.getContent()).thenReturn(com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(List.of()));
         when(bible.getId()).thenReturn(bibleId);
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
         when(bibles.findByIdAndProjectId(bibleId, projectId)).thenReturn(Optional.of(bible));
@@ -87,12 +91,12 @@ class QualityReviewStoreTest {
     }
 
     @Test
-    void sourceFingerprintTracksPolicyAndContractBibleVersions() {
+    void sourceFingerprintTracksPolicyAndOutlineBibleVersions() {
         String first = store.snapshot(projectId, 1).fingerprint();
         CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING).applyTo(project);
         String changedStrategy = store.snapshot(projectId, 1).fingerprint();
         assertThat(changedStrategy).isNotEqualTo(first);
-        when(contract.getRowVersion()).thenReturn(1L);
+        when(outline.getRowVersion()).thenReturn(1L);
         String changedContract = store.snapshot(projectId, 1).fingerprint();
         assertThat(changedContract).isNotEqualTo(changedStrategy);
         when(bible.getRowVersion()).thenReturn(1L);
@@ -101,9 +105,9 @@ class QualityReviewStoreTest {
 
     @Test
     void wrongChapterOrChangedCurrentOutlineStopsBeforeChecking() {
-        when(contract.getChapterNumber()).thenReturn(2);
+        when(manuscript.getChapterNumber()).thenReturn(2);
         assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
-        when(contract.getChapterNumber()).thenReturn(1);
+        when(manuscript.getChapterNumber()).thenReturn(1);
         project.publishOutline(UUID.randomUUID());
         assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
     }

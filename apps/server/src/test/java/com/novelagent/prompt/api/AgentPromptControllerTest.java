@@ -23,9 +23,10 @@ class AgentPromptControllerTest {
         when(service.get("OUTLINE")).thenReturn(value);
         mvc.perform(get("/api/v1/settings/prompts")).andExpect(status().isOk()).andExpect(jsonPath("$[0].version").value(2));
         mvc.perform(get("/api/v1/settings/prompts/OUTLINE")).andExpect(status().isOk()).andExpect(jsonPath("$.systemPrompt").value("指令"));
-        when(service.save(eq("OUTLINE"), anyString(), anyString(), eq(0L))).thenThrow(new ResourceVersionConflictException(0, 2));
+        mvc.perform(get("/api/v1/settings/prompts/OUTLINE")).andExpect(jsonPath("$.sessionSystemPrompt").isNotEmpty());
+        when(service.save(eq("OUTLINE"), anyString(), anyString(), anyString(), eq(0L))).thenThrow(new ResourceVersionConflictException(0, 2));
         mvc.perform(put("/api/v1/settings/prompts/OUTLINE").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"systemPrompt\":\"修改\",\"guidance\":\"\",\"version\":0}"))
+                .content("{\"systemPrompt\":\"修改\",\"sessionSystemPrompt\":\"系统角色\",\"guidance\":\"\",\"version\":0}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RESOURCE_VERSION_CONFLICT"));
         for (String payload : List.of("{}", "{\"systemPrompt\":\"修改\",\"guidance\":\"\"}",
                 "{\"systemPrompt\":\"  \",\"guidance\":\"\",\"version\":0}",

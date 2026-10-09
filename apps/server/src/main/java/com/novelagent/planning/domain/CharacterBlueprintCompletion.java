@@ -38,6 +38,6 @@ public final class CharacterBlueprintCompletion {
         return new StoryBibleContent(source.logline(), source.theme(), source.worldSetting(), source.worldRules(),
                 source.protagonist(), source.protagonistArc(), source.supportingCharacters(),
                 source.relationshipDynamics(), source.centralConflict(), source.stakes(), source.narrativeStyle(),
-                source.endingDirection(), source.hardConstraints(), source.openQuestions(), result, source.readerExperiencePlans());
+                source.endingDirection(), source.hardConstraints(), source.openQuestions(), result, source.readerExperiencePlans(), source.developmentNotes());
     }
 }

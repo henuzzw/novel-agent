@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 
-test('creates a planned promise without inventing actual progress', async ({ page }, testInfo) => {
+test('creates a planned promise without inventing actual progress', async ({ page }) => {
   const models = createModelSettingsFixture()
   const entries: object[] = []
   await page.route('**/api/v1/**', async route => {
@@ -41,23 +41,21 @@ test('creates a planned promise without inventing actual progress', async ({ pag
   expect(entries).toHaveLength(1)
   await expect(page.locator('.history')).not.toContainText('已兑现')
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('reader-ledger.png'), fullPage: true })
 })
 
-test('local editing adopts a new draft and keeps the exact segment diff', async ({ page }, testInfo) => {
+test('local editing adopts a new draft and keeps the exact segment diff', async ({ page }) => {
   const models = createModelSettingsFixture()
   const body = '门口传来脚步声。她把纸条递过来。我等她说完。'
   let manuscript = { id: 'm1', projectId: 'test-project', chapterNumber: 1, version: 0, versionNumber: 1,
-    status: 'DRAFT', sourceContractVersionId: 'c1', baseManuscriptVersionId: null as string | null,
+    status: 'DRAFT', sourceContractVersionId: null, baseManuscriptVersionId: null as string | null,
     sourceReviewVersionId: null, changeSummary: [] as string[], content: { title: '纸条', body, summary: '交接纸条', continuityNotes: [] } }
   let calls = 0
   await page.route('**/api/v1/**', async route => {
     if (await models(route)) return
     const path = new URL(route.request().url()).pathname
     if (path.endsWith('/outlines/current')) return route.fulfill({ json: { id: 'o1', status: 'PUBLISHED', content: { arcs: [{ ordinal: 1, title: '第一卷', chapters: [{ number: 1, title: '纸条', objective: '交接' }] }] } } })
-    if (path.endsWith('/contracts/latest')) return route.fulfill({ json: { id: 'c1', version: 0, versionNumber: 1, status: 'APPROVED', content: { chapterTitle: '纸条', pov: '我', objective: '交接', storyTime: '当天', locations: [], requiredBeats: ['交换纸条'], requiredReveals: [], forbiddenFacts: [], expectedExitState: '接过纸条', foreshadowActions: [], hook: '讨论', suggestedMinWords: 1000, suggestedMaxWords: 2000 } } })
     if (path.endsWith('/manuscripts/latest')) return route.fulfill({ json: manuscript })
-    if (path.endsWith('/manuscripts') || path.endsWith('/contracts') || path.endsWith('/entities')) return route.fulfill({ json: [] })
+    if (path.endsWith('/manuscripts') || path.endsWith('/entities')) return route.fulfill({ json: [] })
     if (path.endsWith('/manuscripts/actions/local-edit')) {
       const input = route.request().postDataJSON()
       expect(input.sourceManuscriptId).toBe('m1')
@@ -88,5 +86,4 @@ test('local editing adopts a new draft and keeps the exact segment diff', async 
   await expect(panel.getByLabel('原稿正文')).toHaveValue('门口传来脚步声。她递来纸条。我等她说完。')
   expect(calls).toBe(1)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('local-edit.png'), fullPage: true })
 })

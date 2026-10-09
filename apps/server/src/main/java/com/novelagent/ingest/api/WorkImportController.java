@@ -1,7 +1,6 @@
 package com.novelagent.ingest.api;
 
 import com.novelagent.ingest.application.WorkImportService;
-import com.novelagent.ingest.application.ImportedPlanningService;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -29,11 +28,9 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/projects/{projectId}/imports")
 public class WorkImportController {
     private final WorkImportService service;
-    private final ImportedPlanningService planning;
 
-    public WorkImportController(WorkImportService service, ImportedPlanningService planning) {
+    public WorkImportController(WorkImportService service) {
         this.service = service;
-        this.planning = planning;
     }
 
     /**
@@ -62,6 +59,15 @@ public class WorkImportController {
         return service.list(projectId);
     }
 
+    public record PastedStoryRequest(@jakarta.validation.constraints.NotBlank String text) { }
+
+    @PostMapping("/text")
+    public ResponseEntity<WorkImportResponse> paste(@PathVariable UUID projectId,
+            @Valid @RequestBody PastedStoryRequest input) {
+        var result = service.paste(projectId, input.text());
+        return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/imports/" + result.id())).body(result);
+    }
+
     /**
      * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
      *
@@ -82,19 +88,6 @@ public class WorkImportController {
     @PostMapping("/{importId}/actions/confirm")
     public WorkImportResponse confirm(@PathVariable UUID projectId, @PathVariable UUID importId) {
         return service.confirm(projectId, importId);
-    }
-
-    /**
-     * 依据已确认的原文解析报告执行圣经与大纲反推，返回两份草稿；确认导入文件本身不足以跳过解析确认。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param importId 导入文件记录 ID，必须与指定项目匹配。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    @PostMapping("/{importId}/actions/reverse-plan")
-    public ReversePlanResponse reversePlan(@PathVariable UUID projectId, @PathVariable UUID importId,
-            @Valid @RequestBody ReversePlanRequest request) {
-        return planning.generate(projectId, importId, request);
     }
 
     /**

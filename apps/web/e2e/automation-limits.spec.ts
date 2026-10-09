@@ -2,7 +2,7 @@ import { createModelSettingsFixture, selectGlobalProvider } from './model-settin
 import { test, expect } from '@playwright/test'
 import type { AutomationRun } from '../src/api/automation'
 
-test('keeps revision opt-in and generation limits when returning to a waiting task', async ({ page }, testInfo) => {
+test('keeps revision opt-in and generation limits when returning to a waiting task', async ({ page }) => {
   let run: AutomationRun | null = null
   const modelSettings = createModelSettingsFixture()
   await page.route('**/api/v1/**', async route => {
@@ -58,6 +58,5 @@ test('keeps revision opt-in and generation limits when returning to a waiting ta
   await page.getByRole('button', { name: '任务', exact: true }).click()
   await expect(rounds).toHaveValue('2')
   await expect(page.getByLabel('生成次数上限')).toHaveValue('12')
-  await page.screenshot({ path: testInfo.outputPath('automation-limits.png'), fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 })

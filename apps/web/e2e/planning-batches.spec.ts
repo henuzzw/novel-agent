@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createModelSettingsFixture } from './model-settings-fixture'
 
-test('resumes a failed planning chunk and assembles a draft without publishing', async ({ page }, testInfo) => {
+test('resumes a failed planning chunk and assembles a draft without publishing', async ({ page }) => {
   const models = createModelSettingsFixture()
   const bible = { id: 'b1', projectId: 'test-project', status: 'PUBLISHED', version: 1, generationNumber: 1,
     content: { logline: '寻找失物', theme: '信任', worldSetting: '校园', protagonist: '林安',
@@ -101,5 +101,4 @@ test('resumes a failed planning chunk and assembles a draft without publishing',
   expect(generationCalls).toBe(3)
   expect(publishCalls).toBe(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('planning-batches.png'), fullPage: true })
 })

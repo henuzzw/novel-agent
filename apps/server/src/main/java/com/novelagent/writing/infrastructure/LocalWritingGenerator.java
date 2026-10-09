@@ -14,26 +14,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 class LocalWritingGenerator {
-    ChapterContractContent contract(ChapterPlan chapter) {
-        return new ChapterContractContent(chapter.title(), chapter.pov(), chapter.objective(),
-                "承接上一章后的连续时段", List.of("章节计划指定的主要场景"),
-                List.of(chapter.coreEvent(), "让角色选择推动事件，而非依赖解释"),
-                List.of(chapter.reveal()), List.of("不得提前揭示后续章节答案", "不得改变已发布故事圣经"),
-                "章节目标取得阶段性进展，同时产生新的压力", List.of("埋入一个可在后续回收的动作或物件细节"),
-                chapter.endingHook(), chapter.suggestedMinWords(), chapter.suggestedMaxWords());
-    }
-
-    ChapterContractContent contract(ChapterPlan chapter, ChapterContractContent previous, String instruction) {
-        if (previous == null) return contract(chapter);
-        if (instruction == null || instruction.isBlank()) return previous;
-        List<String> beats = new java.util.ArrayList<>(previous.requiredBeats());
-        beats.add("作者调整要求：" + instruction.trim());
-        return new ChapterContractContent(previous.chapterTitle(), previous.pov(), previous.objective(),
-                previous.storyTime(), previous.locations(), beats, previous.requiredReveals(),
-                previous.forbiddenFacts(), previous.expectedExitState(), previous.foreshadowActions(),
-                previous.hook(), previous.suggestedMinWords(), previous.suggestedMaxWords());
-    }
-
     ManuscriptContent manuscript(ChapterPlan chapter, ChapterContractContent contract) {
         String body = "场景从" + contract.storyTime() + "开始。" + chapter.pov() + "首先注意到周围细节里那一点不合常理的变化。\n\n"
                 + chapter.coreEvent() + "。事情并没有按照最省力的方向发展，人物必须在迟疑与行动之间作出选择。"

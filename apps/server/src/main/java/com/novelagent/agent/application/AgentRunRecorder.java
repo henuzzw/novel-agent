@@ -126,7 +126,7 @@ public class AgentRunRecorder {
                     id, projectId, stage, provider, Duration.between(startedAt, Instant.now()).toMillis());
             return result;
         } catch (RuntimeException exception) {
-            boolean stopped = control != null && control.isStopped();
+            boolean stopped = exception instanceof GenerationStoppedException || control != null && control.isStopped();
             if (stopped) Thread.interrupted();
             log.warn("Agent run ended runId={} projectId={} stage={} provider={} durationMs={} status={} exceptionType={}",
                     id, projectId, stage, provider, Duration.between(startedAt, Instant.now()).toMillis(),
@@ -179,7 +179,8 @@ public class AgentRunRecorder {
             Integer maxOutputTokens, String sessionPolicy, ContextBudget contextBudget) {
         public static RequestSnapshot capture(EffectiveSettings settings, String systemPrompt,
                 String userPrompt, JsonNode schema, String schemaName, int maxOutputTokens, String sessionPolicy) {
-            return new RequestSnapshot(settings, hash(systemPrompt), hash(userPrompt), hash(schema.toString()),
+            return new RequestSnapshot(settings, hash(systemPrompt), hash(userPrompt),
+                    schema == null || schema.isNull() ? null : hash(schema.toString()),
                     schemaName, maxOutputTokens,
                     settings.provider() == ModelProvider.DEEPSEEK ? maxOutputTokens : null, sessionPolicy, null);
         }

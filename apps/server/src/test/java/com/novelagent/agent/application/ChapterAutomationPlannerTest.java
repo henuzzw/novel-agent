@@ -28,28 +28,22 @@ class ChapterAutomationPlannerTest {
     private final ChapterAutomationPlanner planner = new ChapterAutomationPlanner();
 
     @Test
-    void generatesContractAndRequiresCurrentContractReview() {
-        assertThat(next(null, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.CONTRACT);
-        var draft = contract(ChapterContractStatus.DRAFT);
-        assertThat(next(draft, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.CONTRACT_REVIEW);
-        var review = contractReview(CONTRACT, 2);
-        assertThat(next(draft, review, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.WAIT);
-        assertThat(next(draft, contractReview(CONTRACT, 1), null, null).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.CONTRACT_REVIEW);
-        assertThat(next(draft, contractReview(UUID.randomUUID(), 2), null, null).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.CONTRACT_REVIEW);
+    void generatesManuscriptWithoutContractOrContractReview() {
+        assertThat(next(null, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
+        assertThat(next(contract(ChapterContractStatus.DRAFT), null, null, null).action())
+                .isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
     }
 
     @Test
-    void requiresAuthorAcceptanceBeforeReviewAndRejectsStaleSource() {
+    void waitsForAuthorPublicationWithoutRequestingAnyReview() {
         var approved = contract(ChapterContractStatus.APPROVED);
         assertThat(next(approved, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
         assertThat(next(approved, null, manuscript(ManuscriptStatus.DRAFT), null).reason()).contains("作者确认");
         assertThat(next(approved, null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED), null).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.REVIEW);
+                .isEqualTo(ChapterAutomationPlanner.Action.WAIT);
         assertThat(next(approved, null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED), review(UUID.randomUUID(), List.of())).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.REVIEW);
-        assertThat(planner.next(UUID.randomUUID(), approved, null, null, null, null).reason()).contains("旧大纲");
+                .isEqualTo(ChapterAutomationPlanner.Action.WAIT);
+        assertThat(planner.next(UUID.randomUUID(), approved, null, null, null, null).action()).isEqualTo(ChapterAutomationPlanner.Action.MANUSCRIPT);
     }
 
     @Test
@@ -74,7 +68,7 @@ class ChapterAutomationPlannerTest {
     void confirmedOrCommittedManuscriptDoesNotRepeatLiteraryCheckAndLegacyPolicyStaysOff() {
         var contract = contract(ChapterContractStatus.APPROVED);
         assertThat(planner.next(OUTLINE, contract, null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED), null, null, true, null).action())
-                .isEqualTo(ChapterAutomationPlanner.Action.REVIEW);
+                .isEqualTo(ChapterAutomationPlanner.Action.WAIT);
         assertThat(planner.next(OUTLINE, contract, null, manuscript(ManuscriptStatus.DRAFT), null, null, false, null).reason())
                 .isEqualTo("请由作者确认正文");
         assertThat(planner.next(OUTLINE, contract, null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED), null, MANUSCRIPT, true, null).action())
@@ -82,12 +76,12 @@ class ChapterAutomationPlannerTest {
     }
 
     @Test
-    void stopsForBlockingIssuesAndDoesNotAutoApproveOrCommit() {
+    void legacyReviewsNeverGateAuthorPublication() {
         var issue = new ReviewIssue("issue", "BLOCKING", "LOGIC", "逻辑矛盾", "证据", "修改", false);
         assertThat(next(contract(ChapterContractStatus.APPROVED), null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED),
-                review(MANUSCRIPT, List.of(issue))).reason()).contains("阻断");
+                review(MANUSCRIPT, List.of(issue))).reason()).contains("确认并发布");
         assertThat(next(contract(ChapterContractStatus.APPROVED), null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED),
-                review(MANUSCRIPT, List.of())).reason()).contains("确认审稿");
+                review(MANUSCRIPT, List.of())).reason()).contains("确认并发布");
         assertThat(planner.next(OUTLINE, null, null, manuscript(ManuscriptStatus.AUTHOR_ACCEPTED), null, MANUSCRIPT).action())
                 .isEqualTo(ChapterAutomationPlanner.Action.NEXT_CHAPTER);
         assertThat(planner.next(OUTLINE, null, null, manuscript(ManuscriptStatus.DRAFT), null, UUID.randomUUID()).reason())

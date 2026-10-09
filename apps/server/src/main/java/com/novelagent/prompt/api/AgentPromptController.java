@@ -26,7 +26,7 @@ public class AgentPromptController {
     @GetMapping public List<AgentPromptService.View> list() { return service.list(); }
     @GetMapping("/{key}") public AgentPromptService.View get(@PathVariable String key) { return service.get(key); }
     @PutMapping("/{key}") public AgentPromptService.View save(@PathVariable String key, @Valid @RequestBody Edit request) {
-        return service.save(key, request.systemPrompt(), request.guidance(), request.version());
+        return service.save(key, request.systemPrompt(), request.sessionSystemPrompt(), request.guidance(), request.version());
     }
     @PostMapping("/{key}/reset") public AgentPromptService.View reset(@PathVariable String key, @Valid @RequestBody Version request) {
         return service.reset(key, request.version());
@@ -34,6 +34,7 @@ public class AgentPromptController {
     @GetMapping("/{key}/history") public List<PromptRevision> history(@PathVariable String key) { return service.history(key); }
 
     public record Edit(@NotBlank @Size(max = 40000) String systemPrompt,
+            @NotBlank @Size(max = 40000) String sessionSystemPrompt,
             @NotNull @Size(max = 40000) String guidance, @NotNull @Min(0) Long version) { }
     public record Version(@NotNull @Min(0) Long version) { }
 }
