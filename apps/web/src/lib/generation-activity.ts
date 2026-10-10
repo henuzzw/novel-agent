@@ -21,6 +21,7 @@ const routes: [RegExp, string][] = [
   [/^outlines\/actions\/generate$/, 'OUTLINE'],
   [/^imports\/[^/]+\/actions\/reverse-plan$/, 'IMPORT_PLANNING'],
   [/^imports\/[^/]+\/actions\/prepare-directions$/, 'IMPORT_PLANNING'],
+  [/^imports\/[^/]+\/actions\/resume-directions$/, 'IMPORT_PLANNING'],
   [/^imports\/[^/]+\/analyses\/[^/]+\/actions\/run-next$/, 'IMPORT_SOURCE_ANALYSIS'],
   [/^chapters\/\d+\/contracts\/actions\/generate$/, 'CHAPTER_CONTRACT'],
   [/^chapters\/\d+\/contract-reviews\/actions\/generate$/, 'CHAPTER_CONTRACT_REVIEW'],

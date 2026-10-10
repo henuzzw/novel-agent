@@ -32,6 +32,9 @@ public class ImportAnalysisStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final ImportAnalysisOutputParser parser;
+    private com.novelagent.project.application.CreativeBoundaryService boundaries;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setBoundaries(com.novelagent.project.application.CreativeBoundaryService boundaries) { this.boundaries = boundaries; }
     public ImportAnalysisStore(ProjectAccessService access, WorkImportService imports, JdbcTemplate jdbc, ObjectMapper mapper, ImportAnalysisOutputParser parser) {
         this.access = access; this.imports = imports; this.jdbc = jdbc; this.mapper = mapper; this.parser = parser;
     }
@@ -128,6 +131,9 @@ public class ImportAnalysisStore {
         int next = report.nextSlice() + 1; var content = report.content().append(batch, report.nextSlice());
         jdbc.update("UPDATE import_analysis_report SET content = CAST(? AS jsonb), next_slice = ?, status = ?, row_version = row_version + 1, updated_at = now() WHERE id = ?",
                 json(content), next, next == report.slices().size() ? "REVIEW" : "READY", report.id());
+        if (next == report.slices().size() && boundaries != null) {
+            boundaries.assess(report.projectId(), report.importId(), report.sourceHash(), content.worldAssessments());
+        }
         return get(report.projectId(), report.importId(), report.id());
     }
     /**

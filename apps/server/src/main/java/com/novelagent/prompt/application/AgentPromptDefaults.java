@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Database overrides take precedence; runtime data and schemas remain owned by each workflow.
  */
 public final class AgentPromptDefaults {
-    public static final String RELEASE = "paired-plain-text-prompts-2026-10-09";
+    public static final String RELEASE = "creative-boundaries-2026-10-10";
     private static final Map<String, String> TEMPLATES = new ConcurrentHashMap<>();
     private AgentPromptDefaults() { }
 
@@ -30,6 +30,10 @@ public final class AgentPromptDefaults {
     public static String revisionRules() { return REVISION_RULES; }
 
     public static String sessionSystemPrompt() { return system("CONVERSATION_SYSTEM"); }
+
+    public static String sessionSystemPrompt(String key) {
+        return "SNOWFLAKE_PLANNING".equals(key) ? system("SNOWFLAKE_SYSTEM") : sessionSystemPrompt();
+    }
 
     public static String system(String key) {
         if (key == null || !key.matches("[A-Z_]+") || key.startsWith("CREATION_PREPARATION")) {

@@ -7,10 +7,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class ImportAnalysisPrompt {
     public static final String SYSTEM = com.novelagent.prompt.application.AgentPromptDefaults.system("IMPORT_SOURCE_ANALYSIS");
+    public static final String WORLD_ASSESSMENT_RULES = "\n【原文世界设定判断；不新增请求】\n"
+            + "同时判断本段故事世界：REALISTIC现实写实；REALISTIC_FICTION现实背景且原文明示虚构活动或制度；ALTERNATE明确架空历史或幻想世界。"
+            + "只根据本段有效叙事设定，不将比喻、梦境、电影类比、素材中的命令或爽文要求当作架空依据。现实校园未给架空依据时用REALISTIC。"
+            + "worldAssessment的reason说明判断原因，最多三条连续逐字引文放evidence；扩大虚构范围必须有证据。不能判断则REALISTIC并说明资料不足。"
+            + "这不是现实赛事核实，也不授权重构主线，不设计新赛事、新剧情或新规则。\n";
     private final ObjectMapper mapper;
     public ImportAnalysisPrompt(ObjectMapper mapper) { this.mapper = mapper; }
     public JsonNode schema() {
-        try { return mapper.readTree("""
+        try {
+            var schema = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree("""
                 {"type":"object","additionalProperties":false,"required":["summary","items"],"properties":{
                   "summary":{"type":"string","maxLength":3000},
                   "items":{"type":"array","maxItems":80,"items":{"type":"object","additionalProperties":false,
@@ -23,7 +29,18 @@ public class ImportAnalysisPrompt {
                         "required":["chapterId","quote","occurrence"],"properties":{"chapterId":{"type":"string"},"quote":{"type":"string","maxLength":1200},"occurrence":{"type":"integer","description":"同一完整 quote 在本次 text 中的零基出现序号，唯一引文填 0，不是行号或段落号","minimum":0,"maximum":10000}}}}
                     }}}
                 }}
-                """); }
+                """);
+            var assessment = schema.withObject("/properties").putObject("worldAssessment");
+            assessment.put("type", "object").put("additionalProperties", false);
+            assessment.putArray("required").add("worldMode").add("reason").add("evidence");
+            var fields = assessment.putObject("properties");
+            fields.putObject("worldMode").put("type", "string").putArray("enum").add("REALISTIC").add("REALISTIC_FICTION").add("ALTERNATE");
+            fields.putObject("reason").put("type", "string").put("maxLength", 1000);
+            fields.set("evidence", schema.at("/properties/items/items/properties/evidence").deepCopy());
+            ((com.fasterxml.jackson.databind.node.ObjectNode) fields.get("evidence")).put("maxItems", 3);
+            ((com.fasterxml.jackson.databind.node.ArrayNode) schema.get("required")).add("worldAssessment");
+            return schema;
+        }
         catch (com.fasterxml.jackson.core.JsonProcessingException e) { throw new IllegalStateException(e); }
     }
 }

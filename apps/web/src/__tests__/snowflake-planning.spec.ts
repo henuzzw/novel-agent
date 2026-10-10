@@ -4,8 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SnowflakePlanningPanel from '@/components/SnowflakePlanningPanel.vue'
 import { getLatestSnowflakePlan, type SnowflakePlan } from '@/api/snowflake'
 import { generationRequests } from '@/lib/generation-activity'
+import { resumeImportedDirections } from '@/api/imports'
+import type { StoryDirectionSet } from '@/api/planning'
 
 vi.mock('@/api/snowflake', () => ({ getLatestSnowflakePlan: vi.fn() }))
+vi.mock('@/api/imports', () => ({ resumeImportedDirections: vi.fn() }))
 let wrapper: VueWrapper | undefined
 let client: QueryClient
 function plan(overrides: Partial<SnowflakePlan> = {}): SnowflakePlan {
@@ -15,9 +18,9 @@ function plan(overrides: Partial<SnowflakePlan> = {}): SnowflakePlan {
     steps: { CORE: '自由文本故事核心', CHARACTER_SETTINGS: '人物自由叙述，无字段清单' },
     createdAt: '', updatedAt: '', ...overrides }
 }
-function render() {
+function render(props: { importId?: string; planningStatus?: 'CANCELLED' | 'FAILED' | 'GENERATING' } = {}) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
-  wrapper = mount(SnowflakePlanningPanel, { props: { projectId: 'p1' },
+  wrapper = mount(SnowflakePlanningPanel, { props: { projectId: 'p1', ...props },
     global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } })
   return wrapper
 }
@@ -80,5 +83,48 @@ describe('snowflake planning', () => {
     await view.get('button').trigger('click')
     await flushPromises()
     expect(view.text()).toContain('自由文本故事核心')
+  })
+
+  it('resumes the exact stopped plan once and keeps successful text visible', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'CANCELLED', sourceImportId: 'i1' }))
+    let finish!: (value: StoryDirectionSet) => void
+    vi.mocked(resumeImportedDirections).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const view = render({ importId: 'i1', planningStatus: 'CANCELLED' })
+    const cache = vi.spyOn(client, 'setQueryData')
+    await flushPromises()
+    const button = view.findAll('button').find(item => item.text() === '继续生成')!
+    await button.trigger('click')
+    await button.trigger('click')
+    expect(resumeImportedDirections).toHaveBeenCalledExactlyOnceWith('p1', 'i1', 'plan-1')
+    expect(view.text()).toContain('正在继续')
+    expect(view.text()).toContain('自由文本故事核心')
+    finish({ id: 'directions' } as StoryDirectionSet)
+    await flushPromises()
+    expect(view.emitted('planningGenerated')).toHaveLength(1)
+    expect(cache).toHaveBeenCalledWith(['story-directions', 'p1'], { id: 'directions' })
+  })
+
+  it('offers continuation after direction failure but not for another import or an active request', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'SUCCEEDED', sourceImportId: 'i1' }))
+    const view = render({ importId: 'i1', planningStatus: 'FAILED' })
+    await flushPromises()
+    expect(view.text()).toContain('继续生成')
+    await view.setProps({ importId: 'i2' })
+    expect(view.text()).not.toContain('继续生成')
+    await view.setProps({ importId: 'i1', planningStatus: 'GENERATING' })
+    expect(view.text()).not.toContain('继续生成')
+    expect(resumeImportedDirections).not.toHaveBeenCalled()
+  })
+
+  it('shows resume errors and allows another attempt without replacing saved text', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'FAILED', sourceImportId: 'i1' }))
+    vi.mocked(resumeImportedDirections).mockRejectedValue(new Error('解析报告已被替换，请重新确认'))
+    const view = render({ importId: 'i1', planningStatus: 'FAILED' })
+    await flushPromises()
+    await view.findAll('button').find(item => item.text() === '继续生成')!.trigger('click')
+    await flushPromises()
+    expect(view.text()).toContain('解析报告已被替换')
+    expect(view.text()).toContain('自由文本故事核心')
+    expect(view.findAll('button').find(item => item.text() === '继续生成')!.attributes('disabled')).toBeUndefined()
   })
 })

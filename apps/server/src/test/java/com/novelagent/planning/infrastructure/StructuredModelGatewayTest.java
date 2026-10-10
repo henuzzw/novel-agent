@@ -82,7 +82,12 @@ class StructuredModelGatewayTest {
         verify(codex, times(9)).resumeThread("shared", project, wireSystem, settings);
         var prompt = ArgumentCaptor.forClass(String.class);
         verify(codex, times(9)).runStructuredTurn(eq("shared"), eq(project), prompt.capture(), eq(absentSchema), eq(settings), any());
-        assertThat(prompt.getAllValues()).containsOnly(wireUser);
+        assertThat(prompt.getAllValues()).hasSize(9);
+        for (int i = 0; i < prompt.getAllValues().size(); i++) {
+            String extra = i == 1 ? com.novelagent.ingest.infrastructure.ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "";
+            assertThat(prompt.getAllValues().get(i)).isEqualTo("【本轮服务端执行规范】\nsystem" + extra
+                    + new PlainTextOutputProtocol(schema).instructions() + "\n【本轮创作资料】\nuser");
+        }
         verify(codex, never()).startThread(any(), anyString(), any());
     }
     @Test void missingSessionIsRebuiltButAuthenticationFailureIsNotRetried() {
@@ -135,6 +140,48 @@ class StructuredModelGatewayTest {
         assertThat(snapshot.getValue().schemaName()).isEqualTo("PLAIN_TEXT");
         assertThat(snapshot.getValue().schemaHash()).isNull();
         assertThat(snapshot.getValue().sessionPolicy()).isEqualTo("STATELESS");
+        verifyNoInteractions(sessions, codex);
+    }
+
+    @Test void currentProjectBoundariesReachWireAndFrozenCallsNeverReadMutableSettings() {
+        var boundaries = mock(com.novelagent.project.application.CreativeBoundaryService.class);
+        when(boundaries.promptContext(project)).thenReturn("\n项目边界快照");
+        gateway.setBoundaries(boundaries);
+        when(deepSeek.request(anyString(), anyString(), anyString(), eq(absentSchema), anyInt(), any()))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("文本", null));
+        request("OUTLINE", ModelProvider.DEEPSEEK, CodexSessionPolicy.NEW_THREAD);
+        verify(deepSeek).request("schema", wireSystem,
+                "【本轮服务端执行规范】\n" + wireStage + "\n项目边界快照\n【本轮创作资料】\nuser",
+                absentSchema, 4000, deepSettings);
+        clearInvocations(boundaries);
+        gateway.requestWithBoundaries(project, "QUALITY_REVIEW", ModelProvider.DEEPSEEK,
+                "system", "user", schema, "schema", 4000, CodexSessionPolicy.NEW_THREAD, null, "\n冻结边界");
+        verifyNoInteractions(boundaries);
+        verify(deepSeek).request("schema", wireSystem,
+                "【本轮服务端执行规范】\n" + wireStage + "\n冻结边界\n【本轮创作资料】\nuser",
+                absentSchema, 4000, deepSettings);
+    }
+
+    @Test void snowflakeDefaultPairReachesProviderAndRecorderAsPlainText() {
+        var prompts = new AgentPromptService(new com.novelagent.prompt.application.AgentPromptCatalog(),
+                mock(com.novelagent.prompt.infrastructure.AgentPromptRepository.class),
+                new com.novelagent.project.application.CurrentActorProvider(UUID.randomUUID()));
+        String stage = AgentPromptDefaults.system("SNOWFLAKE_PLANNING");
+        String role = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
+        String system = role + "\n\n" + AgentPromptService.protectedRules("SNOWFLAKE_PLANNING");
+        String user = "【本轮服务端执行规范】\n" + stage + new PlainTextOutputProtocol(schema).instructions()
+                + "\n【本轮创作资料】\n冻结的本步创作资料";
+        when(deepSeek.request("snowflake_core", system, user, absentSchema, 1000, deepSettings))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("本步自由文本", null));
+        assertThat(gateway(new ModelContextProperties(), prompts).request(project, "SNOWFLAKE_PLANNING",
+                ModelProvider.DEEPSEEK, stage, "冻结的本步创作资料", schema, "snowflake_core", 1000,
+                CodexSessionPolicy.REUSE_THREAD)).isEqualTo("{\"text\":\"本步自由文本\"}");
+        verify(deepSeek).request("snowflake_core", system, user, absentSchema, 1000, deepSettings);
+        var snapshot = ArgumentCaptor.forClass(RequestSnapshot.class);
+        verify(runs).record(eq(project), eq("SNOWFLAKE_PLANNING"), eq(ModelProvider.DEEPSEEK), eq(system), eq(user),
+                snapshot.capture(), any(), any());
+        assertThat(snapshot.getValue().schemaName()).isEqualTo("PLAIN_TEXT");
+        assertThat(snapshot.getValue().schemaHash()).isNull();
         verifyNoInteractions(sessions, codex);
     }
     @Test void parsingFailureHappensInsideRecordedAction() {

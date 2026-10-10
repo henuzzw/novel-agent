@@ -47,7 +47,7 @@ public class OutlineVersion {
         this.id = id;
         this.projectId = projectId;
         this.generationNumber = generationNumber;
-        this.schemaVersion = "outline/1";
+        this.schemaVersion = "outline/2";
         this.status = OutlineStatus.DRAFT;
         this.generatorType = required(generatorType, "generatorType");
         this.authorInstruction = authorInstruction;

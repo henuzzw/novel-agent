@@ -6,10 +6,9 @@ const wordBudget = { targetWords: 50000, acceptableMinWords: 40000, acceptableMa
   recommendedVolumeCount: 1, recommendedChapterCount: 20, averageChapterWords: 2500,
   recommendedChapterMinWords: 2000, recommendedChapterMaxWords: 3000 }
 const chapters = [1, 2, 3].map(number => ({ number, title: ['未递出的纸条', '被撤回的署名', '把这件事说清'][number - 1],
-  pov: '江澈', objective: '把遗漏的条件补齐', coreEvent: '在同学面前承担修改责任', reveal: '资料缺少条件',
-  endingHook: '另一份资料仍在传阅', suggestedMinWords: 2000, suggestedMaxWords: 3000, status: 'PLANNED',
-  sceneOutline: '教室：江澈先停止问题版本传阅，同学要求说明删改理由。\n对照原稿发现条件缺失，他收回版本并承担逐页返工；仍有一份未收回。',
-  sceneOutlineNeedsUpdate: number === 2 }))
+  status: 'PLANNED',
+  content: '视角：江澈\n字数要求：2500字\n教室：江澈先停止问题版本传阅，同学要求说明删改理由。\n对照原稿发现条件缺失，他收回版本并承担逐页返工；仍有一份未收回。',
+  contentNeedsUpdate: number === 2 }))
 const outline = { id: 'o1', projectId: 'ux', generationNumber: 1, status: 'PUBLISHED', version: 0,
   generatorType: 'LOCAL_CODEX', sourceBibleVersionId: 'bible-1', wordBudget, changeSummary: [],
   content: { title: '未递出的纸条', premise: '在感情和责任之间学会选择', structureSummary: '误会逐步暴露',
@@ -139,10 +138,10 @@ test('displays saved and stale scene drafts without extra requests on narrow scr
     await page.goto('/projects/ux?section=outline&planning=outline')
     const chapter = page.locator('.chapter-list details').nth(1)
     await chapter.locator('summary').click()
-    const field = chapter.getByLabel('场景清单与展开', { exact: false })
+    const field = chapter.getByLabel('第2章规划', { exact: true })
     await expect(field).toHaveValue(/逐页返工/)
     await expect(field).toBeDisabled()
-    await expect(chapter.getByRole('status')).toContainText('场景底稿待核对')
+    await expect(chapter.getByRole('status')).toContainText('章节规划待核对')
     await expect(page.getByText(/Cannot read properties|NaN/)).toHaveCount(0)
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await field.scrollIntoViewIfNeeded()

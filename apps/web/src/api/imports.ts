@@ -52,6 +52,12 @@ export function prepareImportedDirections(projectId: string, importId: string,
   })
 }
 
+export function resumeImportedDirections(projectId: string, importId: string, planId: string): Promise<StoryDirectionSet> {
+  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/resume-directions`, {
+    method: 'POST', body: JSON.stringify({ planId }),
+  })
+}
+
 export async function listWorkImports(projectId: string): Promise<WorkImport[]> {
   return apiRequest(`/api/v1/projects/${projectId}/imports`)
 }

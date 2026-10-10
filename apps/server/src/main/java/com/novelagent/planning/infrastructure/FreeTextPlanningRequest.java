@@ -21,13 +21,18 @@ public class FreeTextPlanningRequest {
 
     public String request(UUID projectId, String workflow, ModelProvider provider,
             String prompt, String stage, int maxTokens) {
+        return request(projectId, workflow, provider, prompt, stage, maxTokens, null);
+    }
+
+    public String request(UUID projectId, String workflow, ModelProvider provider,
+            String prompt, String stage, int maxTokens, String frozenBoundaries) {
         var schema = mapper.createObjectNode().put("type", "object").put("additionalProperties", false);
         schema.putArray("required").add("text");
         schema.putObject("properties").putObject("text").put("type", "string");
         var text = new AtomicReference<String>();
-        models.request(projectId, workflow, provider, AgentPromptDefaults.system(workflow), prompt,
+        models.requestWithBoundaries(projectId, workflow, provider, AgentPromptDefaults.system(workflow), prompt,
                 schema, "snowflake_" + stage.toLowerCase(java.util.Locale.ROOT), maxTokens,
-                CodexSessionPolicy.REUSE_THREAD, raw -> text.set(readText(raw)));
+                CodexSessionPolicy.REUSE_THREAD, raw -> text.set(readText(raw)), frozenBoundaries);
         return text.get();
     }
 

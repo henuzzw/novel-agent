@@ -16,4 +16,12 @@ public class ImportedStoryBlueprintController {
             @Valid @RequestBody PrepareImportedStoryRequest input) {
         return service.generate(projectId, importId, input);
     }
+
+    public record ResumeRequest(@jakarta.validation.constraints.NotNull UUID planId) { }
+
+    @PostMapping("/resume-directions")
+    public StoryDirectionSetResponse resume(@PathVariable UUID projectId, @PathVariable UUID importId,
+            @Valid @RequestBody ResumeRequest input) {
+        return service.resume(projectId, importId, input.planId());
+    }
 }

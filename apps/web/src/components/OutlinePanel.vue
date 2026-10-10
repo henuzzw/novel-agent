@@ -61,8 +61,7 @@ function copyContent(value: OutlineContent): OutlineContent {
     readerExperiencePlans: value.readerExperiencePlans?.map(plan => ({ ...plan })),
     arcs: value.arcs.map((arc) => ({
       ...arc,
-      chapters: arc.chapters.map((chapter) => ({ ...chapter, sceneOutline: chapter.sceneOutline ?? '',
-        sceneOutlineNeedsUpdate: chapter.sceneOutlineNeedsUpdate ?? !chapter.sceneOutline?.trim() })),
+      chapters: arc.chapters.map((chapter) => ({ ...chapter })),
     })),
   }
 }
@@ -90,21 +89,21 @@ const currentBaseNumber = computed(() => versionsQuery.data.value?.find(
 )?.generationNumber)
 const isLatestCurrent = computed(() => outlineQuery.data.value?.id === currentOutlineQuery.data.value?.id)
 
-function sceneStatus(chapter: ChapterPlan) {
-  if (!chapter.sceneOutline?.trim()) return '待补充'
+function contentStatus(chapter: ChapterPlan) {
+  if (!chapter.content?.trim()) return '待补充'
   const original = outlineQuery.data.value?.content
   const oldArc = original?.arcs.find(arc => arc.chapters.some(value => value.number === chapter.number))
   const arc = draft.value?.arcs.find(value => value.chapters.some(item => item.number === chapter.number))
   const previous = oldArc?.chapters.find(value => value.number === chapter.number)
-  if (previous && chapter.sceneOutline !== previous.sceneOutline) return ''
-  const chapterChanged = previous && ['title', 'pov', 'objective', 'coreEvent', 'reveal', 'endingHook', 'status']
+  if (previous && chapter.content !== previous.content) return ''
+  const chapterChanged = previous && ['title', 'status']
     .some(key => chapter[key as keyof ChapterPlan] !== previous[key as keyof ChapterPlan])
   const bookChanged = original && draft.value && (original.premise !== draft.value.premise ||
     original.structureSummary !== draft.value.structureSummary || original.pacingStrategy !== draft.value.pacingStrategy ||
     JSON.stringify(original.readerExperiencePlans ?? []) !== JSON.stringify(draft.value.readerExperiencePlans ?? []))
   const arcChanged = arc && oldArc && (arc.objective !== oldArc.objective || arc.mainConflict !== oldArc.mainConflict ||
     arc.turningPoint !== oldArc.turningPoint || arc.outcome !== oldArc.outcome)
-  return chapter.sceneOutlineNeedsUpdate || chapterChanged || bookChanged || arcChanged ? '依据已变化，场景底稿待核对' : ''
+  return chapter.contentNeedsUpdate || chapterChanged || bookChanged || arcChanged ? '依据已变化，章节规划待核对' : ''
 }
 
 function updateCache(value: OutlineVersion) {
@@ -250,15 +249,10 @@ function formatWords(value: number) {
           </div>
           <div class="chapter-list">
             <details v-for="chapter in arc.chapters" :key="chapter.number">
-              <summary><span>第 {{ chapter.number }} 章</span><strong>{{ chapter.title }}</strong><em :class="['chapter-plan-status', (chapter.status ?? 'PLANNED').toLowerCase()]">{{ chapter.status === 'OCCURRED' ? '已发生' : '待规划' }}</em><small>{{ chapter.pov }} · {{ formatWords(chapter.suggestedMinWords) }}～{{ formatWords(chapter.suggestedMaxWords) }} 字</small><ChevronDown :size="16" /></summary>
+              <summary><span>第 {{ chapter.number }} 章</span><strong>{{ chapter.title }}</strong><em :class="['chapter-plan-status', (chapter.status ?? 'PLANNED').toLowerCase()]">{{ chapter.status === 'OCCURRED' ? '已发生' : '待规划' }}</em><ChevronDown :size="16" /></summary>
               <div class="chapter-fields">
                 <label><span>标题</span><input v-model="chapter.title" :disabled="!editable" /></label>
-                <label><span>POV</span><input v-model="chapter.pov" :disabled="!editable" /></label>
-                <label><span>章节目标</span><textarea v-model="chapter.objective" :disabled="!editable" rows="2" /></label>
-                <label><span>核心事件</span><textarea v-model="chapter.coreEvent" :disabled="!editable" rows="2" /></label>
-                <label><span>必要揭示</span><textarea v-model="chapter.reveal" :disabled="!editable" rows="2" /></label>
-                <label><span>结尾钩子</span><textarea v-model="chapter.endingHook" :disabled="!editable" rows="2" /></label>
-                <label class="chapter-scene-field"><span>场景清单与展开</span><textarea v-model="chapter.sceneOutline" :disabled="!editable" rows="8" /><small v-if="sceneStatus(chapter)" class="scene-outline-status" role="status">{{ sceneStatus(chapter) }}</small></label>
+                <label class="chapter-scene-field"><span>章节规划</span><textarea v-model="chapter.content" :disabled="!editable" rows="16" :aria-label="`第${chapter.number}章规划`" /><small v-if="contentStatus(chapter)" class="scene-outline-status" role="status">{{ contentStatus(chapter) }}</small></label>
               </div>
             </details>
           </div>
@@ -281,7 +275,7 @@ function formatWords(value: number) {
         <section v-for="arc in basePreviewQuery.data.value.content.arcs" :key="arc.ordinal">
           <h4>第 {{ arc.ordinal }} 卷 · {{ arc.title }}</h4>
           <p>{{ arc.objective }} · {{ arc.turningPoint }}</p>
-          <ol><li v-for="chapter in arc.chapters" :key="chapter.number">第 {{ chapter.number }} 章 {{ chapter.title }}：{{ chapter.coreEvent }}<p v-if="chapter.sceneOutline" class="scene-outline-text">{{ chapter.sceneOutline }}</p></li></ol>
+          <ol><li v-for="chapter in arc.chapters" :key="chapter.number">第 {{ chapter.number }} 章 {{ chapter.title }}<p class="scene-outline-text">{{ chapter.content }}</p></li></ol>
         </section>
       </div>
     </details>

@@ -145,12 +145,39 @@ class StoryBibleServiceManualRevisionTest {
         StoryBibleVersion base = StoryBibleVersion.create(UUID.randomUUID(), projectId, 1, "DEEPSEEK",
                 null, directionId, candidateId, null, content("原版").withDevelopmentNotes("已有自由文本底稿"), List.of());
         when(bibles.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)).thenReturn(Optional.of(base));
-        when(workflow.generate(eq(projectId), any(), any(), eq(ModelProvider.DEEPSEEK), eq(base.getContent()), any()))
+        when(workflow.generate(eq(projectId), any(), any(), eq(ModelProvider.DEEPSEEK),
+                eq(base.getContent().withoutRepeatedDevelopmentNotes("已有自由文本底稿")), any()))
                 .thenReturn(new GeneratedStoryBible("DEEPSEEK", content("仅修改结局")));
         var result = service.generate(projectId, new GenerateStoryBibleRequest(
                 ModelProvider.DEEPSEEK, "仅修改结局", GenerationMode.REVISE, null));
         org.mockito.Mockito.verifyNoInteractions(snowflake);
         assertThat(result.content().developmentNotes()).isEqualTo("已有自由文本底稿");
+        assertThat(base.getContent().developmentNotes()).isEqualTo("已有自由文本底稿");
+    }
+
+    @Test void importedBiblePassesAuthorInstructionAndSavedNotesSeparately() {
+        var source = selectedDirection();
+        var generator = mock(com.novelagent.ingest.application.ImportedBibleGenerator.class);
+        service.setImportedGenerator(generator);
+        UUID planId = UUID.randomUUID();
+        UUID importId = UUID.randomUUID();
+        String notes = "九步完整底稿".repeat(8000);
+        var plan = mock(com.novelagent.planning.domain.SnowflakePlan.class);
+        when(source.getSourceSnowflakeId()).thenReturn(planId);
+        when(snowflake.get(projectId, planId)).thenReturn(plan);
+        when(plan.id()).thenReturn(planId);
+        when(plan.context()).thenReturn(notes);
+        var input = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("sourceImportId", importId.toString());
+        when(snowflake.input(projectId, planId)).thenReturn(input);
+        when(generator.generate(eq(projectId), eq(ModelProvider.LOCAL_CODEX), eq(input), any(), eq(notes), eq("保持既定人物"), eq(null)))
+                .thenReturn(new GeneratedStoryBible("LOCAL_CODEX", content("导入整合结果")));
+        var result = service.generate(projectId, new GenerateStoryBibleRequest(
+                ModelProvider.LOCAL_CODEX, "保持既定人物", GenerationMode.REGENERATE, null));
+        assertThat(result.content().developmentNotes()).isEqualTo(notes);
+        assertThat(result.sourceImportId()).isEqualTo(importId);
+        verify(generator).generate(eq(projectId), any(), eq(input), any(), eq(notes), eq("保持既定人物"), eq(null));
+        org.mockito.Mockito.verifyNoInteractions(workflow);
+        verify(snowflake, never()).generate(any(), any(), any());
     }
 
     private StoryDirectionSet selectedDirection() {

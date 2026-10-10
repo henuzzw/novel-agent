@@ -16,10 +16,8 @@ class PlanningPromptConstraintTest {
     void scenesRemainFreeTextInTheOutlineProtocol() {
         var chapterSchema = new OutlineOutputSchema(new ObjectMapper()).value()
                 .at("/properties/content/properties/arcs/items/properties/chapters/items");
-        assertThat(chapterSchema.path("required")).anyMatch(value -> value.asText().equals("sceneOutline"));
-        assertThat(chapterSchema.at("/properties/sceneOutline/type").asText()).isEqualTo("string");
-        assertThat(chapterSchema.at("/properties/sceneOutline").size()).isEqualTo(1);
-        assertThat(chapterSchema.path("properties").has("sceneOutlineNeedsUpdate")).isFalse();
+        assertThat(chapterSchema.at("/properties/content/type").asText()).isEqualTo("string");
+        assertThat(chapterSchema.path("properties").size()).isEqualTo(4);
     }
 
     @Test

@@ -147,6 +147,30 @@ class AgentPromptServiceTest {
         assertThat(service.resolve("STORY_BIBLE", "圣经").revision()).isEqualTo(revision);
     }
 
+    @Test void snowflakeDefaultPairIsResolvedWithoutChangingOtherPlanningRoles() {
+        var view = service.get("SNOWFLAKE_PLANNING");
+        var role = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
+        assertThat(view.sessionSystemPrompt()).isEqualTo(role);
+        assertThat(view.defaultSessionSystemPrompt()).isEqualTo(role);
+        assertThat(service.resolve("SNOWFLAKE_PLANNING", view.systemPrompt()).sessionSystemPrompt()).isEqualTo(role);
+        assertThat(service.resolve("STORY_BIBLE", "圣经").sessionSystemPrompt())
+                .isEqualTo(AgentPromptDefaults.sessionSystemPrompt());
+        verify(repository, never()).save(any(), any(), any(), any(), any(), anyLong(), any());
+    }
+
+    @Test void restoredSnowflakePairUsesItsOwnDefaultAndCustomRoleStillWins() {
+        String stage = AgentPromptDefaults.system("SNOWFLAKE_PLANNING");
+        String role = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
+        when(repository.save(user, "SNOWFLAKE_PLANNING", null, null, "", 0, "SAVE")).thenReturn(true);
+        service.save("SNOWFLAKE_PLANNING", stage, role, "", 0);
+        verify(repository).save(user, "SNOWFLAKE_PLANNING", null, null, "", 0, "SAVE");
+        when(repository.findAll(user)).thenReturn(List.of(config("SNOWFLAKE_PLANNING", null, "", 1)));
+        assertThat(service.resolve("SNOWFLAKE_PLANNING", stage).sessionSystemPrompt()).isEqualTo(role);
+        when(repository.findAll(user)).thenReturn(List.of(new PromptConfiguration(
+                "SNOWFLAKE_PLANNING", stage, "", 2, Instant.now(), "作者自定义系统角色")));
+        assertThat(service.resolve("SNOWFLAKE_PLANNING", stage).sessionSystemPrompt()).isEqualTo("作者自定义系统角色");
+    }
+
     private PromptConfiguration config(String key, String system, String guidance, long version) {
         return new PromptConfiguration(key, system, guidance, version, Instant.now());
     }

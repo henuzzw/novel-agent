@@ -133,9 +133,9 @@ class ImportedPlanningServiceTest {
                 .containsExactly(ChapterPlanStatus.OCCURRED, ChapterPlanStatus.OCCURRED,
                         ChapterPlanStatus.PLANNED);
         assertThat(normalized.content().arcs().getFirst().chapters())
-                .extracting(ChapterPlan::sceneOutline).containsOnly("逐场说明目标、阻力与行动后果");
+                .extracting(ChapterPlan::content).allMatch(text -> text.contains("逐场说明目标、阻力与行动后果"));
         assertThat(normalized.content().arcs().getFirst().chapters())
-                .extracting(ChapterPlan::sceneOutlineNeedsUpdate).containsOnly(false);
+                .extracting(ChapterPlan::contentNeedsUpdate).containsOnly(false);
         assertThat(ImportedPlanningService.normalizeChapterStatuses(outline(3), 0)
                 .content().arcs().getFirst().chapters())
                 .extracting(ChapterPlan::status)

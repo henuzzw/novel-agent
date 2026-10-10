@@ -11,5 +11,10 @@ public record CreateProjectRequest(
         @Size(max = 200) String name,
         @NotNull EntryMode entryMode,
         @Valid CreativeIntentRequest creativeIntent,
-        CreativeStrategy creativeStrategy) {
+        CreativeStrategy creativeStrategy,
+        com.novelagent.project.domain.CreativeBoundaries.WorldMode worldMode,
+        com.novelagent.project.domain.CreativeBoundaries.AdaptationScope adaptationScope) {
+    public CreateProjectRequest(String name, EntryMode entryMode, CreativeIntentRequest creativeIntent, CreativeStrategy creativeStrategy) {
+        this(name, entryMode, creativeIntent, creativeStrategy, null, null);
+    }
 }

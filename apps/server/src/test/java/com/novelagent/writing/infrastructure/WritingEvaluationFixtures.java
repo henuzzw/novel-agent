@@ -168,10 +168,10 @@ final class WritingEvaluationFixtures {
 
     private static InputSnapshot input(Context context, Scene scene, ChapterPlan chapter, OutlineArc arc,
             NovelMemoryContext memory, String instruction, boolean includeManuscript) {
-        var contract = new ChapterContractContent(chapter.title(), chapter.pov(), scene.objective(),
+        var contract = new ChapterContractContent(chapter.title(), context.pov(), scene.objective(),
                 context.storyTime(), context.locations(), scene.beats(),
                 scene.reveal() == null ? List.of() : List.of(scene.reveal()), context.bible().hardConstraints(),
-                scene.exitState(), List.of(), scene.hook(), chapter.suggestedMinWords(), chapter.suggestedMaxWords());
+                scene.exitState(), List.of(), scene.hook(), 200, 600);
         var manuscript = includeManuscript ? new ManuscriptContent(chapter.title(), scene.body(),
                 scene.summary() == null ? "微型场景，事实以正文为准" : scene.summary(), List.of()) : null;
         return new InputSnapshot(context.bible(), context.profiles(), context.style(), WritingStyleGuide.render(context.style()),

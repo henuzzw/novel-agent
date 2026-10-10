@@ -15,8 +15,10 @@ public class StorySourceProjectController {
     @PostMapping(value = "/from-story", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProjectResponse> create(@RequestParam(required = false) String name,
             @RequestParam(required = false) CreativeStrategy creativeStrategy,
+            @RequestParam(required = false) com.novelagent.project.domain.CreativeBoundaries.WorldMode worldMode,
+            @RequestParam(required = false) com.novelagent.project.domain.CreativeBoundaries.AdaptationScope adaptationScope,
             @RequestPart(required = false) MultipartFile file, @RequestParam(required = false) String text) {
-        var project = service.create(name, creativeStrategy, file, text);
+        var project = service.create(name, creativeStrategy, file, text, worldMode, adaptationScope);
         return ResponseEntity.created(java.net.URI.create("/api/v1/projects/" + project.id())).body(project);
     }
 }

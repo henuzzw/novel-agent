@@ -31,20 +31,37 @@ public final class ImportAnalysis {
             if (evidence.size() > 6 || (!"UNKNOWN".equals(certainty) && evidence.isEmpty())) invalid("事实或推测必须附原文依据");
         }
     }
-    public record Batch(String summary, List<Item> items) {
+    public record WorldAssessment(com.novelagent.project.domain.CreativeBoundaries.WorldMode worldMode,
+            String reason, List<Evidence> evidence) {
+        public WorldAssessment {
+            if (worldMode == null || worldMode == com.novelagent.project.domain.CreativeBoundaries.WorldMode.AUTO) invalid("世界判断结果无效");
+            reason = text(reason, 1000, false);
+            evidence = evidence == null ? List.of() : List.copyOf(evidence);
+            if (evidence.size() > 3) invalid("世界判断证据过多");
+            if (worldMode != com.novelagent.project.domain.CreativeBoundaries.WorldMode.REALISTIC && evidence.isEmpty()) invalid("扩大虚构范围须有原文依据");
+        }
+    }
+    public record Batch(String summary, List<Item> items, WorldAssessment worldAssessment) {
+        public Batch(String summary, List<Item> items) { this(summary, items, null); }
         public Batch {
             summary = text(summary, 3000, false); items = items == null ? List.of() : List.copyOf(items);
             if (items.size() > 80 || items.stream().map(Item::key).distinct().count() != items.size()) invalid("单段解析项过多或标识重复");
         }
     }
-    public record Content(List<String> summaries, List<Item> items) {
-        public Content { summaries = List.copyOf(summaries); items = List.copyOf(items); }
+    public record Content(List<String> summaries, List<Item> items, List<WorldAssessment> worldAssessments) {
+        public Content(List<String> summaries, List<Item> items) { this(summaries, items, List.of()); }
+        public Content {
+            summaries = List.copyOf(summaries); items = List.copyOf(items);
+            worldAssessments = worldAssessments == null ? List.of() : List.copyOf(worldAssessments);
+        }
         public Content append(Batch batch, int index) {
             var merged = new ArrayList<>(items);
             for (var item : batch.items()) merged.add(new Item("b" + index + "_" + item.key(), item.category(), item.certainty(),
                     item.title(), item.description(), item.subjects(), item.progress(), item.evidence()));
             var notes = new ArrayList<>(summaries); notes.add(batch.summary());
-            return new Content(notes, merged);
+            var assessments = new ArrayList<>(worldAssessments);
+            if (batch.worldAssessment() != null) assessments.add(batch.worldAssessment());
+            return new Content(notes, merged, assessments);
         }
     }
     public record Decision(String key, String action, String note) {
@@ -104,7 +121,21 @@ public final class ImportAnalysis {
             }
             items.add(new Item(item.key(), item.category(), item.certainty(), item.title(), item.description(), item.subjects(), item.progress(), evidence));
         }
-        var normalized = new Batch(batch.summary(), items); validateBatch(normalized, List.of(slice), chapters); return normalized;
+        WorldAssessment assessment = batch.worldAssessment();
+        if (assessment != null) {
+            var evidence = new ArrayList<Evidence>();
+            for (var value : assessment.evidence()) {
+                if (!value.chapterId().equals(slice.chapterId())) invalid("世界判断证据引用了未提供章节");
+                int first = fragment.indexOf(value.quote());
+                if (first < 0) invalid("世界判断证据必须是本段连续原文");
+                int offset = slice.start() + (fragment.indexOf(value.quote(), first + 1) < 0 ? first : locate(value, fragment));
+                int occurrence = 0, found = chapter.content().indexOf(value.quote());
+                while (found >= 0 && found < offset) { occurrence++; found = chapter.content().indexOf(value.quote(), found + 1); }
+                evidence.add(new Evidence(value.chapterId(), value.quote(), occurrence));
+            }
+            assessment = new WorldAssessment(assessment.worldMode(), assessment.reason(), evidence);
+        }
+        var normalized = new Batch(batch.summary(), items, assessment); validateBatch(normalized, List.of(slice), chapters); return normalized;
     }
     public static List<Slice> slices(List<Chapter> chapters) {
         var result = new ArrayList<Slice>();

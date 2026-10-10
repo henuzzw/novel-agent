@@ -46,10 +46,11 @@ public class ImportedOutlineGenerator {
         check.run();
         int occurred = mode == ImportPlanningMode.CONTINUE_MANUSCRIPT ? source.path("sourceChapterCount").asInt() : 0;
         String key = occurred > 0 ? "IMPORT_REVERSE_OUTLINE_CONTINUE" : "IMPORT_REVERSE_OUTLINE_ADAPT";
+        String notes = plan.context();
         String prompt = "【作者本次要求】\n" + java.util.Objects.toString(instruction, "")
-                + "\n【已发布故事圣经】\n" + bible.getContent()
+                + "\n【已发布故事圣经】\n" + bible.getContent().withoutRepeatedDevelopmentNotes(notes)
                 + "\n【篇幅预算】\n" + budget + "\n【确切来源及作者确认处理】\n" + source
-                + "\n【保存的九步底稿】\n" + plan.context()
+                + "\n【保存的九步底稿】\n" + notes
                 + "\n【调整基准；空则重新生成】\n" + previous
                 + "\n续写时前 " + occurred + " 章必须忠实保留原文事件并标记 OCCURRED，其余 PLANNED；改编全部 PLANNED。"
                 + "未来设计不等于已发生事实，不把已知结局提前泄露。"

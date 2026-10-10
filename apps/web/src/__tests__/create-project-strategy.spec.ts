@@ -54,7 +54,17 @@ describe('source-only project creation', () => {
     await wrapper.get('input[value=STANDARD]').setValue()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(createProjectFromStory).toHaveBeenCalledWith({ name: '未寄出的信', file: null, text: '故事素材', creativeStrategy: 'STANDARD' })
+    expect(createProjectFromStory).toHaveBeenCalledWith({ name: '未寄出的信', file: null, text: '故事素材', creativeStrategy: 'STANDARD', worldMode: 'AUTO', adaptationScope: 'AUTO' })
+  })
+  it('submits the two independent explicit choices', async () => {
+    const { wrapper } = await render()
+    await wrapper.get('input[value=text]').setValue()
+    await wrapper.get('textarea').setValue('校园故事')
+    await wrapper.get('input[value=REALISTIC_FICTION]').setValue()
+    await wrapper.get('input[value=RESTRUCTURE]').setValue()
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(createProjectFromStory).toHaveBeenCalledWith(expect.objectContaining({ worldMode: 'REALISTIC_FICTION', adaptationScope: 'RESTRUCTURE' }))
   })
   it('surfaces import failure without leaving the form', async () => {
     const { wrapper, router } = await render()

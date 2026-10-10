@@ -33,6 +33,15 @@ public class SnowflakePlanStore {
                 """, stage, projectId, id));
     }
 
+    /** Claim a stopped run once; completed prose and its source snapshot remain unchanged. */
+    public void resume(UUID projectId, UUID id) {
+        requireUpdated(jdbc.update("""
+                UPDATE snowflake_planning_run SET status = 'RUNNING', error_message = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ? AND id = ? AND status IN ('FAILED', 'CANCELLED')
+                """, projectId, id));
+    }
+
     public void save(UUID projectId, UUID id, String stage, String text) {
         try {
             com.novelagent.planning.application.SnowflakeStep.valueOf(stage);
@@ -72,7 +81,8 @@ public class SnowflakePlanStore {
 
     public SnowflakePlan get(UUID projectId, UUID id) {
         return jdbc.query("SELECT * FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
-                this::read, projectId, id).stream().findFirst().orElseThrow();
+                this::read, projectId, id).stream().findFirst().orElseThrow(() ->
+                        new com.novelagent.writing.application.WritingResourceNotFoundException("雪花规划", id));
     }
 
     private SnowflakePlan read(ResultSet rs, int row) throws SQLException {
@@ -80,7 +90,17 @@ public class SnowflakePlanStore {
                 rs.getString("mode"), ModelProvider.valueOf(rs.getString("provider")), rs.getString("status"),
                 rs.getString("active_stage"), rs.getString("core"), rs.getString("characters"), rs.getString("world"),
                 rs.getString("plot"), rs.getString("error_message"), rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant(), steps(rs.getString("steps")));
+                rs.getTimestamp("updated_at").toInstant(), steps(rs.getString("steps")),
+                sourceImportId(rs.getString("input_snapshot")));
+    }
+
+    private UUID sourceImportId(String value) {
+        try {
+            String id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value).path("sourceImportId").asText("");
+            return id.isBlank() ? null : UUID.fromString(id);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException("雪花来源无法读取", exception);
+        }
     }
 
     private static java.util.Map<String, String> steps(String value) {

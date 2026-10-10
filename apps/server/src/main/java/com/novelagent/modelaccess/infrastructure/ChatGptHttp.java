@@ -89,6 +89,31 @@ public class ChatGptHttp {
         return new ChatGptAccessException(category, "ChatGPT HTTP " + status + "，错误码 " + code
                 + (requestId.isBlank() ? "" : "，请求编号 " + safeIdentifier(requestId)) + "；" + advice);
     }
+
+    /** Never echo bodies: even error messages can contain bearer tokens, prompts or private model output. */
+    public static ChatGptAccessException nonEventStream(int status, String contentType, String body, String requestId) {
+        String kind = "非事件流文本";
+        try {
+            JsonNode node = new ObjectMapper().readTree(body);
+            if (node != null) kind = node.has("error") ? "JSON错误响应" : "JSON响应";
+            if (node != null && (node.has("error") || node.has("code"))) {
+                var error = failure(status, body, requestId);
+                return new ChatGptAccessException(error.category(), error.getMessage()
+                        + "；未返回事件流，响应类型 " + safeMediaType(contentType) + "，" + kind + "；未保存为生成结果");
+            }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+            if (body.stripLeading().startsWith("<")) kind = "HTML/XML页面（可能是网关页面）";
+        }
+        return new ChatGptAccessException("PROVIDER", "ChatGPT 未返回事件流，HTTP " + status
+                + "，响应类型 " + safeMediaType(contentType)
+                + (requestId.isBlank() ? "" : "，请求编号 " + safeIdentifier(requestId))
+                + "，" + kind + "；未保存为生成结果，请检查代理和接口。响应正文不回显以保护凭据与创作资料");
+    }
+
+    private static String safeMediaType(String value) {
+        String type = value == null ? "" : value.split(";", 2)[0].trim();
+        return type.matches("[a-zA-Z0-9.+_-]{1,64}/[a-zA-Z0-9.+_-]{1,64}") ? type : "缺失或无效";
+    }
     private static String safeIdentifier(String value) {
         return value != null && value.matches("[a-zA-Z0-9_.:-]{1,128}") ? value : "unavailable";
     }

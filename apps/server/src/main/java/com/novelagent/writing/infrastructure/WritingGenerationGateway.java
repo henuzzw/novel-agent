@@ -121,8 +121,7 @@ public class WritingGenerationGateway {
         if (provider == ModelProvider.LOCAL_TEMPLATE) {
             return new WritingStylePreviewContent(chapter.title(),
                     "【本地模板，仅验证试写流程，不代表实际风格效果】\n\n第一章：" + chapter.title()
-                            + "\n视角：" + chapter.pov() + "\n场景目标：" + chapter.objective()
-                            + "\n核心事件：" + chapter.coreEvent() + "\n试写风格：" + profile.name());
+                            + "\n本章完整规划：" + chapter.content() + "\n试写风格：" + profile.name());
         }
         String output = models.request(projectId, "STYLE_PREVIEW", provider,
                 prompts.stylePreview(projectId, bible, arc, chapter, profile, targetWords, instruction),

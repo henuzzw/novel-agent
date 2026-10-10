@@ -48,6 +48,10 @@ class AgentPromptIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private NovelProjectRepository projects;
     @Autowired private CurrentActorProvider actor;
+    @Autowired private com.novelagent.project.application.CreativeBoundaryService boundaries;
+    @Autowired private com.novelagent.ingest.application.WorkImportService imports;
+    @Autowired private com.novelagent.ingest.application.ImportAnalysisStore analyses;
+    @Autowired private com.novelagent.ingest.application.ImportAnalysisRunner analysisRunner;
     @Autowired private StoryDirectionSetRepository directions;
     @Autowired private com.novelagent.writing.application.DraftLoopStore draftLoops;
     @Autowired private com.novelagent.writing.application.DraftLoopService draftLoopService;
@@ -57,6 +61,62 @@ class AgentPromptIntegrationTest {
     @MockitoBean private DeepSeekStructuredOutputClient deepSeek;
     @MockitoBean private OutboxPublisher outbox;
     @MockitoBean private SemanticEmbeddingBackfill embeddings;
+
+    @Test void sourceAssessmentAndIndependentAuthorChoicesPersistThroughRealDatabaseAndPlainTextWire() throws Exception {
+        var created = mvc.perform(multipart("/api/v1/projects/from-story")
+                .param("name", "边界设置隔离验证").param("text", "高一时，我按成绩选座。")
+                .param("worldMode", "REALISTIC_FICTION").param("adaptationScope", "RESTRUCTURE"))
+                .andExpect(status().isCreated()).andReturn();
+        UUID explicit = UUID.fromString(mapper.readTree(created.getResponse().getContentAsByteArray()).path("id").asText());
+        assertThat(boundaries.get(explicit).effectiveWorld()).isEqualTo(com.novelagent.project.domain.CreativeBoundaries.WorldMode.REALISTIC_FICTION);
+        assertThat(boundaries.get(explicit).effectiveScope()).isEqualTo(com.novelagent.project.domain.CreativeBoundaries.AdaptationScope.RESTRUCTURE);
+
+        UUID projectId = UUID.randomUUID();
+        projects.saveAndFlush(NovelProject.create(projectId, actor.currentUserId(), "自动世界判断验证", EntryMode.MATERIALS));
+        var imported = imports.paste(projectId, "高一时，我按成绩选座。");
+        UUID chapterId = imported.chapters().getFirst().id();
+        var report = analyses.create(projectId, imported.id(), new com.novelagent.ingest.application.ImportAnalysisStore.Create(UUID.randomUUID(), ModelProvider.DEEPSEEK));
+        String raw = """
+                ## @summary
+                本段为现实高中选座。
+                ## @items
+                无
+                ## @worldAssessment/worldMode
+                REALISTIC
+                ## @worldAssessment/reason
+                原文为高中日常，未给定架空设定。
+                ## @worldAssessment/evidence/1/chapterId
+                %s
+                ## @worldAssessment/evidence/1/quote
+                高一时，我按成绩选座。
+                ## @worldAssessment/evidence/1/occurrence
+                0
+                """.formatted(chapterId);
+        var settings = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 0L);
+        when(deepSeek.effectiveSettings()).thenReturn(settings);
+        when(deepSeek.request(anyString(), anyString(), anyString(), any(), anyInt(), any()))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult(raw, null));
+        var finished = analysisRunner.next(projectId, imported.id(), report.report().id(), report.report().version());
+        assertThat(finished.report().status()).isEqualTo("REVIEW");
+        assertThat(boundaries.get(projectId).assessed()).isTrue();
+        assertThat(boundaries.get(projectId).effectiveScope()).isEqualTo(com.novelagent.project.domain.CreativeBoundaries.AdaptationScope.PRESERVE_CORE);
+        var stored = mapper.readTree(jdbc.queryForObject("SELECT settings::text FROM novel_project WHERE id = ?", String.class, projectId));
+        assertThat(stored.at("/creativeBoundaries/assessedWorld").asText()).isEqualTo("REALISTIC");
+        assertThat(stored.at("/creativeBoundaries/sourceImportId").asText()).isEqualTo(imported.id().toString());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE project_id = ?", Integer.class, projectId)).isEqualTo(1);
+        var current = boundaries.get(projectId);
+        mvc.perform(put("/api/v1/projects/" + projectId + "/settings/creative-boundaries").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"worldMode\":\"ALTERNATE\",\"adaptationScope\":\"RESTRUCTURE\",\"version\":" + current.version() + "}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.effectiveWorld").value("ALTERNATE"));
+        mvc.perform(put("/api/v1/projects/" + projectId + "/settings/creative-boundaries").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"worldMode\":\"AUTO\",\"adaptationScope\":\"AUTO\",\"version\":" + current.version() + "}"))
+                .andExpect(status().isConflict());
+        var updated = boundaries.get(projectId);
+        boundaries.update(projectId, com.novelagent.project.domain.CreativeBoundaries.WorldMode.AUTO,
+                com.novelagent.project.domain.CreativeBoundaries.AdaptationScope.AUTO, updated.version(), true);
+        assertThat(boundaries.get(projectId).assessed()).isFalse();
+        assertThat(projects.findById(projectId).orElseThrow().getCurrentBibleVersionId()).isNull();
+    }
 
     @DynamicPropertySource static void isolatedDatabase(DynamicPropertyRegistry properties) {
         String url = "jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432")
@@ -75,7 +135,7 @@ class AgentPromptIntegrationTest {
             assertThat(prompt.path("systemPrompt").asText()).as(key)
                     .isEqualTo(com.novelagent.prompt.application.AgentPromptDefaults.system(key));
             assertThat(prompt.path("sessionSystemPrompt").asText()).as(key)
-                    .isEqualTo(com.novelagent.prompt.application.AgentPromptDefaults.sessionSystemPrompt());
+                    .isEqualTo(com.novelagent.prompt.application.AgentPromptDefaults.sessionSystemPrompt(key));
             assertThat(prompt.path("customized").asBoolean()).as(key).isFalse();
         }
         assertThat(jdbc.queryForObject("SELECT count(*) FROM user_agent_prompt", Integer.class)).isZero();

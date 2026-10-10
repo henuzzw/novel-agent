@@ -3,7 +3,8 @@ import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, FileText, Sparkles, Upload } from 'lucide-vue-next'
 import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { createProjectFromStory, type CreativeStrategy } from '@/api/projects'
+import { createProjectFromStory, type CreativeStrategy, type WorldMode, type AdaptationScope } from '@/api/projects'
+import CreativeBoundaryFields from '@/components/CreativeBoundaryFields.vue'
 
 const router = useRouter()
 const client = useQueryClient()
@@ -12,9 +13,12 @@ const name = ref('')
 const story = ref('')
 const file = ref<File | null>(null)
 const strategy = ref<CreativeStrategy>('FANQIE_GRIPPING')
+const worldMode = ref<WorldMode>('AUTO')
+const adaptationScope = ref<AdaptationScope>('AUTO')
 const error = ref('')
 const create = useMutation({
   mutationFn: () => createProjectFromStory({ name: name.value.trim(), creativeStrategy: strategy.value,
+    worldMode: worldMode.value, adaptationScope: adaptationScope.value,
     file: sourceMode.value === 'file' ? file.value : null, text: sourceMode.value === 'text' ? story.value : undefined }),
   onSuccess: async project => {
     await client.invalidateQueries({ queryKey: ['projects'] })
@@ -57,6 +61,7 @@ function selectFile(event: Event) { file.value = (event.target as HTMLInputEleme
           <label :class="{ selected: strategy === 'STANDARD' }"><input v-model="strategy" type="radio" value="STANDARD" :disabled="create.isPending.value" />标准创作</label>
           <label :class="{ selected: strategy === 'FANQIE_GRIPPING' }"><input v-model="strategy" type="radio" value="FANQIE_GRIPPING" :disabled="create.isPending.value" />番茄强开篇</label>
         </div>
+        <CreativeBoundaryFields v-model:world-mode="worldMode" v-model:adaptation-scope="adaptationScope" :disabled="create.isPending.value" />
       </fieldset>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <div class="form-actions"><RouterLink class="button secondary" to="/projects">取消</RouterLink><button class="button primary" type="submit" :disabled="create.isPending.value"><Sparkles :size="16" />{{ create.isPending.value ? '正在创建并导入…' : '创建并解析' }}</button></div>

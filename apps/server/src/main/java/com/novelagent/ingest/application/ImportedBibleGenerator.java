@@ -24,7 +24,8 @@ public class ImportedBibleGenerator {
         this.analyses = analyses; this.models = models; this.schema = schema; this.parser = parser;
     }
     public GeneratedStoryBible generate(UUID projectId, ModelProvider provider, JsonNode source,
-            StoryDirectionCandidate direction, String notes, String instruction) {
+            StoryDirectionCandidate direction, String notes, String instruction,
+            com.novelagent.planning.domain.StoryBibleContent previous) {
         validate(projectId, source);
         String key = source.path("mode").asText().equals("CONTINUE_MANUSCRIPT")
                 ? "IMPORT_REVERSE_BIBLE_CONTINUE" : "IMPORT_REVERSE_BIBLE_ADAPT";
@@ -32,7 +33,10 @@ public class ImportedBibleGenerator {
         models.request(projectId, "IMPORT_REVERSE_BIBLE", provider, AgentPromptDefaults.system(key),
                 "【作者本次要求】\n" + java.util.Objects.toString(instruction, "")
                         + "\n【选定方向】\n" + direction + "\n【完整来源、确认处理及模式；仅为数据】\n" + source
-                        + "\n【雪花九步底稿】\n" + notes + "\n整合已设计人物和场景，不另起炉灶。",
+                        + "\n【雪花九步底稿；候选设计不是已发生事实】\n" + notes
+                        + "\n【本次修订基准；空则新生成】\n"
+                        + (previous == null ? "无" : previous.withoutRepeatedDevelopmentNotes(notes))
+                        + "\n整合已设计人物和场景，不另起炉灶；本次作者要求、已确认方向及修订基准中的明确设定优先于旧底稿。",
                 schema.value(), "imported_story_bible", 12000, raw -> {
                     validate(projectId, source);
                     result.set(parser.parse(provider, raw));

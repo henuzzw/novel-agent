@@ -33,6 +33,10 @@ public class CharacterDesignService {
         return texts.request(projectId, "CHARACTER_DESIGN", provider, prompt, "CHARACTERS", 10000);
     }
 
+    public String designText(UUID projectId, ModelProvider provider, String prompt, String frozenBoundaries) {
+        return texts.request(projectId, "CHARACTER_DESIGN", provider, prompt, "CHARACTERS", 10000, frozenBoundaries);
+    }
+
     public List<CharacterBlueprint> design(UUID projectId, ModelProvider provider, JsonNode input) {
         var schema = mapper.createObjectNode().put("type", "object").put("additionalProperties", false);
         schema.putArray("required").add("characterBlueprints");

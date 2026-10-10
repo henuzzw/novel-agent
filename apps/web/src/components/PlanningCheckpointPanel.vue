@@ -210,7 +210,7 @@ async function cancel() {
         <li v-for="checkpoint in batch.checkpoints" :key="checkpoint.id" :class="['planning-chunk', checkpoint.status.toLowerCase()]">
           <div class="planning-chunk-heading"><strong>第 {{ checkpoint.chapterFrom }}～{{ checkpoint.chapterTo }} 章</strong><span>{{ chunkLabels[checkpoint.status] }}</span><small>尝试 {{ checkpoint.attempt }}</small></div>
           <p v-if="checkpoint.failure" class="form-error">{{ checkpoint.failure }}</p>
-          <details v-if="checkpoint.result"><summary>查看已完成内容</summary><div v-for="arc in checkpoint.result.arcs" :key="arc.ordinal"><h4>{{ arc.title }}</h4><p v-for="chapter in arc.chapters" :key="chapter.number">第 {{ chapter.number }} 章 · {{ chapter.title }}：{{ chapter.coreEvent }}</p></div></details>
+          <details v-if="checkpoint.result"><summary>查看已完成内容</summary><div v-for="arc in checkpoint.result.arcs" :key="arc.ordinal"><h4>{{ arc.title }}</h4><div v-for="chapter in arc.chapters" :key="chapter.number"><strong>第 {{ chapter.number }} 章 · {{ chapter.title }}</strong><p class="scene-outline-text">{{ chapter.content }}</p></div></div></details>
         </li>
       </ol>
       <div class="planning-actions">

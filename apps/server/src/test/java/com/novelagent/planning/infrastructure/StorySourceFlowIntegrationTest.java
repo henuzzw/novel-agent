@@ -61,14 +61,22 @@ class StorySourceFlowIntegrationTest {
         properties.add("spring.jpa.properties.hibernate.default_schema", () -> SCHEMA);
     }
     @Test void sourceCreationNamingAnalysisNineStepsAndDirectionsAreSavedWithoutAutoPublication() throws Exception {
+        var stopCharacters = new java.util.concurrent.atomic.AtomicBoolean(true);
         when(deepSeek.effectiveSettings()).thenReturn(new EffectiveSettings(ModelProvider.DEEPSEEK, "fake-model", "none", 0L));
         when(deepSeek.request(anyString(), anyString(), anyString(), eq(NullNode.getInstance()), anyInt(), any()))
-                .thenAnswer(call -> new DeepSeekStructuredOutputClient.ResponseResult(switch ((String) call.getArgument(0)) {
+                .thenAnswer(call -> {
+                    if (call.getArgument(0).equals("snowflake_characters") && stopCharacters.getAndSet(false)) {
+                        throw new com.novelagent.agent.application.GenerationStoppedException();
+                    }
+                    return new DeepSeekStructuredOutputClient.ResponseResult(switch ((String) call.getArgument(0)) {
                     case "snowflake_book_title" -> "全班都知道她喜欢我";
-                    case "import_source_analysis" -> "## @summary\n片段叙述同桌关系，缺少完整经历。\n## @items\n无";
+                    case "import_source_analysis" -> "## @summary\n片段叙述同桌关系，缺少完整经历。\n## @items\n无"
+                            + "\n## @worldAssessment/worldMode\nREALISTIC\n## @worldAssessment/reason\n没有架空依据。"
+                            + "\n## @worldAssessment/evidence\n无";
                     case "story_directions" -> directionText();
                     default -> "许言川面对座位与误解，必须用行动澄清关系，否则失去信任；未寄出的信仍等待回答。";
-                }, null));
+                }, null);
+                });
         var created = mvc.perform(multipart("/api/v1/projects/from-story").param("text", "她将纸条递还，他第一次没能用笑话带过去。"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.name").value("待生成书名"))
                 .andExpect(jsonPath("$.creativeStrategy").value("FANQIE_GRIPPING")).andReturn();
@@ -85,18 +93,34 @@ class StorySourceFlowIntegrationTest {
         var body = json.createObjectNode().put("provider", "DEEPSEEK").put("mode", "ADAPT_SOURCE")
                 .put("analysisId", report.report().id().toString()).put("analysisVersion", report.report().version())
                 .put("targetWords",50000).put("expandScenes",true);
-        var directions = mvc.perform(post("/api/v1/projects/" + project + "/imports/" + imported.id() + "/actions/prepare-directions")
-                .contentType("application/json").content(body.toString())).andExpect(status().isOk())
+        mvc.perform(post("/api/v1/projects/" + project + "/imports/" + imported.id() + "/actions/prepare-directions")
+                .contentType("application/json").content(body.toString())).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("GENERATION_CANCELLED"));
+        UUID stoppedId = jdbc.queryForObject("SELECT id FROM snowflake_planning_run WHERE project_id=?", UUID.class, project);
+        String prefix = jdbc.queryForObject("SELECT steps::text FROM snowflake_planning_run WHERE id=?", String.class, stoppedId);
+        assertThat(json.readTree(prefix).size()).isEqualTo(6);
+        assertThat(imports.get(project, imported.id()).planningStatus()).isEqualTo("CANCELLED");
+        mvc.perform(get("/api/v1/projects/" + project + "/snowflake-plans/latest"))
+                .andExpect(jsonPath("$.sourceImportId").value(imported.id().toString()));
+        var directions = mvc.perform(post("/api/v1/projects/" + project + "/imports/" + imported.id() + "/actions/resume-directions")
+                .contentType("application/json").content(json.createObjectNode().put("planId", stoppedId.toString()).toString()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.directions.length()").value(3)).andExpect(jsonPath("$.status").value("DRAFT")).andReturn();
         UUID setId = UUID.fromString(json.readTree(directions.getResponse().getContentAsByteArray()).path("id").asText());
         UUID planId = jdbc.queryForObject("SELECT source_snowflake_id FROM story_direction_set WHERE id=?", UUID.class, setId);
+        assertThat(planId).isEqualTo(stoppedId);
         var steps = json.readTree(jdbc.queryForObject("SELECT steps::text FROM snowflake_planning_run WHERE id=?", String.class, planId));
         assertThat(steps.size()).isEqualTo(9);
         for(var step : SnowflakeStep.values()) assertThat(steps.path(step.name()).asText()).contains("许言川");
+        json.readTree(prefix).fields().forEachRemaining(entry -> assertThat(steps.get(entry.getKey())).isEqualTo(entry.getValue()));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM snowflake_planning_run WHERE project_id=?", Integer.class, project)).isEqualTo(1);
+        mvc.perform(post("/api/v1/projects/" + project + "/imports/" + imported.id() + "/actions/resume-directions")
+                .contentType("application/json").content(json.createObjectNode().put("planId", stoppedId.toString()).toString()))
+                .andExpect(status().isBadRequest());
         assertThat(imports.get(project, imported.id()).planningStatus()).isEqualTo("DIRECTIONS_READY");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM story_bible_version WHERE project_id=?", Integer.class, project)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM outline_version WHERE project_id=?", Integer.class, project)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE project_id=? AND request_snapshot->>'schemaName'='PLAIN_TEXT'", Integer.class, project)).isEqualTo(12);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE project_id=? AND request_snapshot->>'schemaName'='PLAIN_TEXT'", Integer.class, project)).isEqualTo(13);
         assertThat(jdbc.queryForObject("SELECT response_text FROM agent_run WHERE project_id=? AND stage='BOOK_TITLE'", String.class, project)).isEqualTo("全班都知道她喜欢我");
         verifyNoInteractions(codex);
     }

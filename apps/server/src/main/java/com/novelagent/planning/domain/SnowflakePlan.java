@@ -7,7 +7,15 @@ import java.util.UUID;
 /** Intermediate creative prose is a candidate, never a published Bible or canonical fact. */
 public record SnowflakePlan(UUID id, UUID projectId, String mode, ModelProvider provider,
         String status, String activeStage, String core, String characters, String world,
-        String plot, String errorMessage, Instant createdAt, Instant updatedAt, java.util.Map<String, String> steps) {
+        String plot, String errorMessage, Instant createdAt, Instant updatedAt, java.util.Map<String, String> steps,
+        UUID sourceImportId) {
+
+    public SnowflakePlan(UUID id, UUID projectId, String mode, ModelProvider provider,
+            String status, String activeStage, String core, String characters, String world,
+            String plot, String errorMessage, Instant createdAt, Instant updatedAt, java.util.Map<String, String> steps) {
+        this(id, projectId, mode, provider, status, activeStage, core, characters, world,
+                plot, errorMessage, createdAt, updatedAt, steps, null);
+    }
 
     public SnowflakePlan(UUID id, UUID projectId, String mode, ModelProvider provider,
             String status, String activeStage, String core, String characters, String world,

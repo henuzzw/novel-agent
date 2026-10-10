@@ -23,7 +23,8 @@ class StructuredRequestBudgetTest {
         assertThat(budget.requireCapacity(ModelProvider.DEEPSEEK, system, user, schema, 20).estimatedInputTokens())
                 .isEqualTo(input);
         assertThatThrownBy(() -> budget.requireCapacity(ModelProvider.DEEPSEEK, system, user, schema, 21))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("上下文容量");
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("上下文容量", "估算输入 " + input,
+                        "输出预留 21", "安全余量 10", "容量 " + (input + 30));
         assertThat(schema.path("description").asText()).isEqualTo("小说资料");
     }
 

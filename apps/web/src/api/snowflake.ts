@@ -16,6 +16,7 @@ export interface SnowflakePlan {
   errorMessage: string | null
   createdAt: string
   updatedAt: string
+  sourceImportId?: string | null
 }
 
 export function getLatestSnowflakePlan(projectId: string): Promise<SnowflakePlan | null> {

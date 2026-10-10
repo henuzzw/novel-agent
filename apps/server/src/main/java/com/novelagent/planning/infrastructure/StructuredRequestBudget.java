@@ -8,6 +8,7 @@ import com.novelagent.planning.application.ModelProvider;
 
 /** Validates the final request, including edited instructions, schema and output/safety reserves. */
 final class StructuredRequestBudget {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(StructuredRequestBudget.class);
     private final ModelContextProperties context;
 
     StructuredRequestBudget(ModelContextProperties context) {
@@ -30,7 +31,11 @@ final class StructuredRequestBudget {
                 (systemPrompt == null ? "" : systemPrompt) + "\n\n"
                         + (userPrompt == null ? "" : userPrompt) + "\n\n" + schema);
         if (input + reservedOutputTokens + safety > window) {
-            throw new IllegalArgumentException("最终模型请求超过配置的上下文容量，请减少输入或输出预留");
+            log.warn("Model context budget rejected provider={} inputTokens={} outputReserve={} safetyMargin={} window={}",
+                    provider, input, reservedOutputTokens, safety, window);
+            throw new IllegalArgumentException("最终模型请求超过配置的上下文容量：估算输入 " + input
+                    + " + 输出预留 " + reservedOutputTokens + " + 安全余量 " + safety + " > 容量 " + window
+                    + " Token，请减少重复资料或分段规划");
         }
         return new ContextBudget(window, safety, input, reservedOutputTokens);
     }

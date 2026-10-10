@@ -30,11 +30,49 @@ public class ImportedStoryBlueprintService {
         this.jdbc = jdbc;
     }
     public StoryDirectionSetResponse generate(UUID projectId, UUID importId, PrepareImportedStoryRequest request) {
+        return prepare(projectId, importId, request, null);
+    }
+
+    /** Resume the exact imported run, never implicitly reuse an unrelated latest draft. */
+    public StoryDirectionSetResponse resume(UUID projectId, UUID importId, UUID planId) {
+        imports.get(projectId, importId);
+        var plan = snowflake.get(projectId, planId);
+        if (!planId.equals(snowflake.latest(projectId).orElseThrow().id())) {
+            throw new IllegalArgumentException("已有更新的雪花规划，请刷新后操作最新记录");
+        }
+        var input = snowflake.input(projectId, planId);
+        if (!importId.toString().equals(input.path("sourceImportId").asText())) {
+            throw new IllegalArgumentException("该雪花底稿不属于当前导入，不能继续");
+        }
+        if (!java.util.Set.of("FAILED", "CANCELLED", "SUCCEEDED").contains(plan.status())) {
+            throw new IllegalArgumentException("该雪花规划正在生成，不能重复继续");
+        }
+        var request = new PrepareImportedStoryRequest(plan.provider(),
+                com.novelagent.ingest.domain.ImportPlanningMode.valueOf(input.path("mode").asText()),
+                input.path("authorInstruction").asText(""), UUID.fromString(input.path("sourceAnalysisId").asText()),
+                input.path("sourceAnalysisVersion").asLong(), input.path("targetWords").asInt(),
+                input.path("expandScenes").asBoolean(false));
+        var confirmed = analyses.requireConfirmed(projectId, importId, request.analysisId(), request.analysisVersion(), request.mode());
+        var source = imports.planningSource(projectId, importId);
+        // JSONB round-trips may read a small LongNode as IntNode; compare numeric values, not node types.
+        boolean sameAnalysis = confirmed.equals((left, right) -> left.isNumber() && right.isNumber()
+                ? left.decimalValue().compareTo(right.decimalValue()) : left.equals(right) ? 0 : 1,
+                input.path("confirmedAnalysis"));
+        if (!sameAnalysis || !source.text().equals(input.path("sourceText").asText())
+                || source.chapterCount() != input.path("sourceChapterCount").asInt()
+                || source.truncated() != input.path("sourceTruncated").asBoolean()) {
+            throw new IllegalArgumentException("原文或已确认解析已改变，请重新生成雪花底稿");
+        }
+        return prepare(projectId, importId, request, planId);
+    }
+
+    private StoryDirectionSetResponse prepare(UUID projectId, UUID importId, PrepareImportedStoryRequest request, UUID resumeId) {
         var confirmed = analyses.requireConfirmed(projectId, importId, request.analysisId(), request.analysisVersion(), request.mode());
         var source = imports.planningSource(projectId, importId);
         var initialProject = projects.get(projectId);
         if (jdbc.update("UPDATE work_import SET planning_status = 'GENERATING', planning_mode = ?, planning_error = NULL"
-                + " WHERE project_id = ? AND id = ? AND planning_status <> 'GENERATING'",
+                + " WHERE project_id = ? AND id = ? AND " + (resumeId == null
+                        ? "planning_status <> 'GENERATING'" : "planning_status IN ('FAILED', 'CANCELLED')"),
                 request.mode().name(), projectId, importId) != 1) {
             throw new IllegalArgumentException("该导入的雪花规划正在生成，请勿重复启动");
         }
@@ -47,7 +85,8 @@ public class ImportedStoryBlueprintService {
                 .put("targetWords", request.targetWords()).put("expandScenes", request.expandScenes());
         input.set("intent", mapper.valueToTree(initialProject.creativeIntent()));
         input.set("confirmedAnalysis", confirmed);
-        var plan = snowflake.generate(projectId, request.provider(), input);
+        var plan = resumeId == null ? snowflake.generate(projectId, request.provider(), input)
+                : snowflake.resume(projectId, resumeId);
         analyses.requireConfirmed(projectId, importId, request.analysisId(), request.analysisVersion(), request.mode());
         var snapshot = new CreativeIntentSnapshot(plan.core(), List.of(), null,
                 summary(plan.steps().get("CHARACTER_ARCS")), plan.core(), List.of(), request.targetWords(),

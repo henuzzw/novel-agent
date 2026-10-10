@@ -20,7 +20,7 @@ describe('WritingWorkbench current outline', () => {
   it('shows chapters from the restored current version even when a newer draft exists', async () => {
     vi.mocked(planning.getCurrentOutline).mockResolvedValue({
       id: 'restored', status: 'PUBLISHED', generationNumber: 1,
-      content: { arcs: [{ ordinal: 1, title: '恢复的旧卷', chapters: [{ number: 1, title: '恢复的旧章节', objective: '目标', coreEvent: '事件' }] }] },
+      content: { arcs: [{ ordinal: 1, title: '恢复的旧卷', chapters: [{ number: 1, title: '恢复的旧章节', content: '目标与事件', status: 'PLANNED' }] }] },
     } as planning.OutlineVersion)
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const wrapper = mount(WritingWorkbench, {

@@ -70,13 +70,16 @@ public class ChatGptResponsesClient {
             var response = pending.get(45, TimeUnit.SECONDS);
             body = response.body();
             boolean success = response.statusCode() >= 200 && response.statusCode() < 300;
-            if (success && !response.headers().firstValue("Content-Type").orElse("").toLowerCase(java.util.Locale.ROOT).startsWith("text/event-stream"))
-                throw new ChatGptAccessException("PROVIDER", "ChatGPT 未返回事件流，未保存响应；请检查代理或接口");
+            String contentType = response.headers().firstValue("Content-Type").orElse("");
+            boolean eventStream = "text/event-stream".equalsIgnoreCase(contentType.split(";", 2)[0].trim());
             AtomicLong activity = new AtomicLong(System.nanoTime());
             InputStream stream = body;
             reader = Thread.ofVirtual().name("chatgpt-response-reader").start(() -> {
                 try {
                     if (!success) throw ChatGptHttp.failure(response.statusCode(),
+                            new String(stream.readNBytes(16384), StandardCharsets.UTF_8),
+                            response.headers().firstValue("x-request-id").orElse(""));
+                    if (!eventStream) throw ChatGptHttp.nonEventStream(response.statusCode(), contentType,
                             new String(stream.readNBytes(16384), StandardCharsets.UTF_8),
                             response.headers().firstValue("x-request-id").orElse(""));
                     reading.complete(read(stream, progress, activity, activityObserver));

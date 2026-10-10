@@ -26,8 +26,7 @@ public record PlanningCheckpointResult(List<OutlineArc> arcs) {
                 if (chapter.number() < from || chapter.number() > to || !chapters.add(chapter.number())) {
                     throw new IllegalArgumentException("规划分块包含越界或重复章节");
                 }
-                if (blank(chapter.title()) || blank(chapter.pov()) || blank(chapter.objective()) || blank(chapter.coreEvent())
-                        || chapter.suggestedMinWords() <= 0 || chapter.suggestedMaxWords() < chapter.suggestedMinWords()) {
+                if (blank(chapter.title()) || blank(chapter.content())) {
                     throw new IllegalArgumentException("规划分块章节内容不完整");
                 }
                 if (chapter.status() != ChapterPlanStatus.PLANNED) {

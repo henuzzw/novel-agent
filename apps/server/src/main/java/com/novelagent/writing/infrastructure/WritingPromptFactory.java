@@ -299,14 +299,10 @@ class WritingPromptFactory {
             String body, List<UUID> relatedIds) {
         List<String> references = new ArrayList<>();
         if (chapter != null) {
-            references.add(chapter.objective());
-            references.add(chapter.coreEvent());
-            references.add(chapter.reveal());
-            references.add(chapter.endingHook());
-            if (!chapter.sceneOutlineNeedsUpdate()) references.add(chapter.sceneOutline());
+            references.add(chapter.content());
         }
         references.add(body);
-        return profiles.promptContext(projectId, chapter == null ? contract.pov() : chapter.pov(),
+        return profiles.promptContext(projectId, chapter == null ? contract.pov() : null,
                 contract, relatedIds, references);
     }
 

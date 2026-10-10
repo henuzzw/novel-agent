@@ -19,12 +19,19 @@ public class StorySourceProjectService {
     }
     @Transactional
     public ProjectResponse create(String name, CreativeStrategy strategy, MultipartFile file, String text) {
+        return create(name, strategy, file, text, null, null);
+    }
+
+    @Transactional
+    public ProjectResponse create(String name, CreativeStrategy strategy, MultipartFile file, String text,
+            com.novelagent.project.domain.CreativeBoundaries.WorldMode world,
+            com.novelagent.project.domain.CreativeBoundaries.AdaptationScope scope) {
         boolean hasFile = file != null && !file.isEmpty();
         boolean hasText = text != null && !text.isBlank();
         if (hasFile == hasText) throw new IllegalArgumentException("请选择导入文件或粘贴文字，且只提供一种来源");
         if (name != null && name.strip().length() > 200) throw new IllegalArgumentException("项目名称不能超过200字符");
         var project = projects.create(new CreateProjectRequest(name, EntryMode.MATERIALS, null,
-                strategy == null ? CreativeStrategy.FANQIE_GRIPPING : strategy));
+                strategy == null ? CreativeStrategy.FANQIE_GRIPPING : strategy, world, scope));
         if (hasFile) imports.upload(project.id(), file);
         else imports.paste(project.id(), text);
         return project;

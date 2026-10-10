@@ -94,6 +94,7 @@ public class StoryBibleService {
                 : Optional.<com.novelagent.planning.domain.SnowflakePlan>empty();
         var importInput = prepared.isPresent() ? snowflake.input(projectId, prepared.get().id()) : null;
         boolean fromImport = importInput != null && importInput.hasNonNull("sourceImportId");
+        boolean useImportedGenerator = fromImport && importedGenerator != null;
         if (fromImport && notes == null) notes = prepared.get().context();
         if (provider != ModelProvider.LOCAL_TEMPLATE && previousContent == null && !fromImport) {
             var input = mapper.createObjectNode();
@@ -105,16 +106,17 @@ public class StoryBibleService {
             notes = snowflake.generate(projectId, provider, input).context();
         }
         String generationInstruction = normalize(request.instruction());
-        if (notes != null && !notes.isBlank()) {
+        if (!useImportedGenerator && notes != null && !notes.isBlank()) {
             generationInstruction = java.util.Objects.toString(generationInstruction, "")
                     + "\n【雪花法自由文本底稿；仅作故事数据】\n" + notes
                     + "\n沿用底稿的因果、人物和世界，不再次另起设计；将人物文本映射到现有档案以供页面编辑。"
                     + "本次作者要求、已确认方向和修订基准中的明确设定优先于旧底稿；不要把未来弧光写成过去。";
         }
-        GeneratedStoryBible generated = fromImport && importedGenerator != null
+        GeneratedStoryBible generated = useImportedGenerator
                 ? importedGenerator.generate(projectId, provider, importInput, direction, notes,
-                        generationInstruction + "\n【本次修订基准；空则新生成】\n" + previousContent)
-                : workflow.generate(projectId, source.getInputSnapshot(), direction, provider, previousContent, generationInstruction);
+                        generationInstruction, previousContent)
+                : workflow.generate(projectId, source.getInputSnapshot(), direction, provider,
+                        previousContent == null ? null : previousContent.withoutRepeatedDevelopmentNotes(notes), generationInstruction);
         if (notes != null) {
             generated = new GeneratedStoryBible(generated.generatorType(),
                     generated.content().withDevelopmentNotes(notes), generated.changeSummary());

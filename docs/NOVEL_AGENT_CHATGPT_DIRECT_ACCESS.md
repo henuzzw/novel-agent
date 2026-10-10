@@ -1,5 +1,11 @@
 # ChatGPT OAuth 直连接入
 
+## 非事件流响应诊断（2026-10-09）
+
+请求仍发送 `store=false/stream=true`，只有收到有效 `response.completed` 才完成生成，遵守[官方模型与流式推理说明](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)。HTTP200的JSON、HTML或其他类型不会被保存为有效结果或会话历史。
+
+非SSE错误现在显示HTTP状态、实际媒体类型、可信格式的错误码和请求编号、JSON错误/JSON响应/HTML页面等种类。诊断读取最多16KB，在空闲等待与手动停止控制内进行；不回显原始正文或任意供应商message，以免泄露凭据、手稿或隐藏输出。失败任务不自动重试，不据此断言一定是代理错误；需以新请求的安全诊断继续定位。
+
 ## 方案与边界
 
 参考 OpenClaw 的账号授权、流式请求、显式账号切换与错误恢复原则，采用官方 Sign in with ChatGPT（SIWC）应用专属授权及公开 Responses API；不是复制 OpenClaw 的原生 Codex 客户端身份或后台接口。

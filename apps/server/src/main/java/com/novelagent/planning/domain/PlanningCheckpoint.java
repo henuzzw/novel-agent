@@ -9,7 +9,7 @@ import java.util.UUID;
 public record PlanningCheckpoint(UUID id, UUID projectId, String chunkKey, int chapterFrom, int chapterTo,
         Source source, Status status, long attempt, long version, PlanningCheckpointResult result,
         String failure, Instant createdAt, Instant updatedAt) {
-    public static final String SCHEMA_VERSION = "planning-checkpoint/2";
+    public static final String SCHEMA_VERSION = "planning-checkpoint/3";
 
     public enum Status { PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED }
 

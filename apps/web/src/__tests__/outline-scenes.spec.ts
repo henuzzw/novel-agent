@@ -22,9 +22,8 @@ function outline(): OutlineVersion {
     content: { title: '返工', premise: '选择和责任', structureSummary: '误会暴露', pacingStrategy: '行动与后果',
       suggestedMinWords: 40000, suggestedMaxWords: 60000, arcs: [{ ordinal: 1, title: '第一幕', objective: '承担责任',
         mainConflict: '条件缺失', turningPoint: '署名被撤回', outcome: '完成返工', suggestedMinWords: 40000, suggestedMaxWords: 60000,
-        chapters: [{ number: 1, title: '停止传阅', pov: '江澈', objective: '收回问题版本', coreEvent: '发现遗漏',
-          reveal: '条件缺失', endingHook: '仍有版本未收回', suggestedMinWords: 2000, suggestedMaxWords: 3000, status: 'PLANNED',
-          sceneOutline: '教室：停止传阅。\n核对原稿，发现漏项，决定逐页返工。', sceneOutlineNeedsUpdate: false }] }] } }
+        chapters: [{ number: 1, title: '停止传阅', status: 'PLANNED',
+          content: '视角：江澈\n字数要求：2500字\n教室：停止传阅。\n核对原稿，发现漏项，决定逐页返工。', contentNeedsUpdate: false }] }] } }
 }
 async function render(value = outline()) {
   vi.mocked(api.getLatestOutline).mockResolvedValue(value)
@@ -53,33 +52,33 @@ describe('outline scenes', () => {
     await view.findAll('button').find(button => button.text() === '保存修改')!.trigger('click')
     await flushPromises()
     expect(api.updateOutline).toHaveBeenCalledWith('p1', expect.anything(), expect.objectContaining({
-      arcs: [expect.objectContaining({ chapters: [expect.objectContaining({ sceneOutline: '先收回所有版本，再共同核对。' })] })],
+      arcs: [expect.objectContaining({ chapters: [expect.objectContaining({ content: '先收回所有版本，再共同核对。' })] })],
     }))
   })
 
   it('marks unchanged scenes when chapter or upstream basis changes without overwriting them', async () => {
     const view = await render()
-    await view.find('.chapter-fields textarea').setValue('先通知所有持有者')
-    expect(view.text()).toContain('场景底稿待核对')
+    await view.find('.arc-fields textarea').setValue('先通知所有持有者')
+    expect(view.text()).toContain('章节规划待核对')
     expect((scenes(view).element as HTMLTextAreaElement).value).toContain('决定逐页返工')
     expect(api.generateOutline).not.toHaveBeenCalled()
     await scenes(view).setValue('通知所有持有者后再安排返工。')
-    expect(view.text()).not.toContain('场景底稿待核对')
+    expect(view.text()).not.toContain('章节规划待核对')
   })
 
   it('shows persisted stale status on published, read-only scenes', async () => {
     const value = outline()
     value.status = 'PUBLISHED'
-    value.content.arcs[0]!.chapters[0]!.sceneOutlineNeedsUpdate = true
+    value.content.arcs[0]!.chapters[0]!.contentNeedsUpdate = true
     const view = await render(value)
     expect(scenes(view).attributes('disabled')).toBeDefined()
-    expect(view.text()).toContain('场景底稿待核对')
+    expect(view.text()).toContain('章节规划待核对')
   })
 
   it('shows missing scenes without manufacturing text or unsaved changes', async () => {
     const value = outline()
-    delete value.content.arcs[0]!.chapters[0]!.sceneOutline
-    delete value.content.arcs[0]!.chapters[0]!.sceneOutlineNeedsUpdate
+    value.content.arcs[0]!.chapters[0]!.content = ''
+    delete value.content.arcs[0]!.chapters[0]!.contentNeedsUpdate
     const view = await render(value)
     expect(view.text()).toContain('待补充')
     expect(view.text()).not.toContain('大纲有未保存修改')

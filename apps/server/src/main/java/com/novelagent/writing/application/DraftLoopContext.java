@@ -45,7 +45,7 @@ public class DraftLoopContext {
         data.set("arc", mapper.valueToTree(context.arc()));
         data.set("chapterPlan", mapper.valueToTree(ChapterWritingBasisService.capture(context).plan()));
         data.put("characterProfiles", profiles.promptContext(projectId));
-        data.put("confirmedPreparation", context.preparationContext());
+        data.put("creativeBoundaries", context.preparationContext());
         data.put("selectedStyle", styles.promptContext(projectId));
         data.put("strategy", CreativeStrategyGuide.render(context.creativeStrategy()));
         data.put("futurePlanOnly", context.futureContext());

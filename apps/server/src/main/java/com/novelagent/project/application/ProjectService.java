@@ -57,6 +57,8 @@ public class ProjectService {
             project.setSetting("automaticTitle", java.util.Map.of("pending", true));
         }
         CreativeStrategyPolicy.of(request.creativeStrategy()).applyTo(project);
+        com.novelagent.project.domain.CreativeBoundaries.defaults()
+                .choose(request.worldMode(), request.adaptationScope(), false).applyTo(project);
         projectRepository.saveAndFlush(project);
 
         CreativeIntent intent = null;

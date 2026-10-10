@@ -63,7 +63,7 @@ const currentChapter = computed(() => outlineQuery.data.value?.content.arcs
   .flatMap((arc) => arc.chapters).find((chapter) => chapter.number === selectedChapter.value))
 const memorySearchText = computed(() => {
   const chapter = currentChapter.value
-  return chapter ? `${chapter.title} ${chapter.objective} ${chapter.coreEvent}` : `第 ${selectedChapter.value} 章`
+  return chapter ? `${chapter.title}\n${chapter.content}` : `第 ${selectedChapter.value} 章`
 })
 const memoryQuery = useQuery({
   queryKey: computed(() => ['novel-memory', props.projectId, selectedChapter.value,

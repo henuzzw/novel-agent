@@ -43,6 +43,12 @@ public record StoryBibleContent(
                 endingDirection, hardConstraints, openQuestions, characterBlueprints, readerExperiencePlans, notes);
     }
 
+    /** Request-only copy: do not resend an identical prose block provided separately. */
+    public StoryBibleContent withoutRepeatedDevelopmentNotes(String separatelyProvided) {
+        return developmentNotes != null && developmentNotes.equals(separatelyProvided)
+                ? withDevelopmentNotes(null) : this;
+    }
+
     public StoryBibleContent(String logline, String theme, String worldSetting, List<String> worldRules,
             String protagonist, String protagonistArc, List<String> supportingCharacters,
             List<String> relationshipDynamics, String centralConflict, String stakes, String narrativeStyle,

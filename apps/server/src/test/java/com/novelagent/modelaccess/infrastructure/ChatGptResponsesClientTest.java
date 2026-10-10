@@ -42,6 +42,46 @@ class ChatGptResponsesClientTest {
                 {"type":"message","role":"assistant","content":[{"type":"output_text","text":"%s"}]}]}}
                 """.formatted(body));
     }
+
+    @Test void nonStreamSuccessReportsSafeDiagnosticsAndNeverAcceptsJsonOrHtml() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/json-error", exchange -> {
+            byte[] bytes = "{\"error\":{\"code\":\"stream_not_supported\",\"message\":\"test-access private-story\"}}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+            exchange.getResponseHeaders().set("x-request-id", "req-safe-123");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (var body = exchange.getResponseBody()) { body.write(bytes); }
+        });
+        server.createContext("/html", exchange -> {
+            byte[] bytes = "<html>private-story test-access</html>".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/html");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (var body = exchange.getResponseBody()) { body.write(bytes); }
+        });
+        server.createContext("/json-completed", exchange -> {
+            byte[] bytes = "{\"status\":\"completed\",\"output\":\"private-story\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            try (var body = exchange.getResponseBody()) { body.write(bytes); }
+        });
+        server.start();
+        try {
+            for (String path : List.of("json-error", "html", "json-completed")) {
+                var client = client(URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/" + path), 2);
+                var preview = new ArrayList<String>();
+                assertThatThrownBy(() -> client.request("instructions", json.createArrayNode(), settings,
+                        ChatGptResponsesClient.accountBinding(credentials), preview::add))
+                        .hasMessageContaining("HTTP 200").hasMessageContaining("未返回事件流")
+                        .hasMessageNotContaining("test-access").hasMessageNotContaining("private-story")
+                        .satisfies(error -> {
+                            if (path.equals("json-error")) assertThat(error.getMessage())
+                                    .contains("stream_not_supported", "application/json", "req-safe-123");
+                            if (path.equals("html")) assertThat(error.getMessage()).contains("text/html", "HTML/XML");
+                        });
+                assertThat(preview).isEmpty();
+            }
+        } finally { server.stop(0); }
+    }
     @Test void consecutiveRealHttpRequestsCarryUpdatedInstructionsAndCompleteHistoryWithoutSchema() throws Exception {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         var requests = new ArrayList<JsonNode>();

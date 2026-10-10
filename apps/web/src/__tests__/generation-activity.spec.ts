@@ -10,6 +10,7 @@ describe('generation request state', () => {
     ['chapters/2/manuscripts/actions/generate', 'MANUSCRIPT'],
     ['chapters/2/reviews/actions/generate', 'CHAPTER_REVIEW'],
     ['imports/i/actions/prepare-directions', 'IMPORT_PLANNING'],
+    ['imports/i/actions/resume-directions', 'IMPORT_PLANNING'],
   ])('immediately tracks %s without storing request text', (path, stage) => {
     beginGenerationRequest(`/api/v1/projects/p/${path}`, 'POST')
     expect(generationRequests.value[0]).toMatchObject({ stage, status: 'RUNNING', projectId: 'p' })

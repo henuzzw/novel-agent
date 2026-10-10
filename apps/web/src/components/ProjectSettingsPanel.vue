@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import GlobalModelSettingsPanel from '@/components/GlobalModelSettingsPanel.vue'
 import CreativeStrategyPanel from '@/components/CreativeStrategyPanel.vue'
+import CreativeBoundaryPanel from '@/components/CreativeBoundaryPanel.vue'
 import { RouterLink } from 'vue-router'
 import { FilePenLine } from 'lucide-vue-next'
 defineProps<{ projectId: string }>()
@@ -8,6 +9,7 @@ defineProps<{ projectId: string }>()
 <template>
   <div class="project-settings">
     <CreativeStrategyPanel :key="projectId" :project-id="projectId" />
+    <CreativeBoundaryPanel :key="projectId" :project-id="projectId" />
     <GlobalModelSettingsPanel />
     <section class="prompt-settings-entry">
       <h2>全局提示词</h2>

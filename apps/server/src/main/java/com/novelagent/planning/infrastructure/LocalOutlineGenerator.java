@@ -64,10 +64,15 @@ public class LocalOutlineGenerator implements OutlineGenerator {
         double progress = number / (double) total;
         String phase = progress <= .25 ? "建立局面" : progress <= .5 ? "压力升级" : progress <= .75 ? "代价显现" : "真相与抉择";
         String reveal = progress < .9 ? "揭示一条改变人物判断的新信息" : "回收关键伏笔并逼近最终真相";
-        return new ChapterPlan(number, "第" + number + "章 " + phase, "主角",
-                "让主角为当前目标采取不可撤销的一步", "围绕“" + bible.centralConflict() + "”推进一次具体对抗",
-                reveal, number == total ? "完成核心选择，同时保留人物余韵" : "以新的风险、误解或选择收束",
-                budget.recommendedChapterMinWords(), budget.recommendedChapterMaxWords());
+        return new ChapterPlan(number, "第" + number + "章 " + phase,
+                "章节定位：" + phase + "\n视角：主角\n本章目标：让主角为当前目标采取不可撤销的一步"
+                + "\n事件与选择：围绕“" + bible.centralConflict() + "”推进一次具体对抗"
+                + "\n揭示：" + reveal + "\n章末期待："
+                + (number == total ? "完成核心选择，同时保留人物余韵" : "以新的风险、误解或选择收束")
+                + "\n字数要求：" + budget.recommendedChapterMinWords() + "～" + budget.recommendedChapterMaxWords() + "字"
+                + "\n场景展开：在当前目标的阻碍下行动，依靠既有条件改变处境。"
+                + "\n道具、地点与时间压力：待作者设计；本地模板仅验证流程。",
+                com.novelagent.planning.domain.ChapterPlanStatus.PLANNED);
     }
 
     private static String arcTitle(int index, int total) {

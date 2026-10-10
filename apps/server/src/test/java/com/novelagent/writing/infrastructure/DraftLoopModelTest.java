@@ -29,7 +29,7 @@ class DraftLoopModelTest {
     }
     private void returns(String json) {
         doAnswer(call -> { Consumer<String> consume = call.getArgument(9); consume.accept(json); return json; })
-                .when(gateway).request(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any(), any());
+                .when(gateway).requestWithBoundaries(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any(), any(), eq(""));
     }
 
     @Test void bAndCReceiveSameIndependentFrozenBasisWithNoAuthorInstruction() throws Exception {
@@ -38,8 +38,8 @@ class DraftLoopModelTest {
         returns("{\"action\":\"NO_CHANGE\",\"decisions\":[],\"content\":null,\"changeSummary\":[]}");
         model.judge(run, draft, report, ignored -> { });
         var prompts = ArgumentCaptor.forClass(String.class);
-        verify(gateway, times(2)).request(eq(run.getProjectId()), anyString(), eq(ModelProvider.DEEPSEEK), anyString(), prompts.capture(),
-                any(), anyString(), anyInt(), eq(CodexSessionPolicy.NEW_THREAD), any());
+        verify(gateway, times(2)).requestWithBoundaries(eq(run.getProjectId()), anyString(), eq(ModelProvider.DEEPSEEK), anyString(), prompts.capture(),
+                any(), anyString(), anyInt(), eq(CodexSessionPolicy.NEW_THREAD), any(), eq(""));
         for (var prompt : prompts.getAllValues()) {
             var data = mapper.readTree(prompt);
             assertThat(data.path("independentWritingBasis").asText()).isEqualTo(run.getBasis().prompt());

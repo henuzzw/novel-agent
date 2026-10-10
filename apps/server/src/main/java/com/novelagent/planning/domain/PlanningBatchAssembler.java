@@ -28,10 +28,10 @@ public final class PlanningBatchAssembler {
         for (int i = 0; i < chapters.size(); i++) {
             if (chapters.get(i).number() != i + 1) throw new IllegalArgumentException("卷章排序不连续，须重新检查规划片段");
         }
-        long min = chapters.stream().mapToLong(ChapterPlan::suggestedMinWords).sum();
-        long max = chapters.stream().mapToLong(ChapterPlan::suggestedMaxWords).sum();
+        long min = arcs.stream().mapToLong(OutlineArc::suggestedMinWords).sum();
+        long max = arcs.stream().mapToLong(OutlineArc::suggestedMaxWords).sum();
         if (min > budget.acceptableMaxWords() || max < budget.acceptableMinWords()) {
-            throw new IllegalArgumentException("各章建议篇幅与作品总字数区间没有交集，请调整规划要求或目标字数");
+            throw new IllegalArgumentException("各阶段建议篇幅与作品总字数区间没有交集，请调整规划要求或目标字数");
         }
         return new OutlineContent(title, bible.logline(),
                 String.join("；", arcs.stream().map(OutlineArc::objective).toList()), bible.narrativeStyle(),

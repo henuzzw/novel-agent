@@ -44,7 +44,7 @@ public record OutlineContent(
                     || !java.util.Objects.equals(arc.outcome(), oldArc.outcome());
             return new OutlineArc(arc.ordinal(), arc.title(), arc.objective(), arc.mainConflict(), arc.turningPoint(),
                     arc.outcome(), arc.suggestedMinWords(), arc.suggestedMaxWords(), arc.chapters().stream()
-                    .map(chapter -> chapter.reviewScenesAgainst(oldChapters.get(chapter.number()), bookChanged || arcChanged)).toList());
+                    .map(chapter -> chapter.reviewContentAgainst(oldChapters.get(chapter.number()), bookChanged || arcChanged)).toList());
         }).toList();
         return new OutlineContent(title, premise, structureSummary, pacingStrategy, suggestedMinWords,
                 suggestedMaxWords, updated, readerExperiencePlans);

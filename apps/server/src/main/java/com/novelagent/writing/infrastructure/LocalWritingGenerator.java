@@ -15,15 +15,15 @@ import org.springframework.stereotype.Component;
 @Component
 class LocalWritingGenerator {
     ManuscriptContent manuscript(ChapterPlan chapter, ChapterContractContent contract) {
-        String body = "场景从" + contract.storyTime() + "开始。" + chapter.pov() + "首先注意到周围细节里那一点不合常理的变化。\n\n"
-                + chapter.coreEvent() + "。事情并没有按照最省力的方向发展，人物必须在迟疑与行动之间作出选择。"
+        String body = "场景从" + contract.storyTime() + "开始。人物首先注意到周围细节里那一点不合常理的变化。\n\n"
+                + "事情并没有按照最省力的方向发展，人物必须在迟疑与行动之间作出选择。"
                 + "这个选择让冲突真正落到眼前，也让每一句对话都带上了尚未说破的立场。\n\n"
-                + "随着场面推进，" + chapter.reveal() + "。这一信息没有直接给出答案，却改变了人物对局势的判断。"
+                + "随着场面推进，新信息改变了人物对局势的判断。"
                 + "他/她重新审视此前忽略的细节，并为下一步付出具体代价。\n\n"
-                + "临近结尾，" + contract.expectedExitState() + "。" + chapter.endingHook()
+                + "临近结尾，" + contract.expectedExitState()
                 + "。本地模板只用于验证流程，建议切换 Codex 或 DeepSeek 生成正式长篇正文。";
         return new ManuscriptContent(chapter.title(), body,
-                "本章围绕“" + chapter.objective() + "”推进，并以新的悬念收束。",
+                "本地模板验证第" + chapter.number() + "章流程，不代表完成规划中的剧情。",
                 List.of("核对上一章退出状态", "后续审稿时验证揭示与伏笔的时序"));
     }
 

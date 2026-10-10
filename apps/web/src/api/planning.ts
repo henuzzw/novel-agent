@@ -123,16 +123,9 @@ export interface StoryBibleVersionSummary {
 export interface ChapterPlan {
   number: number
   title: string
-  pov: string
-  objective: string
-  coreEvent: string
-  reveal: string
-  endingHook: string
-  suggestedMinWords: number
-  suggestedMaxWords: number
+  content: string
   status: 'OCCURRED' | 'PLANNED'
-  sceneOutline?: string
-  sceneOutlineNeedsUpdate?: boolean
+  contentNeedsUpdate?: boolean
 }
 
 export interface OutlineArc {

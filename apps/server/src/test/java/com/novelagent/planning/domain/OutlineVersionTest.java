@@ -18,7 +18,7 @@ class OutlineVersionTest {
         version.publish();
 
         assertThat(version.getContent().title()).isEqualTo("修订稿");
-        assertThat(version.getContent().arcs().getFirst().chapters().getFirst().suggestedMinWords()).isEqualTo(1_800);
+        assertThat(version.getContent().arcs().getFirst().chapters().getFirst().content()).contains("1800");
         assertThatThrownBy(() -> version.revise(content("再次修改", 2_000, 4_000)))
                 .isInstanceOf(IllegalStateException.class);
     }

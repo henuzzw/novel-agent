@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import SnowflakePlanningPanel from '@/components/SnowflakePlanningPanel.vue'
+import CreativeBoundaryPanel from '@/components/CreativeBoundaryPanel.vue'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
 import ImportAnalysisPanel from '@/components/ImportAnalysisPanel.vue'
 import type { AnalysisProof } from '@/api/importAnalyses'
@@ -7,6 +8,7 @@ import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, Check, Download, FileText, LoaderCircle, Sparkles, Upload } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
+import { generationRequests } from '@/lib/generation-activity'
 
 import { listWorkImports, prepareImportedDirections, pasteWork, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
 
@@ -33,7 +35,8 @@ const importsQuery = useQuery({
   refetchInterval: 5000,
 })
 const selectedImport = computed(() => importsQuery.data.value?.find((item) => item.id === selectedImportId.value) ?? null)
-const planningBusy = computed(() => confirmMutation.isPending.value || selectedImport.value?.planningStatus === 'GENERATING')
+const planningBusy = computed(() => confirmMutation.isPending.value || selectedImport.value?.planningStatus === 'GENERATING'
+  || generationRequests.value.some(item => item.projectId === props.projectId && item.stage === 'IMPORT_PLANNING' && item.status === 'RUNNING'))
 watch(() => importsQuery.data.value, (items) => {
   if (!items?.some((item) => item.id === selectedImportId.value)) selectedImportId.value = items?.[0]?.id ?? null
 }, { immediate: true })
@@ -105,7 +108,9 @@ function contentTypeLabel(value: string) {
     </div>
     <label v-if="sourceMode === 'file'" class="button primary import-upload"><Upload :size="16" />{{ uploadMutation.isPending.value ? '正在导入…' : '选择文件' }}<input type="file" accept=".txt,.md,.docx,.pdf" :disabled="uploadMutation.isPending.value" @change="selectFile" /></label>
     <form v-else class="paste-source" @submit.prevent="pasteMutation.mutate()"><label class="instruction-field"><span>故事文字</span><textarea v-model="pastedText" rows="8" :disabled="pasteMutation.isPending.value" /></label><button class="button primary" :disabled="!pastedText.trim() || pasteMutation.isPending.value"><FileText :size="16" />{{ pasteMutation.isPending.value ? '正在导入…' : '导入文字' }}</button></form>
-    <SnowflakePlanningPanel :project-id="projectId" />
+    <CreativeBoundaryPanel :key="projectId" :project-id="projectId" />
+    <SnowflakePlanningPanel :project-id="projectId" :import-id="selectedImportId ?? undefined"
+      :planning-status="selectedImport?.planningStatus" @planning-generated="emit('planningGenerated')" />
     <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
 
     <div v-if="importsQuery.isPending.value" class="editor-empty">正在读取导入记录…</div>

@@ -23,6 +23,9 @@ public class StructuredModelGateway {
     private final AgentPromptService prompts;
     private final com.novelagent.modelaccess.application.ChatGptDirectGateway direct;
     private final com.novelagent.modelaccess.application.ChatGptTransportService transport;
+    private com.novelagent.project.application.CreativeBoundaryService boundaries;
+    @Autowired
+    public void setBoundaries(com.novelagent.project.application.CreativeBoundaryService boundaries) { this.boundaries = boundaries; }
 
     public StructuredModelGateway(
             CodexAppServerClient codex,
@@ -76,6 +79,14 @@ public class StructuredModelGateway {
     public String request(UUID projectId, String workflow, ModelProvider provider,
             String systemPrompt, String userPrompt, JsonNode schema, String schemaName,
             int maxOutputTokens, CodexSessionPolicy sessionPolicy, Consumer<String> processOutput) {
+        return requestWithBoundaries(projectId, workflow, provider, systemPrompt, userPrompt, schema, schemaName,
+                maxOutputTokens, sessionPolicy, processOutput, null);
+    }
+
+    /** A supplied snapshot prevents long planning and editorial loops from rereading mutable settings. */
+    public String requestWithBoundaries(UUID projectId, String workflow, ModelProvider provider,
+            String systemPrompt, String userPrompt, JsonNode schema, String schemaName,
+            int maxOutputTokens, CodexSessionPolicy sessionPolicy, Consumer<String> processOutput, String frozenBoundaries) {
         if (provider != ModelProvider.DEEPSEEK && provider != ModelProvider.LOCAL_CODEX) {
             throw new IllegalArgumentException("当前模型调用只支持服务端 Codex 或 DeepSeek：" + provider);
         }
@@ -83,9 +94,17 @@ public class StructuredModelGateway {
         var resolved = prompts == null ? new AgentPromptService.Resolved(systemPrompt, null)
                 : prompts.resolve(workflow, systemPrompt);
         var protocol = new PlainTextOutputProtocol(schema);
-        String stageInstructions = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.systemPrompt()) + protocol.instructions();
+        boolean chapterBlocks = schema != null &&
+                (schema.at("/properties/content/properties/arcs/items/properties/chapters/items/properties").has("content")
+                        || schema.at("/properties/arcs/items/properties/chapters/items/properties").has("content"));
+        String stageInstructions = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.systemPrompt())
+                + (workflow.equals("IMPORT_SOURCE_ANALYSIS") ? com.novelagent.ingest.infrastructure.ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "")
+                + (chapterBlocks ? "\n" + com.novelagent.planning.application.ScenePlanningGuide.planningRules() : "")
+                + protocol.instructions();
         boolean sharedPlanning = provider == ModelProvider.LOCAL_CODEX && PlanningConversationPolicy.shares(workflow);
+        String boundaryContext = frozenBoundaries != null ? frozenBoundaries : boundaries == null ? "" : boundaries.promptContext(projectId);
         String effectiveUser = "【本轮服务端执行规范】\n" + stageInstructions
+                + boundaryContext
                 + "\n【本轮创作资料】\n" + userPrompt;
         String effectiveSystem = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.sessionSystemPrompt())
                 + "\n\n" + AgentPromptService.protectedRules(workflow);

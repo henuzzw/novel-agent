@@ -54,12 +54,13 @@ public class DraftLoopModel {
         data.put("round", run.getPhase() == DraftLoopRun.Phase.C ? run.getRounds().size() : run.getRounds().size() + 1);
         data.put("frozenSourceFingerprint", run.getBasis().fingerprint());
         data.put("independentWritingBasis", run.getBasis().prompt());
-        data.put("scope", "仅本章全文、实际提供的前两章参考和相关事实；sceneOutlineNeedsUpdate=true 的旧底稿不能当作有效必写计划。所有阶段共用本次冻结依据。");
+        data.put("scope", "仅本章全文、实际提供的前两章参考和相关事实；本章content是完整规划文字块，含场景与字数要求。所有阶段共用本次冻结依据，不把未来计划当作已发生事实。");
         if (draft != null) data.set("currentDraft", mapper.valueToTree(draft));
         if (report != null) data.set("suggestionsNotFacts", mapper.valueToTree(report));
-        gateway.request(run.getProjectId(), stage, run.getProvider(), AgentPromptDefaults.system(stage), data.toString(),
+        // Project boundaries already live in the frozen basis; do not append current mutable choices.
+        gateway.requestWithBoundaries(run.getProjectId(), stage, run.getProvider(), AgentPromptDefaults.system(stage), data.toString(),
                 schema, "draft_loop_" + run.getPhase().name().toLowerCase(java.util.Locale.ROOT), limit,
-                CodexSessionPolicy.NEW_THREAD, output -> save.accept(parse(output, type)));
+                CodexSessionPolicy.NEW_THREAD, output -> save.accept(parse(output, type)), "");
     }
 
     private <T> T parse(String output, Class<T> type) {

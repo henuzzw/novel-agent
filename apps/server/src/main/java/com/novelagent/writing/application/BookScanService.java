@@ -84,10 +84,9 @@ public class BookScanService {
         }).toList();
         for (int i = 1; i < plans.size(); i++) {
             var previous = plans.get(i - 1); var current = plans.get(i);
-            if (previous.coreEvent() != null && !previous.coreEvent().isBlank()
-                    && previous.coreEvent().equals(current.coreEvent())) observations.add(new Observation(
+            if (previous.content().equals(current.content())) observations.add(new Observation(
                     "IDENTICAL_PLAN_TEXT", List.of(previous.number(), current.number()), null,
-                    "相邻章核心事件字段逐字相同，供作者核对；不是已证明的重复场景。"));
+                    "相邻章规划文字块逐字相同，供作者核对；不是已证明的重复场景。"));
         }
         int lastCanon = summaries.stream().mapToInt(ReaderExperienceMemory.Chapter::chapterNumber).max().orElse(0);
         for (var entry : ledger) {

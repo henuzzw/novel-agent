@@ -14,15 +14,19 @@ public final class ChapterWritingBasisService {
 
     public static ManuscriptBasis capture(WritingContextService.Context context) {
         ChapterPlan chapter = context.chapter();
+        if (chapter.contentNeedsUpdate()) throw new IllegalArgumentException("本章规划依据已变化，请先更新章节规划文字块");
         // Reuse the existing prompt payload shape, without creating any contract record or model stage.
-        ChapterContractContent plan = new ChapterContractContent(chapter.title(), chapter.pov(), chapter.objective(),
+        int count = context.arc().chapters().size();
+        // Numeric defaults are a capacity reference; explicit words/POV in the text block take precedence.
+        ChapterContractContent plan = new ChapterContractContent(chapter.title(), "按本章规划文字块指定的视角", "落实本章规划文字块",
                 "以已确认圣经、大纲与前文为准；未知时间不得编成事实", List.of(),
-                requiredBeats(chapter), entries(chapter.reveal()), List.of(),
+                List.of("【本章完整规划；未来计划不是正史】\n" + chapter.content()), List.of(), List.of(),
                 "本章行动的后果按已发布大纲落实，不提前兑现未来计划", context.outline().getContent().readerExperiencePlans().stream()
                         .filter(seed -> java.util.Objects.equals(seed.plannedChapter(), chapter.number()))
                         .map(seed -> seed.title() + "；承诺：" + seed.promise() + "；埋设：" + seed.setup()
-                                + "；预期回收（未来计划，不是已发生）：" + seed.payoff()).toList(), chapter.endingHook(),
-                chapter.suggestedMinWords(), chapter.suggestedMaxWords());
+                                + "；预期回收（未来计划，不是已发生）：" + seed.payoff()).toList(), "按本章规划文字块的结果与章末期待",
+                Math.max(1, context.arc().suggestedMinWords() / count),
+                Math.max(1, context.arc().suggestedMaxWords() / count));
         return new ManuscriptBasis(context.outline().getId(), context.boundaryFingerprint(), plan);
     }
 
@@ -43,15 +47,4 @@ public final class ChapterWritingBasisService {
         return current;
     }
 
-    private static List<String> entries(String text) {
-        return text == null || text.isBlank() ? List.of() : List.of(text);
-    }
-
-    private static List<String> requiredBeats(ChapterPlan chapter) {
-        var beats = new java.util.ArrayList<>(entries(chapter.coreEvent()));
-        if (!chapter.sceneOutlineNeedsUpdate() && chapter.sceneOutline() != null && !chapter.sceneOutline().isBlank()) {
-            beats.add("【已保存场景底稿；未来规划不是正史】\n" + chapter.sceneOutline());
-        }
-        return List.copyOf(beats);
-    }
 }

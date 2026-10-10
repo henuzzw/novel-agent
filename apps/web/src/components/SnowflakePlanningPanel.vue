@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { useQuery } from '@tanstack/vue-query'
-import { RefreshCw } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { Play, RefreshCw } from 'lucide-vue-next'
+import { resumeImportedDirections, type WorkImport } from '@/api/imports'
 import { getLatestSnowflakePlan } from '@/api/snowflake'
 import { generationRequests } from '@/lib/generation-activity'
 
-const props = defineProps<{ projectId: string }>()
+const props = defineProps<{ projectId: string; importId?: string; planningStatus?: WorkImport['planningStatus'] }>()
+const emit = defineEmits<{ planningGenerated: [] }>()
+const queryClient = useQueryClient()
+const resumeError = ref('')
 const pending = computed(() => generationRequests.value.some(item => item.projectId === props.projectId
   && ['STORY_BIBLE', 'IMPORT_PLANNING'].includes(item.stage) && item.status === 'RUNNING'))
 const query = useQuery({
@@ -14,6 +18,33 @@ const query = useQuery({
   refetchInterval: state => pending.value || state.state.data?.status === 'RUNNING' ? 3000 : false,
 })
 watch(pending, () => query.refetch())
+const canResume = computed(() => props.importId && props.importId === query.data.value?.sourceImportId
+  && ['FAILED', 'CANCELLED'].includes(props.planningStatus ?? '')
+  && ['FAILED', 'CANCELLED', 'SUCCEEDED'].includes(query.data.value?.status ?? '') && !pending.value)
+const resumeMutation = useMutation({
+  mutationFn: async (source: { projectId: string; importId: string; planId: string }) => ({
+    ...source, result: await resumeImportedDirections(source.projectId, source.importId, source.planId),
+  }),
+  onSuccess: value => {
+    queryClient.setQueryData(['story-directions', value.projectId], value.result)
+    queryClient.invalidateQueries({ queryKey: ['project', value.projectId] })
+    if (props.projectId === value.projectId && props.importId === value.importId) emit('planningGenerated')
+  },
+  onError: (error: Error, source) => {
+    if (props.projectId === source.projectId && props.importId === source.importId) resumeError.value = error.message
+  },
+  onSettled: (_data, _error, source) => {
+    queryClient.invalidateQueries({ queryKey: ['work-imports', source.projectId] })
+    queryClient.invalidateQueries({ queryKey: ['snowflake-plan', source.projectId] })
+  },
+})
+watch(() => [props.projectId, props.importId], () => { resumeMutation.reset(); resumeError.value = '' })
+function resume() {
+  const plan = query.data.value
+  if (!canResume.value || !plan || !props.importId || resumeMutation.isPending.value) return
+  resumeError.value = ''
+  resumeMutation.mutate({ projectId: props.projectId, importId: props.importId, planId: plan.id })
+}
 const stages = [
   { key: 'CORE', label: '1 · 一句话故事核心' },
   { key: 'SYNOPSIS', label: '2 · 一段故事梗概' },
@@ -33,9 +64,14 @@ const statusNames = { RUNNING: '请求中', SUCCEEDED: '成功', FAILED: '失败
     <header>
       <h3>雪花渐进规划</h3>
       <span v-if="query.data.value" role="status">{{ statusNames[query.data.value.status] }}</span>
+      <button v-if="canResume || resumeMutation.isPending.value" class="button primary" type="button"
+        :disabled="resumeMutation.isPending.value || pending" title="复用已成功步骤与保存的生成要求" @click="resume">
+        <Play :size="16" />{{ resumeMutation.isPending.value ? '正在继续…' : '继续生成' }}
+      </button>
       <button class="icon-button" type="button" aria-label="刷新雪花规划" title="刷新雪花规划" :disabled="query.isFetching.value" @click="query.refetch()"><RefreshCw :size="16" /></button>
     </header>
     <p v-if="query.isError.value" class="form-error" role="alert">规划记录加载失败：{{ query.error.value?.message }}</p>
+    <p v-if="resumeError" class="form-error" role="alert">{{ resumeError }}</p>
     <template v-if="query.data.value">
       <p v-if="query.data.value.errorMessage" class="form-error" role="alert">{{ query.data.value.errorMessage }}</p>
       <details v-for="stage in stages" :key="stage.key">
