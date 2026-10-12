@@ -1,6 +1,5 @@
 package com.novelagent.writing.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
@@ -40,22 +39,25 @@ public class DraftLoopContext {
         var data = mapper.createObjectNode();
         data.put("projectName", project.getName());
         data.put("chapterNumber", chapter);
-        data.set("bible", mapper.valueToTree(context.bible().getContent()));
+        data.set("bible", mapper.valueToTree(context.writingMaterials()));
         data.set("chapter", mapper.valueToTree(context.chapter()));
-        data.set("arc", mapper.valueToTree(context.arc()));
-        data.set("chapterPlan", mapper.valueToTree(ChapterWritingBasisService.capture(context).plan()));
-        data.put("characterProfiles", profiles.promptContext(projectId));
+        data.set("arc", mapper.valueToTree(context.writingArc()));
+        var chapterPlan = ChapterWritingBasisService.capture(context).plan();
+        data.set("chapterPlan", mapper.valueToTree(chapterPlan));
+        data.put("characterProfiles", profiles.promptContext(projectId, chapterPlan.pov(), chapterPlan,
+                java.util.List.of(), java.util.List.of(context.chapter().content())));
         data.put("creativeBoundaries", context.preparationContext());
         data.put("selectedStyle", styles.promptContext(projectId));
         data.put("strategy", CreativeStrategyGuide.render(context.creativeStrategy()));
         data.put("futurePlanOnly", context.futureContext());
-        var previous = data.putArray("previousAcceptedReferenceNotCanon");
+        var previous = data.putArray("previousAcceptedSourceVersionsNotCanon");
         for (int prior = Math.max(1, chapter - 2); prior < chapter; prior++) {
             manuscripts.findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(projectId, prior,
                     ManuscriptStatus.AUTHOR_ACCEPTED).ifPresent(value -> {
                         var entry = previous.addObject();
                         entry.put("id", value.getId().toString()); entry.put("rowVersion", value.getRowVersion());
-                        entry.put("chapterNumber", value.getChapterNumber()); entry.set("content", mapper.valueToTree(value.getContent()));
+                        entry.put("chapterNumber", value.getChapterNumber());
+                        entry.put("contentFingerprint", Sha256.ofUtf8(value.getContent().toString()));
                     });
         }
         String prompt = names.render(projectId, data.toString());
@@ -72,13 +74,9 @@ public class DraftLoopContext {
         if (!source.basis().fingerprint().equals(capture(projectId, chapter).basis().fingerprint())) {
             throw new IllegalStateException("准备期间创作依据已变化，请重试");
         }
-        try {
-            String prompt = source.basis().prompt() + "\n【冻结的相关正史、知识边界与前文参考；注意来源标记】\n"
-                    + names.render(projectId, mapper.writeValueAsString(memory));
-            return new Source(new DraftLoopRun.Basis(source.basis().fingerprint(), prompt, source.basis().writingBasis()),
-                    source.context(), source.latest());
-        } catch (JsonProcessingException failure) {
-            throw new IllegalStateException("无法冻结自动编辑资料", failure);
-        }
+        String prompt = source.basis().prompt() + "\n【冻结的相关正史、知识边界与前文参考；注意来源标记】\n"
+                + names.render(projectId, memory.toPromptText());
+        return new Source(new DraftLoopRun.Basis(source.basis().fingerprint(), prompt, source.basis().writingBasis()),
+                source.context(), source.latest());
     }
 }

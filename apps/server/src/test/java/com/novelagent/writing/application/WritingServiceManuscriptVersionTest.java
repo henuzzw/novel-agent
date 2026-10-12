@@ -61,6 +61,7 @@ class WritingServiceManuscriptVersionTest {
     private final UUID outlineId = UUID.randomUUID();
     private final UUID bibleId = UUID.randomUUID();
     private final UUID contractId = UUID.randomUUID();
+    private final ChapterPlan chapter = new ChapterPlan(1, "第一章", "主角", "目标", "事件", "揭示", "钩子", 2000, 3000);
     private final NovelProjectRepository projects = mock(NovelProjectRepository.class);
     private final OutlineVersionRepository outlines = mock(OutlineVersionRepository.class);
     private final StoryBibleVersionRepository bibles = mock(StoryBibleVersionRepository.class);
@@ -75,7 +76,7 @@ class WritingServiceManuscriptVersionTest {
     private final CharacterNameService names = mock(CharacterNameService.class);
     private final TransactionTemplate transactions = mock(TransactionTemplate.class);
     private final WritingContextService contexts = new WritingContextService(new ProjectAccessService(projects, actor),
-            outlines, bibles, memory);
+            outlines, bibles, memory, names);
     private final ManuscriptService manuscriptService = new ManuscriptService(contexts, manuscripts,
             workflow, budgetPlanner, names, mock(WritingStyleService.class));
     private final WritingService service = new WritingService(mock(ChapterContractService.class), manuscriptService,
@@ -90,7 +91,6 @@ class WritingServiceManuscriptVersionTest {
         OutlineVersion outline = mock(OutlineVersion.class);
         StoryBibleVersion bible = mock(StoryBibleVersion.class);
         ChapterContractVersion contract = mock(ChapterContractVersion.class);
-        ChapterPlan chapter = new ChapterPlan(1, "第一章", "主角", "目标", "事件", "揭示", "钩子", 2000, 3000);
         OutlineArc arc = new OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果",
                 2000, 3000, List.of(chapter));
         StoryBibleContent bibleContent = new StoryBibleContent("故事", "主题", "世界", List.of(), "主角",
@@ -115,6 +115,7 @@ class WritingServiceManuscriptVersionTest {
                 2000, 3000, List.of(arc)));
         when(outlines.findByIdAndProjectId(outlineId, projectId)).thenReturn(Optional.of(outline));
         when(bible.getContent()).thenReturn(bibleContent);
+        when(bible.getId()).thenReturn(bibleId);
         when(bible.getStatus()).thenReturn(com.novelagent.planning.domain.StoryBibleStatus.PUBLISHED);
         when(bibles.findByIdAndProjectId(bibleId, projectId)).thenReturn(Optional.of(bible));
         when(contract.getId()).thenReturn(contractId);
@@ -123,9 +124,9 @@ class WritingServiceManuscriptVersionTest {
         when(contracts.findFirstByProjectIdAndChapterNumberAndStatusOrderByVersionNumberDesc(
                 projectId, 1, ChapterContractStatus.APPROVED)).thenReturn(Optional.of(contract));
         when(budgetPlanner.plan(eq(AgentStage.MANUSCRIPT), eq(ModelProvider.LOCAL_TEMPLATE),
-                any(), any(), any(), any(), any(), any(), any())).thenReturn(budget);
+                any(Object[].class))).thenReturn(budget);
         when(memory.recall(eq(AgentStage.MANUSCRIPT), eq(projectId), eq(1), any(Long.class),
-                any(), eq(budget))).thenReturn(recalled);
+                any(), eq(budget), eq(bibleId), any())).thenReturn(recalled);
         when(workflow.generateManuscript(eq(projectId), any(), any(), any(), any(), eq(recalled),
                 any(), eq(ModelProvider.LOCAL_TEMPLATE), any()))
                 .thenReturn(new GeneratedManuscript(generated, List.of("调整了对话")));
@@ -140,7 +141,8 @@ class WritingServiceManuscriptVersionTest {
         var created = service.generateManuscript(projectId, 1, request(GenerationMode.REGENERATE, null));
         assertThat(created.sourceContractVersionId()).isNull();
         assertThat(created.writingBasis().outlineId()).isEqualTo(outlineId);
-        assertThat(created.writingBasis().plan().requiredBeats()).containsExactly("事件");
+        assertThat(created.writingBasis().plan().requiredBeats())
+                .containsExactly("【本章完整规划；未来计划不是正史】\n" + chapter.content());
         org.mockito.Mockito.verifyNoInteractions(contracts);
         var source = ManuscriptVersion.create(created.id(), projectId, null, 1, 1, "LOCAL_TEMPLATE", null, generated)
                 .withWritingBasis(created.writingBasis());
@@ -166,8 +168,9 @@ class WritingServiceManuscriptVersionTest {
         assertThat(result.versionNumber()).isEqualTo(4);
         assertThat(result.baseManuscriptVersionId()).isEqualTo(older.getId());
         assertThat(result.content()).isEqualTo(generated);
+        String expectedInstruction = contexts.context(projectId, 1).instructionWithPreparation("微调");
         verify(workflow).generateManuscript(eq(projectId), any(), any(), any(), any(), any(),
-                eq(older.getContent()), eq(ModelProvider.LOCAL_TEMPLATE), eq("微调"));
+                eq(older.getContent()), eq(ModelProvider.LOCAL_TEMPLATE), eq(expectedInstruction));
     }
 
     @Test
@@ -181,8 +184,9 @@ class WritingServiceManuscriptVersionTest {
         var result = service.generateManuscript(projectId, 1, request(GenerationMode.REVISE, null));
 
         assertThat(result.baseManuscriptVersionId()).isEqualTo(latest.getId());
+        String expectedInstruction = contexts.context(projectId, 1).instructionWithPreparation("微调");
         verify(workflow).generateManuscript(eq(projectId), any(), any(), any(), any(), any(),
-                eq(latest.getContent()), eq(ModelProvider.LOCAL_TEMPLATE), eq("微调"));
+                eq(latest.getContent()), eq(ModelProvider.LOCAL_TEMPLATE), eq(expectedInstruction));
     }
 
     @Test

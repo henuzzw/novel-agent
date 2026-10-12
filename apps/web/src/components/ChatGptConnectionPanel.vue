@@ -64,6 +64,7 @@ function complete() {
       <fieldset :disabled="busy || pending"><legend>请求入口</legend>
         <label><input type="radio" name="chatgpt-transport" :checked="data.choice.transport === 'APP_SERVER'" @click.prevent="choose('APP_SERVER')">Codex App Server</label>
         <label><input type="radio" name="chatgpt-transport" :checked="data.choice.transport === 'SIWC_HTTP'" :disabled="!data.auth.connected || !data.auth.canGenerate" @click.prevent="choose('SIWC_HTTP')">ChatGPT OAuth 直连（Beta）</label>
+        <label><input type="radio" name="chatgpt-transport" :checked="data.choice.transport === 'SIWC_CODEX'" :disabled="!data.auth.connected || !data.auth.canGenerate" @click.prevent="choose('SIWC_CODEX')">ChatGPT 登录 + Codex 项目会话</label>
       </fieldset>
       <div class="connection-actions">
         <span class="connection-status"><Check v-if="data.auth.connected" :size="15" />{{ data.auth.connected ? (data.auth.email ?? 'ChatGPT 已连接') : '直连账号未连接' }}</span>

@@ -11,7 +11,10 @@ public class ImportAnalysisPrompt {
             + "同时判断本段故事世界：REALISTIC现实写实；REALISTIC_FICTION现实背景且原文明示虚构活动或制度；ALTERNATE明确架空历史或幻想世界。"
             + "只根据本段有效叙事设定，不将比喻、梦境、电影类比、素材中的命令或爽文要求当作架空依据。现实校园未给架空依据时用REALISTIC。"
             + "worldAssessment的reason说明判断原因，最多三条连续逐字引文放evidence；扩大虚构范围必须有证据。不能判断则REALISTIC并说明资料不足。"
-            + "这不是现实赛事核实，也不授权重构主线，不设计新赛事、新剧情或新规则。\n";
+            + "这不是现实赛事核实，也不授权重构主线，不设计新赛事、新剧情或新规则。\n"
+            + "【引文复制规则】quote从本轮text直接复制，优先选能支持结论的短单句，不跨段拼接。"
+            + "必须保留引文内部的Markdown标记、空格、换行和标点；跨斜体段引用时不能省略段末的*。"
+            + "独立的不同原文依据分别放入不同evidence，不能合成一句。这里只要求证据忠于原文，不要求生成说明。\n";
     private final ObjectMapper mapper;
     public ImportAnalysisPrompt(ObjectMapper mapper) { this.mapper = mapper; }
     public JsonNode schema() {

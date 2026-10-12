@@ -30,7 +30,7 @@ test('resumes a failed planning chunk and assembles a draft without publishing',
     if (await models(route)) return
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
-    if (path.endsWith('/story-bibles/current') || path.endsWith('/story-bibles/latest')) return route.fulfill({ json: bible })
+    if (path.endsWith('/planning-snapshot') || path.endsWith('/planning-snapshot')) return route.fulfill({ json: bible })
     if (path.endsWith('/outlines/current') || path.endsWith('/outlines/latest')) return route.fulfill({ json: outline })
     if (path.endsWith('/outlines')) return route.fulfill({ json: [{ ...outline, title: outline.content.title, chapterCount: 4 }] })
     if (path.endsWith('/planning-batches') && method === 'GET') return route.fulfill({ json: batch ? [batch] : [] })

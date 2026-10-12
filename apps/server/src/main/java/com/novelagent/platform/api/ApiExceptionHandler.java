@@ -1,7 +1,6 @@
 package com.novelagent.platform.api;
 
 import com.novelagent.planning.application.ModelProviderException;
-import com.novelagent.planning.application.StoryDirectionSetNotFoundException;
 import com.novelagent.planning.application.StoryBibleVersionNotFoundException;
 import com.novelagent.planning.application.OutlineVersionNotFoundException;
 import com.novelagent.project.application.ProjectNotFoundException;
@@ -19,6 +18,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(com.novelagent.agent.application.ModelInputUnavailableException.class)
+    ProblemDetail handleModelInputUnavailable(RuntimeException exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_GATEWAY, "MODEL_INPUT_UNAVAILABLE", "模型未取得创作资料", exception.getMessage(), request);
+    }
 
     @ExceptionHandler(com.novelagent.agent.application.GenerationStoppedException.class)
     ProblemDetail handleGenerationStopped(RuntimeException exception, HttpServletRequest request) {
@@ -37,7 +40,7 @@ public class ApiExceptionHandler {
                 "规划分块不可用", exception.getMessage(), request);
     }
 
-    @ExceptionHandler({ProjectNotFoundException.class, StoryDirectionSetNotFoundException.class,
+    @ExceptionHandler({ProjectNotFoundException.class,
             StoryBibleVersionNotFoundException.class, OutlineVersionNotFoundException.class,
             WritingResourceNotFoundException.class})
     ProblemDetail handleNotFound(RuntimeException exception, HttpServletRequest request) {

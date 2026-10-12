@@ -15,13 +15,13 @@ const emit = defineEmits<{ 'open-chapter': [target: AutomationChapterTarget] }>(
 const runsQuery = useQuery({ queryKey: computed(() => ['agent-runs', props.projectId]), queryFn: () => listAgentRuns(props.projectId), refetchInterval: 5000 })
 const summaryQuery = useQuery({ queryKey: computed(() => ['agent-run-summary', props.projectId]), queryFn: () => getAgentRunSummary(props.projectId) })
 const stageNames: Record<string, string> = {
-  STORY_DIRECTION: '故事方向', STORY_BIBLE: '故事圣经', OUTLINE: '分层大纲',
+  OUTLINE: '分层大纲',
   CHAPTER_CONTRACT: '章节合同', CHAPTER_CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', CHAPTER_REVIEW: '章节审稿',
   QUALITY_REVIEW: '正文质量检查', STYLE_ANALYSIS: '写作风格分析',
-  STYLE_PREVIEW: '第一章风格试写', STYLE_RECOMMENDATION: '圣经风格推荐',
+  STYLE_PREVIEW: '第一章风格试写', STYLE_RECOMMENDATION: '规划资料风格推荐',
   STYLE_PREVIEW_REVIEW: '试写编辑检查', STYLE_PREVIEW_REVISION: '试写建议修订',
   FIRST_THREE_CHAPTERS_REVIEW: '前三章完整通读', MANUSCRIPT_LOCAL_EDIT: '正文局部编辑', DRAFT_JUDGE_REVISION: '自动裁决与修订 · C',
-  IMPORT_REVERSE_BIBLE: '导入反推故事圣经', IMPORT_REVERSE_OUTLINE: '导入反推大纲',
+  IMPORT_REVERSE_OUTLINE: '导入反推大纲',
   SNOWFLAKE_PLANNING: '雪花渐进规划', CHARACTER_DESIGN: '统一人物设计', CHARACTER_BLUEPRINT_COMPLETION: '人物底稿补全（历史）', PLANNING_CHECKPOINT: '分块规划',
 }
 const providerNames: Record<string, string> = { LOCAL_CODEX: 'ChatGPT', DEEPSEEK: 'DeepSeek', LOCAL_TEMPLATE: '本地模板' }
@@ -46,7 +46,7 @@ function refresh() { runsQuery.refetch(); summaryQuery.refetch() }
     </div>
     <div v-if="runsQuery.isPending.value" class="editor-empty">正在读取任务记录…</div>
     <div v-else-if="runsQuery.isError.value" class="status-panel error-panel">任务记录加载失败：{{ runsQuery.error.value?.message }}</div>
-    <div v-else-if="!runsQuery.data.value?.length" class="import-empty"><Activity :size="30" /><h3>还没有模型任务</h3><p>生成故事方向、故事圣经、大纲或正文后，运行记录会出现在这里。</p></div>
+    <div v-else-if="!runsQuery.data.value?.length" class="import-empty"><Activity :size="30" /><h3>还没有模型任务</h3><p>生成雪花规划、大纲或正文后，运行记录会出现在这里。</p></div>
     <div v-else class="run-list">
       <article v-for="run in runsQuery.data.value" :key="run.id" class="run-row">
         <component :is="run.status === 'SUCCEEDED' ? CheckCircle2 : run.status === 'FAILED' ? AlertCircle : run.status === 'CANCELLED' ? Square : Clock3" :size="19" :class="run.status.toLowerCase()" :title="run.status === 'CANCELLED' ? '已停止' : undefined" />

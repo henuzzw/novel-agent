@@ -71,7 +71,7 @@ function path(projectId: string, resource: 'planning-checkpoints' | 'planning-ba
 }
 
 export function getCurrentPlanningBible(projectId: string): Promise<StoryBibleVersion | null> {
-  return apiRequest(`/api/v1/projects/${encodeURIComponent(projectId)}/story-bibles/current`)
+  return apiRequest(`/api/v1/projects/${encodeURIComponent(projectId)}/planning-snapshot`)
 }
 
 export function listPlanningCheckpoints(projectId: string): Promise<PlanningCheckpoint[]> {

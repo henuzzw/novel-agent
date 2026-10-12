@@ -67,7 +67,8 @@ const memorySearchText = computed(() => {
 })
 const memoryQuery = useQuery({
   queryKey: computed(() => ['novel-memory', props.projectId, selectedChapter.value,
-    projectQuery.data.value?.currentCanonVersion, provider.value]),
+    projectQuery.data.value?.currentCanonVersion, projectQuery.data.value?.version,
+    outlineQuery.data.value?.id, outlineQuery.data.value?.version, memorySearchText.value, provider.value]),
   queryFn: () => getMemoryPreview(props.projectId, selectedChapter.value, memorySearchText.value, provider.value),
   enabled: computed(() => mode.value === 'memory' && !!projectQuery.data.value),
 })
@@ -133,7 +134,7 @@ function joined(value: string[] | undefined) { return value?.join('\n') ?? '' }
 function toolLabel(value: string) {
   return ({
     GET_RECENT_CHAPTER_SUMMARIES: '近期章节',
-    SEARCH_STORY_MEMORY: '语义历史检索',
+    SEARCH_STORY_MEMORY: '关键词与向量检索',
     GET_RELATED_CANON_FACTS: '相关正史事实',
   } as Record<string, string>)[value] ?? value
 }
@@ -293,15 +294,16 @@ const publishManuscriptMutation = useMutation({ mutationFn: () => {
           </div>
           <p class="quiet-text">只读工具：{{ memoryQuery.data.value.usage.toolsUsed.map(toolLabel).join('、') || '无' }}</p>
           <section>
-            <h3>相关历史正文</h3>
-            <article v-for="item in memoryQuery.data.value.semanticMemories" :key="`${item.chapterNumber}-${item.canonVersion}`" class="memory-item">
-              <header><strong>第 {{ item.chapterNumber }} 章</strong><span>{{ item.recentChapter ? '前章衔接' : `相关度 ${Math.round(item.similarity * 100)}%` }}</span></header>
+            <h3>相关规划与历史正文</h3>
+            <article v-for="item in memoryQuery.data.value.semanticMemories" :key="item.sourceKey ?? `${item.chapterNumber}-${item.canonVersion}`" class="memory-item">
+              <header><strong>{{ item.canonVersion === -4 ? '规划底稿' : `第 ${item.chapterNumber} 章` }}</strong><span>{{ item.recentChapter ? '前章衔接' : item.sourceKey ? '混合检索片段' : '历史参考' }}</span></header>
               <p class="memory-summary">{{ item.summary }}</p>
-              <small v-if="item.canonVersion === 0">作者已确认，尚未提交正史</small>
+              <small v-if="item.canonVersion === -4">作者侧计划，不是已发生事实，不代表人物知情</small>
+              <small v-else-if="item.canonVersion === 0">作者已确认，尚未提交正史</small>
               <small v-else-if="item.canonVersion < 0">正文尚未确认，不作为正史依据</small>
               <details v-if="item.content"><summary>{{ item.recentChapter ? '查看前章计划与正文' : '查看相关片段' }}</summary><p>{{ item.content }}</p></details>
             </article>
-            <p v-if="!memoryQuery.data.value.semanticMemories.length" class="quiet-text">此前章节中暂无可召回的正文。</p>
+            <p v-if="!memoryQuery.data.value.semanticMemories.length" class="quiet-text">本次未召回相关片段。</p>
           </section>
           <section>
             <h3>已确认事实</h3>

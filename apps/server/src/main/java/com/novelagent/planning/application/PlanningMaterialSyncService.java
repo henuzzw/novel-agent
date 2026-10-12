@@ -41,7 +41,7 @@ public class PlanningMaterialSyncService {
     }
 
     /**
-     * 同步项目当前已发布圣经及大纲，旧项目可显式调用补齐规划资料；读取页面本身不执行此操作。
+     * 同步项目当前已发布规划资料及大纲，旧项目可显式调用补齐规划资料；读取页面本身不执行此操作。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      */
@@ -52,7 +52,7 @@ public class PlanningMaterialSyncService {
         var pointers = jdbc.queryForMap("SELECT current_bible_version_id, current_outline_version_id FROM novel_project WHERE id = ?", projectId);
         UUID bibleId = (UUID) pointers.get("current_bible_version_id");
         UUID outlineId = (UUID) pointers.get("current_outline_version_id");
-        if (bibleId == null) throw new IllegalArgumentException("请先发布故事圣经");
+        if (bibleId == null) throw new IllegalArgumentException("请先发布已确认雪花资料");
         var bible = bibles.findByIdAndProjectId(bibleId, projectId).orElseThrow();
         syncBible(bible);
         if (outlineId != null) {
@@ -62,13 +62,13 @@ public class PlanningMaterialSyncService {
     }
 
     /**
-     * 从指定圣经同步人物蓝图、初始关系和明确台账；档案只填空白，不覆盖作者已有值。
+     * 从指定规划资料同步人物蓝图、初始关系和明确台账；档案只填空白，不覆盖作者已有值。
      *
-     * @param bible 指定圣经来源或其内容，不隐式使用其他最新草稿。
+     * @param bible 指定规划资料来源或其内容，不隐式使用其他最新草稿。
      */
     @Transactional
     public void syncBible(StoryBibleVersion bible) {
-        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw new IllegalArgumentException("只能同步已发布故事圣经");
+        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw new IllegalArgumentException("只能同步已发布已确认雪花资料");
         UUID projectId = bible.getProjectId();
         access.requireOwnedProject(projectId);
         lock(projectId);

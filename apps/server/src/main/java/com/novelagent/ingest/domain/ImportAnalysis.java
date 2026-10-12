@@ -107,14 +107,7 @@ public final class ImportAnalysis {
                 var value = item.evidence().get(j);
                 try {
                     if (!value.chapterId().equals(slice.chapterId())) invalid("证据引用了本次未提供的章节");
-                    int first = fragment.indexOf(value.quote());
-                    if (first < 0) invalid("原文证据不存在，必须使用本段连续逐字引文");
-                    int second = fragment.indexOf(value.quote(), first + 1);
-                    // A unique literal match needs no model-supplied ordinal. Repeated quotes remain strict.
-                    int offset = slice.start() + (second < 0 ? first : locate(value, fragment));
-                    int occurrence = 0, found = chapter.content().indexOf(value.quote());
-                    while (found >= 0 && found < offset) { occurrence++; found = chapter.content().indexOf(value.quote(), found + 1); }
-                    evidence.add(new Evidence(value.chapterId(), value.quote(), occurrence));
+                    evidence.add(normalizeEvidence(value, slice, chapter, fragment));
                 } catch (IllegalArgumentException error) {
                     throw new IllegalArgumentException("原文解析输出校验失败：items[" + i + "].evidence[" + j + "]：" + error.getMessage(), error);
                 }
@@ -124,18 +117,25 @@ public final class ImportAnalysis {
         WorldAssessment assessment = batch.worldAssessment();
         if (assessment != null) {
             var evidence = new ArrayList<Evidence>();
-            for (var value : assessment.evidence()) {
-                if (!value.chapterId().equals(slice.chapterId())) invalid("世界判断证据引用了未提供章节");
-                int first = fragment.indexOf(value.quote());
-                if (first < 0) invalid("世界判断证据必须是本段连续原文");
-                int offset = slice.start() + (fragment.indexOf(value.quote(), first + 1) < 0 ? first : locate(value, fragment));
-                int occurrence = 0, found = chapter.content().indexOf(value.quote());
-                while (found >= 0 && found < offset) { occurrence++; found = chapter.content().indexOf(value.quote(), found + 1); }
-                evidence.add(new Evidence(value.chapterId(), value.quote(), occurrence));
+            for (int j = 0; j < assessment.evidence().size(); j++) {
+                var value = assessment.evidence().get(j);
+                try {
+                    if (!value.chapterId().equals(slice.chapterId())) invalid("世界判断证据引用了未提供章节");
+                    evidence.add(normalizeEvidence(value, slice, chapter, fragment));
+                } catch (IllegalArgumentException error) {
+                    throw new IllegalArgumentException("原文解析输出校验失败：worldAssessment.evidence[" + j + "]：" + error.getMessage(), error);
+                }
             }
             assessment = new WorldAssessment(assessment.worldMode(), assessment.reason(), evidence);
         }
         var normalized = new Batch(batch.summary(), items, assessment); validateBatch(normalized, List.of(slice), chapters); return normalized;
+    }
+    private static Evidence normalizeEvidence(Evidence value, Slice slice, Chapter chapter, String fragment) {
+        var match = ImportEvidenceMatcher.resolve(value, fragment);
+        int offset = slice.start() + match.start();
+        int occurrence = 0, found = chapter.content().indexOf(match.quote());
+        while (found >= 0 && found < offset) { occurrence++; found = chapter.content().indexOf(match.quote(), found + 1); }
+        return new Evidence(value.chapterId(), match.quote(), occurrence);
     }
     public static List<Slice> slices(List<Chapter> chapters) {
         var result = new ArrayList<Slice>();

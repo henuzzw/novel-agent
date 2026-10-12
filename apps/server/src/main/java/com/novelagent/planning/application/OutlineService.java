@@ -80,10 +80,11 @@ public class OutlineService {
     public OutlineResponse generate(UUID projectId, GenerateOutlineRequest request) {
         NovelProject project = access.requireOwnedProject(projectId);
         UUID bibleId = project.getCurrentBibleVersionId();
-        if (bibleId == null) throw new IllegalArgumentException("请先发布故事圣经，再生成分层大纲");
+        if (bibleId == null) throw new IllegalArgumentException("请先完成并确认雪花规划，再生成大纲");
         StoryBibleVersion bible = bibles.findByIdAndProjectId(bibleId, projectId)
                 .filter(value -> value.getStatus() == StoryBibleStatus.PUBLISHED)
-                .orElseThrow(() -> new IllegalArgumentException("项目当前故事圣经不可用，请重新发布"));
+                .filter(value -> value.getSourceSnowflakeId() != null)
+                .orElseThrow(() -> new IllegalArgumentException("项目当前已确认雪花规划不可用，请重新确认规划"));
         ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
         Optional<OutlineVersion> latest = outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId);
         if (request.mode() == GenerationMode.REGENERATE && request.baseOutlineVersionId() != null) {
@@ -97,7 +98,6 @@ public class OutlineService {
         OutlineContent previousContent = base == null ? null
                 : characterNames.render(projectId, base.getContent(), OutlineContent.class);
         GeneratedOutline generated = importedGenerator != null && bible.getSourceImportId() != null
-                && bible.getSourceDirectionSetId() != null
                 ? importedGenerator.generate(projectId, bible, budget, provider, previousContent,
                         normalize(request.instruction()), CreativeStrategyPolicy.from(project))
                 : workflow.generate(projectId, promptBible, budget, provider,
@@ -119,7 +119,7 @@ public class OutlineService {
         OutlineVersion source = base != null ? base : latest.orElse(null);
         OutlineWordBudget saved = source == null ? null : source.getWordBudget();
         if (saved == null || saved.targetWords() < 1000) {
-            throw new IllegalArgumentException("项目尚未设置目标字数，也没有可沿用的大纲篇幅；请在故事方向中保存创作要求后再生成大纲");
+            throw new IllegalArgumentException("项目尚未设置目标字数，也没有可沿用的大纲篇幅；请在项目设置中保存创作要求后再生成大纲");
         }
         budgetPolicy.validate(saved);
         return saved;

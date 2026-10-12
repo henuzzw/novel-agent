@@ -11,9 +11,14 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
     }
 
     public static final long FUTURE_PLAN = -3;
+    public static final long AUTHOR_PLANNING = -4;
 
     public record SemanticMemory(int chapterNumber, long canonVersion, double similarity, String summary,
-            String content, boolean recentChapter, String chapterContract, String chapterBody) {
+            String content, boolean recentChapter, String chapterContract, String chapterBody, String sourceKey) {
+        public SemanticMemory(int chapterNumber, long canonVersion, double similarity, String summary,
+                String content, boolean recentChapter, String chapterContract, String chapterBody) {
+            this(chapterNumber, canonVersion, similarity, summary, content, recentChapter, chapterContract, chapterBody, null);
+        }
         public SemanticMemory(int chapterNumber, long canonVersion, double similarity, String summary,
                 String content) {
             this(chapterNumber, canonVersion, similarity, summary, content, false, null, null);
@@ -25,6 +30,8 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
         }
 
         public boolean futurePlan() { return canonVersion == FUTURE_PLAN; }
+        public boolean authorPlanning() { return canonVersion == AUTHOR_PLANNING; }
+        public String retrievalKey() { return sourceKey == null ? chapterNumber + ":" + canonVersion : sourceKey; }
     }
 
     public record GraphFact(long canonVersion, String subject, String predicate, String object, String evidence) {}
@@ -48,9 +55,15 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
         StringBuilder result = new StringBuilder();
         if (semanticMemories.isEmpty() && graphFacts.isEmpty()) result.append("暂无已提交的历史正史。\n");
         if (!semanticMemories.isEmpty()) {
-            result.append("【只读工具：相关历史章节】\n");
+            result.append("【只读工具：相关资料；规划与历史事实分开使用】\n");
             for (SemanticMemory memory : semanticMemories) {
                 if (memory.futurePlan()) continue;
+                if (memory.authorPlanning()) {
+                    result.append("- 作者侧规划（非已发生事实，不代表角色知情，不提前兑现）：")
+                            .append(memory.summary()).append('\n');
+                    result.append(memory.content()).append('\n');
+                    continue;
+                }
                 result.append("- 第").append(memory.chapterNumber()).append("章（")
                         .append(memory.canonVersion() > 0 ? "正史 V" + memory.canonVersion()
                                 : memory.canonVersion() == 0 ? "作者已确认，未提交正史"

@@ -2,13 +2,14 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SnowflakePlanningPanel from '@/components/SnowflakePlanningPanel.vue'
-import { getLatestSnowflakePlan, type SnowflakePlan } from '@/api/snowflake'
+import { confirmSnowflakePlan, getLatestSnowflakePlan, type SnowflakePlan } from '@/api/snowflake'
 import { generationRequests } from '@/lib/generation-activity'
-import { resumeImportedDirections } from '@/api/imports'
-import type { StoryDirectionSet } from '@/api/planning'
+import { resumeImportedSnowflake } from '@/api/imports'
+import { getPlanningSnapshot, type StoryBibleVersion } from '@/api/planning'
 
-vi.mock('@/api/snowflake', () => ({ getLatestSnowflakePlan: vi.fn() }))
-vi.mock('@/api/imports', () => ({ resumeImportedDirections: vi.fn() }))
+vi.mock('@/api/snowflake', () => ({ getLatestSnowflakePlan: vi.fn(), confirmSnowflakePlan: vi.fn() }))
+vi.mock('@/api/planning', () => ({ getPlanningSnapshot: vi.fn() }))
+vi.mock('@/api/imports', () => ({ resumeImportedSnowflake: vi.fn() }))
 let wrapper: VueWrapper | undefined
 let client: QueryClient
 function plan(overrides: Partial<SnowflakePlan> = {}): SnowflakePlan {
@@ -26,7 +27,7 @@ function render(props: { importId?: string; planningStatus?: 'CANCELLED' | 'FAIL
 }
 
 describe('snowflake planning', () => {
-  beforeEach(() => { vi.resetAllMocks(); generationRequests.value = [] })
+  beforeEach(() => { vi.resetAllMocks(); vi.mocked(getPlanningSnapshot).mockResolvedValue(null); generationRequests.value = [] })
   afterEach(() => { wrapper?.unmount(); client?.clear(); generationRequests.value = [] })
 
   it('shows arbitrary prose without nested creative fields', async () => {
@@ -57,7 +58,7 @@ describe('snowflake planning', () => {
     expect(view.find('section').exists()).toBe(false)
     vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'RUNNING', activeStage: 'CORE',
       core: null, characters: null, world: null, plot: null }))
-    generationRequests.value = [{ id: 'r1', projectId: 'p1', stage: 'STORY_BIBLE', status: 'RUNNING',
+    generationRequests.value = [{ id: 'r1', projectId: 'p1', stage: 'SNOWFLAKE_PLANNING', status: 'RUNNING',
       startedAt: '', completedAt: null, errorMessage: null, source: 'request', chapter: null }]
     await flushPromises()
     expect(view.text()).toContain('请求中')
@@ -85,26 +86,43 @@ describe('snowflake planning', () => {
     expect(view.text()).toContain('自由文本故事核心')
   })
 
+  it('marks unreadable saved prose as invalid, offers recovery and never confirms it', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'CANCELLED', sourceImportId: 'i1',
+      steps: { CORE: '当前没有本地文件读取工具', SYNOPSIS: '依赖无效来源的梗概' },
+      invalidSteps: { CORE: '读取失败', SYNOPSIS: '依赖无效来源' } }))
+    const view = render({ importId: 'i1', planningStatus: 'CANCELLED' })
+    await flushPromises()
+    expect(view.findAll('summary')[0]!.text()).toContain('需重新生成')
+    expect(view.findAll('summary')[1]!.text()).toContain('需重新生成')
+    expect(view.text()).toContain('从第一个无效步骤重做')
+    expect(view.text()).toContain('继续生成')
+    client.setQueryData(['snowflake-plan', 'p1'], plan({ invalidSteps: { CORE: '读取失败' } }))
+    await flushPromises()
+    expect(view.text()).not.toContain('确认雪花规划')
+    expect(confirmSnowflakePlan).not.toHaveBeenCalled()
+  })
+
   it('resumes the exact stopped plan once and keeps successful text visible', async () => {
     vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'CANCELLED', sourceImportId: 'i1' }))
-    let finish!: (value: StoryDirectionSet) => void
-    vi.mocked(resumeImportedDirections).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    let finish!: (value: SnowflakePlan) => void
+    vi.mocked(resumeImportedSnowflake).mockImplementation(() => new Promise(resolve => { finish = resolve }))
     const view = render({ importId: 'i1', planningStatus: 'CANCELLED' })
     const cache = vi.spyOn(client, 'setQueryData')
     await flushPromises()
     const button = view.findAll('button').find(item => item.text() === '继续生成')!
     await button.trigger('click')
     await button.trigger('click')
-    expect(resumeImportedDirections).toHaveBeenCalledExactlyOnceWith('p1', 'i1', 'plan-1')
+    expect(resumeImportedSnowflake).toHaveBeenCalledExactlyOnceWith('p1', 'i1', 'plan-1')
     expect(view.text()).toContain('正在继续')
     expect(view.text()).toContain('自由文本故事核心')
-    finish({ id: 'directions' } as StoryDirectionSet)
+    const completed = plan({ sourceImportId: 'i1' })
+    finish(completed)
     await flushPromises()
     expect(view.emitted('planningGenerated')).toHaveLength(1)
-    expect(cache).toHaveBeenCalledWith(['story-directions', 'p1'], { id: 'directions' })
+    expect(cache).toHaveBeenCalledWith(['snowflake-plan', 'p1'], completed)
   })
 
-  it('offers continuation after direction failure but not for another import or an active request', async () => {
+  it('offers finalization retry but not for another import or an active request', async () => {
     vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'SUCCEEDED', sourceImportId: 'i1' }))
     const view = render({ importId: 'i1', planningStatus: 'FAILED' })
     await flushPromises()
@@ -113,12 +131,12 @@ describe('snowflake planning', () => {
     expect(view.text()).not.toContain('继续生成')
     await view.setProps({ importId: 'i1', planningStatus: 'GENERATING' })
     expect(view.text()).not.toContain('继续生成')
-    expect(resumeImportedDirections).not.toHaveBeenCalled()
+    expect(resumeImportedSnowflake).not.toHaveBeenCalled()
   })
 
   it('shows resume errors and allows another attempt without replacing saved text', async () => {
     vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'FAILED', sourceImportId: 'i1' }))
-    vi.mocked(resumeImportedDirections).mockRejectedValue(new Error('解析报告已被替换，请重新确认'))
+    vi.mocked(resumeImportedSnowflake).mockRejectedValue(new Error('解析报告已被替换，请重新确认'))
     const view = render({ importId: 'i1', planningStatus: 'FAILED' })
     await flushPromises()
     await view.findAll('button').find(item => item.text() === '继续生成')!.trigger('click')
@@ -126,5 +144,51 @@ describe('snowflake planning', () => {
     expect(view.text()).toContain('解析报告已被替换')
     expect(view.text()).toContain('自由文本故事核心')
     expect(view.findAll('button').find(item => item.text() === '继续生成')!.attributes('disabled')).toBeUndefined()
+  })
+
+  it('confirms the exact completed plan once, caches its source and emits only after save', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ sourceImportId: 'i1' }))
+    let finish!: (value: StoryBibleVersion) => void
+    vi.mocked(confirmSnowflakePlan).mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const view = render({ importId: 'i1' })
+    await flushPromises()
+    expect(view.text()).toContain('待确认')
+    const button = view.findAll('button').find(item => item.text() === '确认雪花规划')!
+    await button.trigger('click')
+    await button.trigger('click')
+    expect(confirmSnowflakePlan).toHaveBeenCalledExactlyOnceWith('p1', 'plan-1')
+    expect(view.emitted('planningConfirmed')).toBeUndefined()
+    finish({ id: 'snapshot', sourceSnowflakeId: 'plan-1' } as StoryBibleVersion)
+    await flushPromises()
+    expect(view.text()).toContain('已确认')
+    expect(view.emitted('planningConfirmed')).toHaveLength(1)
+    expect(client.getQueryData(['planning-snapshot', 'p1'])).toMatchObject({ sourceSnowflakeId: 'plan-1' })
+  })
+
+  it('never offers confirmation for stopped runs, other imports or already confirmed runs', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ status: 'CANCELLED', sourceImportId: 'i1' }))
+    const view = render({ importId: 'i1' })
+    await flushPromises()
+    expect(view.text()).not.toContain('确认雪花规划')
+    client.setQueryData(['snowflake-plan', 'p1'], plan({ sourceImportId: 'i2' }))
+    await flushPromises()
+    expect(view.text()).not.toContain('确认雪花规划')
+    client.setQueryData(['snowflake-plan', 'p1'], plan({ sourceImportId: 'i1' }))
+    client.setQueryData(['planning-snapshot', 'p1'], { sourceSnowflakeId: 'plan-1' })
+    await flushPromises()
+    expect(view.text()).not.toContain('确认雪花规划')
+    expect(confirmSnowflakePlan).not.toHaveBeenCalled()
+  })
+
+  it('keeps a failed confirmation retryable and does not unlock the outline', async () => {
+    vi.mocked(getLatestSnowflakePlan).mockResolvedValue(plan({ sourceImportId: 'i1' }))
+    vi.mocked(confirmSnowflakePlan).mockRejectedValue(new Error('原文或确认解析已改变'))
+    const view = render({ importId: 'i1' })
+    await flushPromises()
+    await view.findAll('button').find(item => item.text() === '确认雪花规划')!.trigger('click')
+    await flushPromises()
+    expect(view.text()).toContain('原文或确认解析已改变')
+    expect(view.emitted('planningConfirmed')).toBeUndefined()
+    expect(view.findAll('button').find(item => item.text() === '确认雪花规划')!.attributes('disabled')).toBeUndefined()
   })
 })

@@ -31,9 +31,11 @@ class MemoryPreviewServiceTest {
         when(access.requireOwnedProject(id)).thenReturn(project);
         when(project.getCurrentCanonVersion()).thenReturn(4L);
         when(budgets.plan(AgentStage.CHAPTER_REVIEW, ModelProvider.DEEPSEEK, "线索")).thenReturn(budget);
-        when(memory.recall(AgentStage.CHAPTER_REVIEW, id, 2, 4, "线索", budget)).thenReturn(expected);
+        UUID planning = UUID.randomUUID();
+        when(project.getCurrentBibleVersionId()).thenReturn(planning);
+        when(memory.recall(AgentStage.CHAPTER_REVIEW, id, 2, 4, "线索", budget, planning, List.of())).thenReturn(expected);
         assertThat(service.preview(id, 2, "线索", AgentStage.CHAPTER_REVIEW, ModelProvider.DEEPSEEK)).isSameAs(expected);
-        verify(memory).recall(AgentStage.CHAPTER_REVIEW, id, 2, 4, "线索", budget);
+        verify(memory).recall(AgentStage.CHAPTER_REVIEW, id, 2, 4, "线索", budget, planning, List.of());
     }
 
     @Test void foreignProjectDoesNotAllocateBudgetOrRecallMemory() {

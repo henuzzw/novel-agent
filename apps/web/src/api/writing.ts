@@ -203,7 +203,7 @@ export interface CanonCommit {
   id: string; projectId: string; chapterNumber: number; manuscriptVersionId: string
   reviewVersionId: string | null; canonVersion: number; acceptedFacts: FactProposal[]; createdAt: string
 }
-export interface SemanticMemory { chapterNumber: number; canonVersion: number; similarity: number; summary: string; content: string; recentChapter: boolean }
+export interface SemanticMemory { chapterNumber: number; canonVersion: number; similarity: number; summary: string; content: string; recentChapter: boolean; sourceKey?: string | null }
 export interface GraphFact { canonVersion: number; subject: string; predicate: string; object: string; evidence: string }
 export interface MemoryUsage {
   stage: 'CHAPTER_CONTRACT' | 'MANUSCRIPT' | 'CHAPTER_REVIEW'

@@ -180,9 +180,9 @@ public class ChapterReviewService {
         var plan = ChapterWritingBasisService.requireCurrent(manuscript, context, contracts).plan();
         ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
         MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.CHAPTER_REVIEW, provider,
-                context.budgetInputs(context.bible().getContent(), plan, manuscript.getContent(), request.instruction()));
+                context.budgetInputs(context.writingMaterials(), plan, manuscript.getContent(), request.instruction()));
         NovelMemoryContext recalled = contexts.recall(AgentStage.CHAPTER_REVIEW, context, request.instruction(), budget);
-        ChapterReviewContent generated = workflow.generateReview(projectId, context.bible().getContent(), plan,
+        ChapterReviewContent generated = workflow.generateReview(projectId, context.writingMaterials(), plan,
                 manuscript.getContent(), recalled, entityCatalog.forReview(projectId, plan),
                 provider, context.instructionWithPreparation(normalize(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));

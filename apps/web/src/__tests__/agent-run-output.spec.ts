@@ -74,6 +74,17 @@ describe('private streamed agent output', () => {
       expect(wrapper.text()).toContain('200,000 字符')
     } finally { clear() }
   })
+  it('distinguishes rejected output from an interrupted response', async () => {
+    vi.mocked(getAgentRunOutput).mockResolvedValue({ ...output, status: 'FAILED', responseText: '完整解析响应',
+      errorType: 'IllegalArgumentException', errorCategory: 'OUTPUT_VALIDATION', errorDetail: 'items[15].evidence[2]：原文证据不存在' })
+    const { wrapper, clear } = setup()
+    try {
+      await vi.waitFor(() => expect(wrapper.text()).toContain('输出校验失败'))
+      expect(wrapper.text()).toContain('模型已返回内容，但校验未通过')
+      expect(wrapper.text()).toContain('items[15].evidence[2]')
+      expect(wrapper.text()).not.toContain('未完成响应，不作为有效规划或正文')
+    } finally { clear() }
+  })
   it('retains stopped partial responses and ends the stream without claiming successful output', async () => {
     vi.mocked(getAgentRunOutput).mockResolvedValue(output)
     const stop = vi.fn()

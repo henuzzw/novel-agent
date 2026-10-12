@@ -92,7 +92,7 @@ public class PrivateOAuthStore {
         } finally { Files.deleteIfExists(temp); }
     }
     private Path directory(UUID user) { return root.resolve(user.toString()); }
-    private static void protect(Path path, boolean directory) throws IOException {
+    public static void protect(Path path, boolean directory) throws IOException {
         if (Files.isSymbolicLink(path)) throw new IOException("Symbolic credential path rejected");
         if (Files.getFileStore(path).supportsFileAttributeView("posix")) {
             Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(directory ? "rwx------" : "rw-------"));

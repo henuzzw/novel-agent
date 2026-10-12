@@ -2,12 +2,12 @@ import { mount } from '@vue/test-utils'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getLatestOutline, getLatestStoryBible, type OutlineVersion, type StoryBibleVersion } from '@/api/planning'
+import { getLatestOutline, getPlanningSnapshot, type OutlineVersion, type StoryBibleVersion } from '@/api/planning'
 import { analyzeWritingStyle, applyWritingStyle, generateStylePreview, getStylePresets, getWritingStyle, recommendWritingStyle, checkStylePreview, type StylePreview, type StyleRecommendation, type WritingStyleProfile } from '@/api/writingQuality'
 import WritingStylePanel from '@/components/WritingStylePanel.vue'
 import StylePreviewEditor from '@/components/StylePreviewEditor.vue'
 
-vi.mock('@/api/planning', () => ({ getLatestOutline: vi.fn(), getLatestStoryBible: vi.fn() }))
+vi.mock('@/api/planning', () => ({ getLatestOutline: vi.fn(), getPlanningSnapshot: vi.fn() }))
 vi.mock('@/api/writingQuality', () => ({
   getWritingStyle: vi.fn(), getStylePresets: vi.fn(), generateStylePreview: vi.fn(),
   applyWritingStyle: vi.fn(), analyzeWritingStyle: vi.fn(), uploadWritingStyle: vi.fn(),
@@ -35,7 +35,7 @@ describe('style preview workflow', () => {
     vi.mocked(getWritingStyle).mockResolvedValue({ profile: null, version: 4 })
     vi.mocked(getStylePresets).mockResolvedValue([profile])
     vi.mocked(getLatestOutline).mockResolvedValue(outline)
-    vi.mocked(getLatestStoryBible).mockResolvedValue(bible)
+    vi.mocked(getPlanningSnapshot).mockResolvedValue(bible)
     vi.mocked(recommendWritingStyle).mockResolvedValue(recommendation)
     vi.mocked(generateStylePreview).mockResolvedValue(result)
     vi.mocked(checkStylePreview).mockResolvedValue({ id: 'report-1', preview: result, provider: 'LOCAL_CODEX', reviewMode: 'MODEL',
@@ -149,9 +149,9 @@ describe('style preview workflow', () => {
   })
 
   it('requires a saved bible but not an outline for recommendations', async () => {
-    vi.mocked(getLatestStoryBible).mockResolvedValue(null)
+    vi.mocked(getPlanningSnapshot).mockResolvedValue(null)
     const { wrapper } = render()
-    await vi.waitFor(() => expect(wrapper.text()).toContain('尚无已保存的故事圣经'))
+    await vi.waitFor(() => expect(wrapper.text()).toContain('尚未确认雪花规划'))
     expect(wrapper.find('.style-recommendation button').attributes('disabled')).toBeDefined()
     expect(recommendWritingStyle).not.toHaveBeenCalled()
   })
@@ -161,11 +161,11 @@ describe('style preview workflow', () => {
     await vi.waitFor(() => expect(wrapper.find('.style-recommendation button').attributes('disabled')).toBeUndefined())
     await wrapper.find('.style-recommendation button').trigger('click')
     await vi.waitFor(() => expect(wrapper.find('.recommendation-list button').exists()).toBe(true))
-    queryClient.setQueryData(['story-bible', 'project-1'], { ...bible, version: 3 })
-    await vi.waitFor(() => expect(wrapper.text()).toContain('故事圣经已更新'))
+    queryClient.setQueryData(['planning-snapshot', 'project-1'], { ...bible, version: 3 })
+    await vi.waitFor(() => expect(wrapper.text()).toContain('已确认雪花资料已更新'))
     expect(wrapper.find('.recommendation-list button').attributes('disabled')).toBeDefined()
     vi.mocked(recommendWritingStyle).mockRejectedValueOnce(new Error('推荐模型暂时不可用'))
-    vi.mocked(getLatestStoryBible).mockResolvedValue({ ...bible, version: 3 })
+    vi.mocked(getPlanningSnapshot).mockResolvedValue({ ...bible, version: 3 })
     await wrapper.find('.style-recommendation button').trigger('click')
     await vi.waitFor(() => expect(wrapper.text()).toContain('推荐模型暂时不可用'))
     expect(wrapper.findAll('.recommendation-list > li')).toHaveLength(1)

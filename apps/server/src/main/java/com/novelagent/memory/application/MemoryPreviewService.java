@@ -35,6 +35,7 @@ public class MemoryPreviewService {
     public NovelMemoryContext preview(UUID projectId, int chapterNumber, String query, AgentStage stage, ModelProvider provider) {
         var project = access.requireOwnedProject(projectId);
         var budget = budgetPlanner.plan(stage, provider, query);
-        return memory.recall(stage, projectId, chapterNumber, project.getCurrentCanonVersion(), query, budget);
+        return memory.recall(stage, projectId, chapterNumber, project.getCurrentCanonVersion(), query, budget,
+                project.getCurrentBibleVersionId(), java.util.List.of());
     }
 }

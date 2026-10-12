@@ -80,9 +80,6 @@ class AutomationPersistenceTest {
     @Autowired private com.novelagent.planning.application.PlanningBatchService planningBatches;
     @Autowired private com.novelagent.planning.application.PlanningBatchRunner planningBatchRunner;
     @Autowired private com.novelagent.project.infrastructure.CreativeIntentRepository creativeIntents;
-    @Autowired private com.novelagent.planning.application.CharacterBlueprintCompletionService characterCompletion;
-    @Autowired private com.novelagent.planning.application.CharacterBlueprintDraftStore characterDrafts;
-    @Autowired private com.novelagent.planning.application.StoryBibleService bibleService;
     @Autowired private com.fasterxml.jackson.databind.ObjectMapper json;
     @Autowired private com.novelagent.planning.application.PlanningMaterialSyncService planningMaterials;
     @Autowired private com.novelagent.planning.application.OutlineService outlineService;
@@ -92,7 +89,7 @@ class AutomationPersistenceTest {
     @Autowired private com.novelagent.ingest.application.WorkImportService workImports;
     @Autowired private com.novelagent.ingest.application.ImportAnalysisStore importAnalyses;
     @Autowired private com.novelagent.ingest.application.ImportAnalysisRunner importAnalysisRunner;
-    @Autowired private com.novelagent.ingest.application.ImportedPlanningService importedPlanning;
+    @Autowired private com.novelagent.ingest.application.ImportedStoryBlueprintService importedPlanning;
     @MockitoSpyBean private com.novelagent.planning.infrastructure.StructuredModelGateway structuredModels;
     @Autowired private com.novelagent.writing.infrastructure.ChapterContractVersionRepository chapterContracts;
     @Autowired private com.novelagent.writing.infrastructure.ManuscriptVersionRepository chapterManuscripts;
@@ -173,55 +170,12 @@ class AutomationPersistenceTest {
     }
     @Test void importAnalysisPreventsUnconfirmedPlanningAndPrivateSourceAccess() {
         var source = importedText("第1章 纸条\n林安把纸条夹进数学书。");
-        assertThatThrownBy(() -> importedPlanning.generate(projectId, source.id(), new com.novelagent.ingest.api.ReversePlanRequest(ModelProvider.DEEPSEEK, com.novelagent.ingest.domain.ImportPlanningMode.ADAPT_SOURCE, ""))).hasMessageContaining("先解析原文");
+        assertThatThrownBy(() -> importedPlanning.generate(projectId, source.id(), new com.novelagent.ingest.api.PrepareImportedStoryRequest(ModelProvider.DEEPSEEK, com.novelagent.ingest.domain.ImportPlanningMode.ADAPT_SOURCE, "", UUID.randomUUID(), 0L, 50000, false))).hasMessageContaining("先解析原文");
         var foreign = projects.saveAndFlush(NovelProject.create(UUID.randomUUID(), UUID.randomUUID(), "别人项目", EntryMode.IDEA));
         assertThatThrownBy(() -> importAnalyses.list(foreign.getId(), source.id())).isInstanceOf(ProjectNotFoundException.class);
         var otherSource = importedText("第1章 新稿\n不同的稿件。"); var view = completedImportAnalysis(source.id());
         assertThatThrownBy(() -> importAnalyses.get(projectId, otherSource.id(), view.report().id())).isInstanceOf(com.novelagent.writing.application.WritingResourceNotFoundException.class);
     }
-    @Test void confirmedImportAnalysisIsPassedToBothPlanningCallsAndOnlySavesDrafts() {
-        var source = importedText("第1章 纸条\n林安把纸条夹进数学书。"); var accepted = acceptImportAnalysis(completedImportAnalysis(source.id()), com.novelagent.ingest.domain.ImportPlanningMode.ADAPT_SOURCE);
-        var project = projects.findById(projectId).orElseThrow(); UUID bibleId = project.getCurrentBibleVersionId(), outlineId = project.getCurrentOutlineVersionId();
-        strategies.update(projectId, com.novelagent.project.domain.CreativeStrategy.FANQIE_GRIPPING, project.getRowVersion());
-        String strategyGuide = strategies.promptContext(projectId);
-        var content = bibles.findById(bibleId).orElseThrow().getContent(); var outlineContent = outlines.findById(outlineId).orElseThrow().getContent();
-        var intent = new com.novelagent.project.domain.CreativeIntent(projectId);
-        intent.update("寻找纸条主人", List.of("校园"), "青年", "林安", "误会", List.of("克制"), 3000, "澄清误会", List.of(), List.of(), List.of());
-        creativeIntents.saveAndFlush(intent);
-        org.mockito.Mockito.doAnswer(call -> {
-            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            assertThat((String) call.getArgument(4)).contains("作者已确认的原文解析", accepted.report().id().toString(), "推测", "不允许删改原文");
-            assertThat((String) call.getArgument(4)).contains(strategyGuide);
-            if (((String) call.getArgument(1)).endsWith("OUTLINE")) {
-                assertThat((String) call.getArgument(4)).contains(com.novelagent.project.application.CreativeStrategyGuide.outlineRules());
-            }
-            com.fasterxml.jackson.databind.node.ObjectNode output = json.valueToTree(((String) call.getArgument(1)).endsWith("BIBLE") ? content : outlineContent);
-            if (((String) call.getArgument(1)).endsWith("BIBLE")) output.set("characterBlueprints", json.valueToTree(List.of(com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安"))));
-            return json.writeValueAsString(java.util.Map.of("content", output, "changeSummary", List.of()));
-        }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.startsWith("IMPORT_REVERSE_"), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.doReturn(json.valueToTree(java.util.Map.of("characterBlueprints", List.of(
-                com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安")))).toString())
-                .when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId), org.mockito.ArgumentMatchers.eq("CHARACTER_DESIGN"),
-                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
-                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any());
-        var generated = importedPlanning.generate(projectId, source.id(), new com.novelagent.ingest.api.ReversePlanRequest(ModelProvider.DEEPSEEK, accepted.report().confirmedMode(), "", accepted.report().id(), accepted.report().version()));
-        assertThat(generated.storyBible().status().toString()).isEqualTo("DRAFT"); assertThat(generated.outline().status().toString()).isEqualTo("DRAFT");
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentBibleVersionId()).isEqualTo(bibleId);
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentOutlineVersionId()).isEqualTo(outlineId);
-        assertThat(jdbc.queryForObject("SELECT generated_analysis_id FROM work_import WHERE id = ?", UUID.class, source.id())).isEqualTo(accepted.report().id());
-    }
-
-
-
-
-
-
-
-
-
-
-
-
     @Test void publishedPlanningSynchronizesProfilesRelationsAndLedgerWithoutCanonOrOverwrites() {
         var character = com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安");
         var template = com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(List.of(character));
@@ -233,7 +187,12 @@ class AutomationPersistenceTest {
         var draft = bibles.saveAndFlush(StoryBibleVersion.create(UUID.randomUUID(), projectId, 2, "AUTHOR_EDIT", null, null, null, content));
         assertThat(characterNames.list(projectId)).isEmpty();
         assertThat(readerExperiences.list(projectId)).isEmpty();
-        bibleService.publish(projectId, draft.getId(), draft.getRowVersion());
+        draft.publish();
+        bibles.saveAndFlush(draft);
+        var project = projects.findById(projectId).orElseThrow();
+        project.publishStoryBible(draft.getId());
+        projects.saveAndFlush(project);
+        planningMaterials.syncBible(draft);
         var profile = characterProfiles.list(projectId).getFirst();
         assertThat(profile.background()).isEqualTo(character.background());
         assertThat(profile.secret()).isEqualTo(character.secret());
@@ -435,62 +394,6 @@ class AutomationPersistenceTest {
         assertThat(runQueries.output(other, runId)).isEmpty();
     }
 
-    @Test
-    void characterCompletionUsesLegacyJsonAndSavesEditableDraftWithoutChangingPublishedBible() throws Exception {
-        var project = projects.findById(projectId).orElseThrow();
-        var sourceId = project.getCurrentBibleVersionId();
-        jdbc.update("UPDATE story_bible_version SET content = content - 'characterBlueprints', schema_version = 'story-bible/1' WHERE id = ?", sourceId);
-        var source = bibles.findById(sourceId).orElseThrow();
-        assertThat(source.getContent().characterBlueprints()).isEmpty();
-        var character = com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安");
-        var output = json.createObjectNode(); output.set("characterBlueprints", json.valueToTree(List.of(character)));
-        var calls = new java.util.concurrent.atomic.AtomicInteger();
-        org.mockito.Mockito.doAnswer(call -> {
-            calls.incrementAndGet();
-            assertThat(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
-            assertThat(json.readTree((String) call.getArgument(4)).path("storyBible").path("characterBlueprints")).isEmpty();
-            return output.toString();
-        }).when(structuredModels).request(org.mockito.ArgumentMatchers.eq(projectId),
-                org.mockito.ArgumentMatchers.eq("CHARACTER_DESIGN"), org.mockito.ArgumentMatchers.eq(ModelProvider.DEEPSEEK),
-                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(10000), org.mockito.ArgumentMatchers.any());
-        var draft = characterCompletion.complete(projectId, sourceId, source.getRowVersion(), ModelProvider.DEEPSEEK, "补全缺失人物");
-        assertThat(calls.get()).isOne();
-        assertThat(draft.status()).isEqualTo(com.novelagent.planning.domain.StoryBibleStatus.DRAFT);
-        assertThat(draft.baseBibleVersionId()).isEqualTo(sourceId);
-        assertThat(draft.content().characterBlueprints()).containsExactly(character);
-        assertThat(draft.content().logline()).isEqualTo(source.getContent().logline());
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentBibleVersionId()).isEqualTo(sourceId);
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentCanonVersion()).isZero();
-        assertThat(bibles.findById(sourceId).orElseThrow().getContent().characterBlueprints()).isEmpty();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM character_profile WHERE project_id = ?", Integer.class, projectId)).isZero();
-        var published = bibleService.publish(projectId, draft.id(), draft.version());
-        assertThat(published.content().characterBlueprints()).containsExactly(character);
-        assertThat(bibleService.current(projectId).orElseThrow().id()).isEqualTo(draft.id());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM character_profile WHERE project_id = ?", Integer.class, projectId)).isOne();
-        assertThat(jdbc.queryForObject("SELECT background FROM character_profile WHERE project_id = ?", String.class, projectId)).isEqualTo(character.background());
-    }
-
-    @Test
-    void changedBibleCannotSaveLateCompletionAndNoChangeDoesNotInventVersion() {
-        var project = projects.findById(projectId).orElseThrow();
-        var bibleId = project.getCurrentBibleVersionId();
-        var original = bibles.findById(bibleId).orElseThrow();
-        var basis = characterDrafts.load(projectId, bibleId, original.getRowVersion());
-        jdbc.update("UPDATE story_bible_version SET row_version = row_version + 1 WHERE id = ?", bibleId);
-        var proposed = List.of(com.novelagent.planning.domain.CharacterBlueprintFixtures.character("林安"));
-        int before = bibles.findAllByProjectIdOrderByGenerationNumberDesc(projectId).size();
-        assertThatThrownBy(() -> characterDrafts.save(basis, proposed, ModelProvider.DEEPSEEK, null))
-                .isInstanceOf(com.novelagent.project.application.ResourceVersionConflictException.class);
-        assertThat(bibles.findAllByProjectIdOrderByGenerationNumberDesc(projectId)).hasSize(before);
-        var current = bibles.findById(bibleId).orElseThrow();
-        var updated = characterDrafts.load(projectId, bibleId, current.getRowVersion());
-        var draft = characterDrafts.save(updated, proposed, ModelProvider.DEEPSEEK, null);
-        var unchanged = characterDrafts.load(projectId, draft.id(), draft.version());
-        assertThatThrownBy(() -> characterDrafts.save(unchanged, proposed, ModelProvider.DEEPSEEK, null))
-                .hasMessageContaining("未创建新版本");
-        assertThat(bibles.findAllByProjectIdOrderByGenerationNumberDesc(projectId)).hasSize(before + 1);
-    }
 
     @Test
     void planningBatchRunsOneChunkPerClickAndAssemblesIdempotentDraftWithoutPublishing() throws Exception {

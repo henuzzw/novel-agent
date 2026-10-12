@@ -1,6 +1,7 @@
 package com.novelagent.writing.application;
 
 import com.novelagent.agent.application.AgentStage;
+import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.memory.application.MemoryBudgetPlan;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.NovelMemoryContext;
@@ -34,17 +35,19 @@ public class WritingContextService {
     private final OutlineVersionRepository outlines;
     private final StoryBibleVersionRepository bibles;
     private final NovelMemoryService memory;
+    private final CharacterNameService names;
 
     public WritingContextService(ProjectAccessService access, OutlineVersionRepository outlines,
-            StoryBibleVersionRepository bibles, NovelMemoryService memory) {
+            StoryBibleVersionRepository bibles, NovelMemoryService memory, CharacterNameService names) {
         this.access = access;
         this.outlines = outlines;
         this.bibles = bibles;
         this.memory = memory;
+        this.names = names;
     }
 
     /**
-     * 组装正式章节写作依据：当前发布圣经、大纲、章节及适用创作准备，保留规划与正史边界。
+     * 组装正式章节写作依据：当前发布规划资料、大纲、章节及适用创作准备，保留规划与正史边界。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -60,10 +63,10 @@ public class WritingContextService {
                 .filter(value -> value.getStatus() == OutlineStatus.PUBLISHED)
                 .orElseThrow(() -> new IllegalArgumentException("项目当前大纲不可用"));
         StoryBibleVersion bible = bibles.findByIdAndProjectId(outline.getSourceBibleVersionId(), projectId)
-                .orElseThrow(() -> new IllegalArgumentException("大纲关联的故事圣经不可用"));
+                .orElseThrow(() -> new IllegalArgumentException("大纲关联的已确认雪花资料不可用"));
         if (bible.getStatus() != StoryBibleStatus.PUBLISHED
                 || !outline.getSourceBibleVersionId().equals(project.getCurrentBibleVersionId())) {
-            throw new IllegalArgumentException("大纲关联的故事圣经必须已发布且与项目当前圣经一致");
+            throw new IllegalArgumentException("大纲关联的已确认雪花资料必须已发布且与项目当前规划资料一致");
         }
         return prepared(resolve(outline, bible, chapterNumber, CreativeStrategyPolicy.from(project)), project);
     }
@@ -89,7 +92,7 @@ public class WritingContextService {
         OutlineVersion outline = outlines.findByIdAndProjectId(outlineVersionId, projectId)
                 .orElseThrow(() -> new WritingResourceNotFoundException("大纲", outlineVersionId));
         StoryBibleVersion bible = bibles.findByIdAndProjectId(outline.getSourceBibleVersionId(), projectId)
-                .orElseThrow(() -> new WritingResourceNotFoundException("故事圣经", outline.getSourceBibleVersionId()));
+                .orElseThrow(() -> new WritingResourceNotFoundException("已确认雪花资料", outline.getSourceBibleVersionId()));
         return prepared(resolve(outline, bible, 1, CreativeStrategyPolicy.from(project)), project);
     }
 
@@ -111,10 +114,12 @@ public class WritingContextService {
     public NovelMemoryContext recall(AgentStage stage, Context context, String instruction,
             MemoryBudgetPlan budget) {
         NovelProject project = requireOwnedProject(context.outline().getProjectId());
-        String query = context.chapter().title() + " " + context.chapter().content() + " "
-                + (instruction == null ? "" : instruction);
+        String query = names.render(project.getId(), context.chapter().title() + " " + context.chapter().content() + " "
+                + (instruction == null ? "" : instruction));
         NovelMemoryContext recalled = memory.recall(stage, project.getId(), context.chapter().number(),
-                project.getCurrentCanonVersion(), query, budget);
+                project.getCurrentCanonVersion(), query, budget, context.bible().getId(),
+                context.bible().getContent() == null ? List.of() : context.bible().getContent().characterBlueprints().stream()
+                        .map(com.novelagent.planning.domain.CharacterBlueprint::name).filter(query::contains).toList());
         if (context.previous() == null && context.next() == null && recalled.futureContext().isEmpty()) return recalled;
         var future = new NovelMemoryContext.SemanticMemory(context.next() == null ? context.chapter().number()
                 : context.next().chapter().number(), NovelMemoryContext.FUTURE_PLAN, 1.0,
@@ -170,8 +175,8 @@ public class WritingContextService {
         public String futureContext() {
             return "【未来规划边界：不属于已发生事实或人物已知信息】\n"
                     + "来源项目=" + outline.getProjectId() + "；大纲=" + outline.getId()
-                    + "；大纲行版本=" + outline.getRowVersion() + "；圣经=" + outline.getSourceBibleVersionId()
-                    + "；圣经行版本=" + bible.getRowVersion()
+                    + "；大纲行版本=" + outline.getRowVersion() + "；规划资料=" + outline.getSourceBibleVersionId()
+                    + "；规划资料行版本=" + bible.getRowVersion()
                     + "\n" + (next == null ? "当前为末章，无下一章计划。" : "下一章所在卷/幕："
                     + next.arc().ordinal() + " " + next.arc().title() + "\n下一章计划：" + next.chapter());
         }
@@ -188,6 +193,12 @@ public class WritingContextService {
             result[inputs.length] = preparationContext;
             return result;
         }
+
+        public com.novelagent.planning.domain.StoryBibleContent writingMaterials() {
+            return WritingMaterialSelection.forChapter(bible.getContent(), chapter.content());
+        }
+
+        public OutlineArc writingArc() { return WritingMaterialSelection.forChapter(arc, chapter); }
 
         public String boundaryFingerprint() {
             return NovelMemoryContext.fingerprint(outline.getProjectId() + "\n" + outline.getId() + "\n"

@@ -51,6 +51,9 @@ public class StoryBibleVersion {
     @Column(name = "source_import_id")
     private UUID sourceImportId;
 
+    @Column(name = "source_snowflake_id")
+    private UUID sourceSnowflakeId;
+
     @Column(name = "base_bible_version_id")
     private UUID baseBibleVersionId;
 
@@ -150,6 +153,12 @@ public class StoryBibleVersion {
 
     public void linkImport(UUID importId) { this.sourceImportId = importId; }
 
+    /** Internal immutable material projection; its authority is the confirmed Snowflake run. */
+    public void linkSnowflake(UUID planId) {
+        this.sourceSnowflakeId = java.util.Objects.requireNonNull(planId);
+        this.schemaVersion = "snowflake-materials/1";
+    }
+
     private static StoryBibleContent validate(StoryBibleContent value) {
         if (value == null) {
             throw new IllegalArgumentException("故事圣经内容不能为空");
@@ -180,6 +189,7 @@ public class StoryBibleVersion {
     public UUID getSourceDirectionSetId() { return sourceDirectionSetId; }
     public UUID getSourceCandidateId() { return sourceCandidateId; }
     public UUID getSourceImportId() { return sourceImportId; }
+    public UUID getSourceSnowflakeId() { return sourceSnowflakeId; }
     public UUID getBaseBibleVersionId() { return baseBibleVersionId; }
     public StoryBibleContent getContent() { return content; }
     public List<String> getChangeSummary() { return List.copyOf(changeSummary); }

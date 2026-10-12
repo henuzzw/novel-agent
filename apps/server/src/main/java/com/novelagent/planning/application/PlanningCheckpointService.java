@@ -226,7 +226,7 @@ public class PlanningCheckpointService {
     }
 
     /**
-     * 复核冻结圣经、项目策略和依赖后复用成功片段，失败或失效来源不因键相同而继续采用。
+     * 复核冻结规划资料、项目策略和依赖后复用成功片段，失败或失效来源不因键相同而继续采用。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param id 当前方法所操作记录的稳定 ID。
@@ -252,17 +252,17 @@ public class PlanningCheckpointService {
     }
 
     private StoryBibleVersion currentBible(NovelProject project, boolean lock) {
-        if (project.getCurrentBibleVersionId() == null) throw new IllegalArgumentException("请先发布故事圣经");
+        if (project.getCurrentBibleVersionId() == null) throw new IllegalArgumentException("请先发布已确认雪花资料");
         StoryBibleVersion bible = bibles.findByIdAndProjectId(project.getCurrentBibleVersionId(), project.getId())
-                .orElseThrow(() -> new IllegalArgumentException("项目当前圣经不可用"));
+                .orElseThrow(() -> new IllegalArgumentException("项目当前规划资料不可用"));
         if (lock) entities.refresh(bible, LockModeType.PESSIMISTIC_READ);
-        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw new IllegalArgumentException("规划分块必须使用已发布圣经");
+        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw new IllegalArgumentException("规划分块必须使用已发布规划资料");
         return bible;
     }
 
     private StoryBibleVersion requireSource(NovelProject project, PlanningCheckpoint checkpoint) {
         if (!checkpoint.source().bibleId().equals(project.getCurrentBibleVersionId())) {
-            throw conflict("规划依据已变化，请基于当前圣经创建新的规划分块");
+            throw conflict("规划依据已变化，请基于当前规划资料创建新的规划分块");
         }
         StoryBibleVersion bible = currentBible(project, true);
         var command = new CreateCommand(checkpoint.chunkKey(), checkpoint.chapterFrom(), checkpoint.chapterTo(),

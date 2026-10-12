@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.novelagent.planning.api.StoryBibleResponse;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.application.StoryBibleService;
+import com.novelagent.planning.application.ConfirmedSnowflakeService;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.project.application.ProjectNotFoundException;
@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 class WritingStyleRecommendationServiceTest {
     private final UUID projectId = UUID.randomUUID();
     private final UUID bibleId = UUID.randomUUID();
-    private final StoryBibleService bibles = mock(StoryBibleService.class);
+    private final ConfirmedSnowflakeService bibles = mock(ConfirmedSnowflakeService.class);
     private final WritingGenerationWorkflow workflow = mock(WritingGenerationWorkflow.class);
     private final WritingStyleService styles = mock(WritingStyleService.class);
     private final WritingStyleRecommendationService service = new WritingStyleRecommendationService(bibles, workflow, styles);
@@ -85,6 +85,6 @@ class WritingStyleRecommendationServiceTest {
         var content = new StoryBibleContent("旧信的故事", "记忆", "城市", List.of(), "主角", "成长", List.of(),
                 List.of(), "误会", "代价", style, "和解", List.of(), List.of());
         return new StoryBibleResponse(bibleId, projectId, 2, "story-bible/1", StoryBibleStatus.DRAFT, "AUTHOR_EDIT",
-                null, null, null, null, null, content, List.of(), version, Instant.EPOCH, Instant.EPOCH);
+                null, null, null, null, null, null, content, List.of(), version, Instant.EPOCH, Instant.EPOCH);
     }
 }

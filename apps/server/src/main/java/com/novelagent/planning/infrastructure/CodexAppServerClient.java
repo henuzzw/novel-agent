@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @Component
+@org.springframework.context.annotation.Primary
 public class CodexAppServerClient {
 
     private static final Logger log = LoggerFactory.getLogger(CodexAppServerClient.class);
@@ -81,7 +82,10 @@ public class CodexAppServerClient {
     private final Map<Long, CompletableFuture<JsonNode>> pendingRequests = new ConcurrentHashMap<>();
     private final Map<String, ActiveTurn> activeTurns = new ConcurrentHashMap<>();
     private final Set<String> attachedThreads = ConcurrentHashMap.newKeySet();
+    private final Set<String> materialToolThreads = ConcurrentHashMap.newKeySet();
+    private final Map<String, MaterialScope> materialScopes = new ConcurrentHashMap<>();
     private final Map<String, String> abandonedTurns = new ConcurrentHashMap<>();
+    private final Map<String, Long> contextTokens = new ConcurrentHashMap<>();
     private final Deque<String> recentErrors = new ArrayDeque<>();
 
     private volatile Process process;
@@ -162,13 +166,16 @@ public class CodexAppServerClient {
         params.put("approvalPolicy", "never");
         params.put("sandbox", "read-only");
         params.put("ephemeral", false);
+        if (externalAuthorization()) params.put("baseInstructions", "你是小说工作流助手。只完成当前阶段的文本任务，"
+                + "使用限定的只读资料工具核对信息；不执行代码、命令、文件修改或发布操作。候选输出不代表作者确认。");
         params.put("developerInstructions", developerInstructions);
-        params.set("dynamicTools", objectMapper.createArrayNode());
+        params.set("dynamicTools", dynamicTools());
         params.set("environments", objectMapper.createArrayNode());
 
         JsonNode result = request("thread/start", params);
         String threadId = requiredText(result, "/thread/id", "Codex 未返回 thread ID");
         attachedThreads.add(threadId);
+        materialToolThreads.add(threadId);
         log.info("Codex thread started projectId={} threadId={} model={}", projectId, threadId, choice.model());
         return threadId;
     }
@@ -179,9 +186,9 @@ public class CodexAppServerClient {
 
     public void resumeThread(String threadId, UUID projectId, String developerInstructions, EffectiveSettings choice) {
         ensureStarted();
-        if (attachedThreads.contains(threadId)) {
-            return;
-        }
+        // Resume also updates live instructions; an attached thread is not an immutable prompt.
+        if (activeTurns.containsKey(threadId) || abandonedTurns.containsKey(threadId))
+            throw new CodexAppServerException("会话仍在执行或尚未确认停止，不能更新指令");
         ObjectNode params = objectMapper.createObjectNode();
         params.put("threadId", threadId);
         params.put("model", choice.model());
@@ -191,9 +198,130 @@ public class CodexAppServerClient {
         params.put("sandbox", "read-only");
         params.put("developerInstructions", developerInstructions);
         params.put("excludeTurns", true);
-        request("thread/resume", params);
+        JsonNode resumed = request("thread/resume", params);
+        restoreMaterialToolCapability(threadId, resumed);
         attachedThreads.add(threadId);
         log.info("Codex thread resumed projectId={} threadId={} model={}", projectId, threadId, choice.model());
+    }
+
+    protected ArrayNode dynamicTools() {
+        return com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool.definitions(objectMapper);
+    }
+    protected boolean externalAuthorization() { return false; }
+    protected JsonNode handleDynamicTool(JsonNode params) {
+        var scope = materialScopes.get(params.path("threadId").asText());
+        return com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool.respond(objectMapper, params,
+                scope == null ? Set.of() : scope.ids(), id -> readMaterialFile(scope.project(), id));
+    }
+    public boolean supportsMaterialTool(String threadId) { return materialToolThreads.contains(threadId); }
+    public void openMaterialScope(String threadId, UUID projectId, Set<String> ids) {
+        if (!supportsMaterialTool(threadId)) throw new CodexAppServerException("该旧会话未注册资料工具，不能发送文件引用");
+        if (materialScopes.putIfAbsent(threadId, new MaterialScope(projectId, Set.copyOf(ids))) != null)
+            throw new CodexAppServerException("该会话已有资料读取任务");
+    }
+    public void closeMaterialScope(String threadId) { materialScopes.remove(threadId); }
+
+    /** Resume cannot add tools. Only persisted runtime metadata proves that an older thread has this tool. */
+    private void restoreMaterialToolCapability(String threadId, JsonNode resumed) {
+        if (materialToolThreads.contains(threadId)) return;
+        String path = resumed.at("/thread/path").asText("");
+        if (path.isBlank()) return;
+        try {
+            Path file = Path.of(path).toRealPath();
+            if (!file.startsWith(codexHome.toRealPath())) return;
+            try (var reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                var head = new StringBuilder();
+                int next;
+                while (head.length() < 65536 && (next = reader.read()) != -1 && next != '\n') head.append((char) next);
+                if (head.length() == 65536) return;
+                var metadata = objectMapper.readTree(head.toString());
+                if (metadata == null || !"session_meta".equals(metadata.path("type").asText())
+                        || !threadId.equals(metadata.at("/payload/id").asText())) return;
+                for (var tool : metadata.at("/payload/dynamic_tools")) {
+                    if (com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool.NAME.equals(tool.path("name").asText())) {
+                        materialToolThreads.add(threadId);
+                        return;
+                    }
+                }
+            }
+        } catch (IOException | RuntimeException error) {
+            log.warn("Codex material tool capability unavailable threadId={} fallback=inline", threadId);
+        }
+    }
+
+    private String readMaterialFile(UUID projectId, String id) {
+        Path workspace = runtimeRoot.resolve(projectId.toString());
+        Path directory = workspace.resolve(".novel-materials");
+        Path file = directory.resolve(id + ".txt");
+        try {
+            if (Files.isSymbolicLink(workspace) || Files.isSymbolicLink(directory) || Files.isSymbolicLink(file)
+                    || !file.toRealPath().startsWith(directory.toRealPath()))
+                throw new IOException("Unsafe material path");
+            String text = Files.readString(file, StandardCharsets.UTF_8);
+            if (!id.equals(com.novelagent.modelaccess.infrastructure.CodexMaterialDelta.fingerprint(text)))
+                throw new IOException("Material identity changed");
+            return text;
+        } catch (IOException error) {
+            throw new CodexAppServerException("授权资料文件不可读取", error);
+        }
+    }
+    private record MaterialScope(UUID project, Set<String> ids) { }
+    public boolean hasActiveTurns() { return !activeTurns.isEmpty() || !abandonedTurns.isEmpty(); }
+    public long contextTokens(String threadId) { return contextTokens.getOrDefault(threadId, 0L); }
+
+    /** Exact private files are readable only through a registered, task-scoped material tool. */
+    public void saveMaterialFiles(UUID projectId, Map<String, String> materials) {
+        if (materials.isEmpty()) return;
+        Path workspace = prepareWorkspace(projectId);
+        Path directory = workspace.resolve(".novel-materials");
+        try {
+            if (Files.isSymbolicLink(workspace) || Files.isSymbolicLink(directory))
+                throw new IOException("Symbolic material directory rejected");
+            Files.createDirectories(directory);
+            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(directory, true);
+            for (var entry : materials.entrySet()) {
+                String id = entry.getKey();
+                if (!id.matches("[a-f0-9]{64}")
+                        || !id.equals(com.novelagent.modelaccess.infrastructure.CodexMaterialDelta.fingerprint(entry.getValue())))
+                    throw new IOException("Invalid material identity");
+                Path target = directory.resolve(id + ".txt");
+                if (Files.isSymbolicLink(target)) throw new IOException("Symbolic material file rejected");
+                if (Files.exists(target)) {
+                    com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(target, false);
+                    if (Files.readString(target, StandardCharsets.UTF_8).equals(entry.getValue())) continue;
+                }
+                Path temporary = Files.createTempFile(directory, ".material-", ".tmp");
+                try {
+                    com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(temporary, false);
+                    Files.writeString(temporary, entry.getValue(), StandardCharsets.UTF_8);
+                    Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } finally { Files.deleteIfExists(temporary); }
+            }
+        } catch (IOException error) {
+            throw new CodexAppServerException("无法安全保存完整资料引用，未发送模型请求", error);
+        }
+    }
+
+    /** Wait for the compaction turn, not just the immediate RPC acknowledgement. */
+    public void compactThread(String threadId) {
+        if (abandonedTurns.containsKey(threadId)) throw new CodexAppServerException("上一轮尚未确认停止，不能压缩会话");
+        ActiveTurn active = new ActiveTurn(ignored -> { });
+        active.compacting = true;
+        if (activeTurns.putIfAbsent(threadId, active) != null)
+            throw new CodexAppServerException("会话正在生成，不能同时压缩");
+        try {
+            request("thread/compact/start", objectMapper.createObjectNode().put("threadId", threadId));
+            awaitTurnCompletion(active);
+            contextTokens.remove(threadId);
+        } catch (RuntimeException error) {
+            if (!active.completion.isDone() && active.turnId != null) {
+                abandonedTurns.put(threadId, active.turnId);
+                boolean interrupted = Thread.interrupted();
+                try { interruptTimedOutTurn(threadId, active.turnId); }
+                finally { if (interrupted) Thread.currentThread().interrupt(); }
+            }
+            throw error;
+        } finally { activeTurns.remove(threadId, active); }
     }
 
     public TurnResult runStructuredTurn(String threadId, UUID projectId, String prompt, JsonNode outputSchema) {
@@ -402,7 +530,7 @@ public class CodexAppServerClient {
         }
     }
 
-    List<String> launchCommand() {
+    protected List<String> launchCommand() {
         return List.of(resolveCommand(command, System.getenv("LOCALAPPDATA")),
                 "app-server", "--listen", "stdio://");
     }
@@ -434,7 +562,7 @@ public class CodexAppServerClient {
                 "CODEX_SQLITE_HOME", stateRoot.toString());
     }
 
-    void configureEnvironment(Map<String, String> environment) {
+    protected void configureEnvironment(Map<String, String> environment) {
         HOST_CODEX_VARIABLES.forEach(environment::remove);
         PROXY_VARIABLES.forEach(name -> {
             if (isSandboxBlackholeProxy(environment.get(name))) {
@@ -463,6 +591,12 @@ public class CodexAppServerClient {
         Files.createDirectories(runtimeRoot);
         Files.createDirectories(codexHome);
         Files.createDirectories(stateRoot);
+        if (externalAuthorization()) {
+            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(runtimeRoot, true);
+            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(codexHome, true);
+            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(stateRoot, true);
+            return;
+        }
         Path target = codexHome.resolve("auth.json");
         if (Files.notExists(target)) {
             if (Files.notExists(authSource)) {
@@ -518,12 +652,24 @@ public class CodexAppServerClient {
 
         String method = message.path("method").asText("");
         if (id != null && !method.isBlank()) {
+            if (method.equals("item/tool/call")) {
+                var params = message.path("params");
+                var turn = activeTurns.get(params.path("threadId").asText());
+                // A tool request can precede the turn/start acknowledgement on the stdio stream.
+                JsonNode result = turn != null && (turn.turnId == null || turn.turnId.equals(params.path("turnId").asText()))
+                        ? handleDynamicTool(params) : null;
+                if (result != null) {
+                    ObjectNode reply = objectMapper.createObjectNode();
+                    reply.set("id", id); reply.set("result", result); writeMessage(reply);
+                    return;
+                }
+            }
             rejectServerRequest(id, method);
             return;
         }
         switch (method) {
             case "thread/tokenUsage/updated" -> handleTokenUsage(message.path("params"));
-            case "item/agentMessage/delta", "item/reasoning/textDelta", "item/reasoning/summaryTextDelta",
+            case "turn/started", "item/started", "item/agentMessage/delta", "item/reasoning/textDelta", "item/reasoning/summaryTextDelta",
                     "item/completed", "turn/completed" ->
                     handleTurnEvent(method, message.path("params"));
             default -> {
@@ -534,24 +680,35 @@ public class CodexAppServerClient {
 
     private void handleTurnEvent(String method, JsonNode params) {
         String threadId = params.path("threadId").asText();
-        String turnId = method.equals("turn/completed") ? params.at("/turn/id").asText()
+        String turnId = method.equals("turn/completed") || method.equals("turn/started") ? params.at("/turn/id").asText()
                 : params.path("turnId").asText();
         if (method.equals("turn/completed")) abandonedTurns.remove(threadId, turnId);
         ActiveTurn active = activeTurns.get(threadId);
         if (active == null || turnId.isBlank()) return;
         synchronized (active) {
+            if (active.compacting && active.turnId == null && method.equals("turn/started")) {
+                active.turnId = turnId;
+                active.markActivity();
+                for (var event : active.earlyEvents) handleTurnEvent(event.method(), event.params());
+                active.earlyEvents.clear();
+            }
             if (active.turnId == null) {
                 if (active.earlyEvents.size() < 1000) active.earlyEvents.add(new PendingEvent(method, params));
                 return;
             }
             if (!active.turnId.equals(turnId)) return;
             switch (method) {
+                case "item/started", "item/completed" -> {
+                    if ("contextCompaction".equals(params.at("/item/type").asText())) {
+                        active.markActivity();
+                        log.info("Codex context compaction threadId={} turnId={} event={}", threadId, turnId, method);
+                    } else if (method.equals("item/completed")) handleItemCompleted(params);
+                }
                 case "item/agentMessage/delta" -> active.append(params.path("itemId").asText(), params.path("delta").asText());
                 case "item/reasoning/textDelta", "item/reasoning/summaryTextDelta" -> {
                     // Reasoning advances the wait deadline without entering the public response buffer.
                     if (!params.path("delta").asText().isEmpty()) active.markActivity();
                 }
-                case "item/completed" -> handleItemCompleted(params);
                 case "turn/completed" -> handleTurnCompleted(params);
                 default -> { }
             }
@@ -562,6 +719,10 @@ public class CodexAppServerClient {
         ActiveTurn activeTurn = activeTurns.get(params.path("threadId").asText());
         String turnId = params.path("turnId").asText("");
         if (activeTurn == null || turnId.isBlank()) return;
+        if (turnId.equals(activeTurn.turnId)) {
+            long total = params.at("/tokenUsage/last/totalTokens").asLong(-1);
+            if (total >= 0) contextTokens.put(params.path("threadId").asText(), total);
+        }
         activeTurn.recordUsage(turnId, Usage.from(params.at("/tokenUsage/last"), true));
     }
 
@@ -751,13 +912,17 @@ public class CodexAppServerClient {
         log.error("Codex App Server connection lost pid={} category={} stderrLines={}",
                 owner.pid(), failureCategory(details.isBlank() ? message : details),
                 recentErrorCount());
-        CodexAppServerException failure = new CodexAppServerException(
-                details.isBlank() ? message : message + "：" + abbreviate(details));
+        CodexAppServerException failure = new CodexAppServerException(externalAuthorization()
+                ? "Codex 会话连接中断；类别：" + failureCategory(details.isBlank() ? message : details)
+                : details.isBlank() ? message : message + "：" + abbreviate(details));
         pendingRequests.values().forEach(future -> future.completeExceptionally(failure));
         activeTurns.values().forEach(turn -> turn.completion.completeExceptionally(failure));
         writer = null;
         process = null;
         attachedThreads.clear();
+        materialToolThreads.clear();
+        materialScopes.clear();
+        contextTokens.clear();
         abandonedTurns.clear();
     }
 
@@ -817,6 +982,8 @@ public class CodexAppServerClient {
             }
         }
         attachedThreads.clear();
+        materialToolThreads.clear();
+        materialScopes.clear();
     }
 
     public record TurnResult(String turnId, String output, Usage usage) implements ModelResult {
@@ -845,6 +1012,7 @@ public class CodexAppServerClient {
         private volatile String turnId;
         private volatile String output = "";
         private volatile long lastActivityNanos = System.nanoTime();
+        private boolean compacting;
         private long maxOutputTokens;
         private long maxReasoningTokens;
         private final Map<String, Usage> usages = new ConcurrentHashMap<>();

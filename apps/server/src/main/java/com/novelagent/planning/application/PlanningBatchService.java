@@ -35,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 分块规划批次。
  *
- * <p>冻结圣经、策略、预算和依赖链，控制逐块认领、恢复与组装。只支持未发生正文的全书新规划；组装要求完整连续范围，产生可编辑大纲草稿。</p>
+ * <p>冻结规划资料、策略、预算和依赖链，控制逐块认领、恢复与组装。只支持未发生正文的全书新规划；组装要求完整连续范围，产生可编辑大纲草稿。</p>
  */
 @Service
 public class PlanningBatchService {
@@ -73,7 +73,7 @@ public class PlanningBatchService {
             if (chapterTo < 1 || chapterTo > 500 || chunkSize < 1 || chunkSize > 20 || provider == null
                     || provider == ModelProvider.LOCAL_TEMPLATE || instruction.length() > 1000
                     || requestId == null || expectedBibleId == null || expectedBibleVersion == null || expectedBibleVersion < 0) {
-                throw new IllegalArgumentException("规划批次范围、真实模型、请求标识或圣经版本不可用");
+                throw new IllegalArgumentException("规划批次范围、真实模型、请求标识或规划资料版本不可用");
             }
         }
     }
@@ -113,7 +113,7 @@ public class PlanningBatchService {
         }
         requireUnwrittenProject(project);
         var bible = currentBible(project);
-        if (!bible.getId().equals(command.expectedBibleId())) throw conflict("当前故事圣经已切换，请刷新后创建批次");
+        if (!bible.getId().equals(command.expectedBibleId())) throw conflict("当前已确认雪花资料已切换，请刷新后创建批次");
         if (bible.getRowVersion() != command.expectedBibleVersion()) {
             throw new ResourceVersionConflictException(command.expectedBibleVersion(), bible.getRowVersion());
         }
@@ -329,10 +329,10 @@ public class PlanningBatchService {
     }
 
     private StoryBibleVersion currentBible(NovelProject project) {
-        if (project.getCurrentBibleVersionId() == null) throw new IllegalArgumentException("请先发布故事圣经");
+        if (project.getCurrentBibleVersionId() == null) throw new IllegalArgumentException("请先发布已确认雪花资料");
         var bible = bibles.findByIdAndProjectId(project.getCurrentBibleVersionId(), project.getId()).orElseThrow();
         entities.refresh(bible, LockModeType.PESSIMISTIC_READ);
-        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw conflict("当前圣经尚未发布");
+        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw conflict("当前规划资料尚未发布");
         return bible;
     }
 
@@ -340,7 +340,7 @@ public class PlanningBatchService {
         requireUnwrittenProject(project);
         var bible = currentBible(project);
         if (!batch.sourceHash().equals(sourceHash(project, bible, batch.source()))) {
-            throw conflict("圣经、创作意图、策略、姓名或当前大纲已变化，请创建新批次");
+            throw conflict("规划资料、创作意图、策略、姓名或当前大纲已变化，请创建新批次");
         }
         return bible;
     }

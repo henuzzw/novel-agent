@@ -1,9 +1,7 @@
 package com.novelagent.planning.infrastructure;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 /**
  * Owns the persisted conversation lifecycle, not prompt construction or run recording.
@@ -18,25 +16,12 @@ final class CodexSessionManager {
         this.sessions = sessions;
     }
 
-    CodexAppServerClient.TurnResult run(
-            UUID projectId,
-            String workflow,
-            String systemPrompt,
-            String userPrompt,
-            JsonNode schema,
-            CodexSessionPolicy policy,
-            EffectiveSettings settings,
-            String promptRevision,
-            Consumer<String> progress) {
-        CodexAgentSession session = prepare(projectId, workflow, systemPrompt, policy, settings, promptRevision);
-        CodexAppServerClient.TurnResult turn = codex.runStructuredTurn(
-                session.getThreadId(), projectId, userPrompt, schema, settings, progress);
-        session.recordTurn(turn.turnId());
+    void recordTurn(CodexAgentSession session, String turnId) {
+        session.recordTurn(turnId);
         sessions.saveAndFlush(session);
-        return turn;
     }
 
-    private CodexAgentSession prepare(
+    CodexAgentSession prepare(
             UUID projectId,
             String workflow,
             String systemPrompt,

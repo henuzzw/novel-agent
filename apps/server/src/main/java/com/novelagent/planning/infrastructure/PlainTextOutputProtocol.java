@@ -32,13 +32,14 @@ final class PlainTextOutputProtocol {
     }
 
     String instructions() {
-        if (freeText()) return "\n【本次输出】直接返回最终创作文本，不使用 JSON、代码块或说明。";
+        String unavailable = com.novelagent.agent.application.ModelOutputAvailability.INSTRUCTIONS;
+        if (freeText()) return "\n【本次输出】直接返回最终创作文本，不使用 JSON、代码块或说明。" + unavailable;
         StringBuilder guide = new StringBuilder("\n【本次纯文本输出约定，取代旧版返回格式指令】\n"
                 + "不输出 JSON，不输出 Schema，不使用代码围栏。用下列二级标题标识保存位置，标题下直接写自然文字。"
                 + "重复记录将 * 替换为从 1 开始的连续序号；空列表写‘无’，不要虚构资料。"
                 + "正文及逐字引文原样写在对应标题下，不转义换行或引号。标题必须独占一行，不能把保存标识写进小说正文。\n");
         describe(contract, "", guide);
-        return guide.toString();
+        return guide.append(unavailable).toString();
     }
 
     private static void describe(JsonNode node, String path, StringBuilder guide) {
@@ -63,6 +64,7 @@ final class PlainTextOutputProtocol {
 
     String decode(String raw) {
         if (raw == null || raw.isBlank()) throw new IllegalArgumentException("模型未返回可读文本");
+        com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(raw);
         // Accept internal test fixtures and old locally generated DTOs; neither provider is asked for this format.
         try {
             if (raw.stripLeading().startsWith("{")) {

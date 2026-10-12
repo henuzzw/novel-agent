@@ -17,7 +17,10 @@ public class SnowflakePlanStore {
 
     public SnowflakePlanStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
+    @org.springframework.transaction.annotation.Transactional
     public UUID create(UUID projectId, ModelProvider provider, JsonNode input) {
+        // Serialize only run creation with author confirmation; never hold this lock during generation.
+        jdbc.queryForObject("SELECT id FROM novel_project WHERE id = ? FOR UPDATE", UUID.class, projectId);
         UUID id = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO snowflake_planning_run(id, project_id, mode, provider, input_snapshot)
@@ -42,6 +45,22 @@ public class SnowflakePlanStore {
                 """, projectId, id));
     }
 
+    /** Author-triggered recovery discards only a failed dependency suffix; raw agent responses remain intact. */
+    public void resumeWithValidPrefix(UUID projectId, UUID id, java.util.Map<String, String> expected,
+            java.util.Map<String, String> retained) {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        requireUpdated(jdbc.update("""
+                UPDATE snowflake_planning_run SET status = 'RUNNING', error_message = NULL,
+                    steps = CAST(? AS jsonb), core = ?, characters = ?, plot = ?,
+                    prepared_materials = CASE WHEN ? THEN prepared_materials ELSE NULL END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ? AND id = ? AND status IN ('FAILED', 'CANCELLED')
+                    AND steps = CAST(? AS jsonb)
+                """, json.valueToTree(retained).toString(), retained.get("CORE"), retained.get("CHARACTER_SETTINGS"),
+                retained.get("DETAILED_OUTLINE"), retained.containsKey("CHARACTER_SETTINGS"), projectId, id,
+                json.valueToTree(expected).toString()));
+    }
+
     public void save(UUID projectId, UUID id, String stage, String text) {
         try {
             com.novelagent.planning.application.SnowflakeStep.valueOf(stage);
@@ -64,6 +83,24 @@ public class SnowflakePlanStore {
                 String.class, projectId, id);
         try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value); }
         catch (com.fasterxml.jackson.core.JsonProcessingException exception) { throw new IllegalStateException("雪花来源无法读取", exception); }
+    }
+
+    /** Save the human-readable step and machine projection atomically, without another model call. */
+    @org.springframework.transaction.annotation.Transactional
+    public void saveMaterials(UUID projectId, UUID id, String text, JsonNode materials) {
+        save(projectId, id, "CHARACTER_SETTINGS", text);
+        requireUpdated(jdbc.update("""
+                UPDATE snowflake_planning_run SET prepared_materials = CAST(? AS jsonb)
+                 WHERE project_id = ? AND id = ? AND status = 'RUNNING' AND active_stage = 'CHARACTER_SETTINGS'
+                """, materials.toString(), projectId, id));
+    }
+
+    public JsonNode materials(UUID projectId, UUID id) {
+        String value = jdbc.queryForObject("SELECT prepared_materials::text FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
+                String.class, projectId, id);
+        if (value == null) throw new IllegalArgumentException("雪花第7步缺少资料投影，请重新生成规划");
+        try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException exception) { throw new IllegalStateException("雪花资料无法读取", exception); }
     }
 
 

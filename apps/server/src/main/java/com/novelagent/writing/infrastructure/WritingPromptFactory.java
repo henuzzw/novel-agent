@@ -14,6 +14,7 @@ import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import com.novelagent.writing.application.WritingStyleService;
+import com.novelagent.writing.application.WritingMaterialSelection;
 import com.novelagent.writing.application.WritingStyleGuide;
 import com.novelagent.writing.domain.StylePreviewSource;
 import com.novelagent.project.application.CreativeStrategyService;
@@ -110,10 +111,11 @@ class WritingPromptFactory {
                   """.formatted(json(previousManuscript));
         return rendered(projectId, new Prompt(
                 com.novelagent.prompt.application.AgentPromptDefaults.system("MANUSCRIPT"),
-                "请创作本章正文。建议字数区间允许按情节自然浮动，不要为凑字数灌水。\n故事圣经：" + json(bible)
+                "请创作本章正文。建议字数区间允许按情节自然浮动，不要为凑字数灌水。\n本章相关设定与全局规则："
+                        + json(WritingMaterialSelection.forChapter(bible, chapter.content()))
                         + "\n人物档案：" + characterContext(projectId, chapter, contract,
                                 previousManuscript == null ? null : previousManuscript.body(), List.of())
-                        + "\n所在卷：" + json(arc) + "\n章节计划：" + json(chapter)
+                        + "\n所在卷：" + json(WritingMaterialSelection.forChapter(arc, chapter)) + "\n章节计划：" + json(chapter)
                         + "\n本章大纲计划：" + json(contract) + "\n长期记忆：" + memory.toPromptText()
                         + "\n正文版本参考：" + revisionContext
                         + "\n项目写作风格：" + styles.promptContext(projectId)
@@ -136,9 +138,9 @@ class WritingPromptFactory {
                 com.novelagent.prompt.application.AgentPromptDefaults.system("STYLE_PREVIEW"),
                 "请试写第一章开头约 " + targetWords + " 字，正文最多 6000 字符。选择一个具体场景自然收束，"
                         + "不必完成整章事件或结尾钩子。"
-                        + "\n故事圣经：" + json(bible)
+                        + "\n本章相关设定与全局规则：" + json(WritingMaterialSelection.forChapter(bible, chapter.content()))
                         + "\n人物档案：" + characterContext(projectId, chapter, null, sourceBody, List.of())
-                        + "\n所在卷：" + json(arc)
+                        + "\n所在卷：" + json(WritingMaterialSelection.forChapter(arc, chapter))
                         + "\n第一章计划：" + json(chapter)
                         + "\n本次试写风格（仅用于本次候选，不代表已经应用项目风格）：" + styleProfileSummaryJson(profile)
                         + "\n" + WritingStyleGuide.render(profile)
@@ -156,9 +158,10 @@ class WritingPromptFactory {
                 com.novelagent.prompt.application.AgentPromptDefaults.system("STYLE_PREVIEW_REVIEW"),
                 "检查当前试写的风格、语义、逻辑和场景。它只是约 " + source.targetWords()
                         + " 字的第一章开头，不按整章字数或结尾钩子要求判错；仅检查已展开场景是否自洽。"
-                        + EDITOR_RULES + "\n故事圣经：" + json(bible)
+                        + EDITOR_RULES + "\n本章相关设定与全局规则："
+                        + json(WritingMaterialSelection.forChapter(bible, chapter.content() + "\n" + source.content().body()))
                         + "\n人物档案：" + characterContext(projectId, chapter, null, source.content().body(), List.of())
-                        + "\n所在卷与第一章：" + json(arc) + "\n第一章计划：" + json(chapter)
+                        + "\n所在卷与第一章：" + json(WritingMaterialSelection.forChapter(arc, chapter)) + "\n第一章计划：" + json(chapter)
                         + "\n候选风格：" + WritingStyleGuide.render(source.profile())
                         + "\n试写要求：" + value(source.instruction())
                         + "\n待检查样例（完整 JSON）：" + json(source.content()) + craft.preview()
@@ -189,7 +192,8 @@ class WritingPromptFactory {
                         + "事件和状态变化的 storyTime 只填写正文明确给出的故事时间；时间无法确定时填 null，不得据本章大纲计划猜测日期。"
                         + "事件参与者 participants 只填写正文明确出现的人物；没有可确认参与者时填空数组。"
                         + "不得根据常识补写正文没有明确成立的事实。\n故事圣经："
-                        + json(bible) + "\n人物档案：" + characterContext(projectId, null, contract, manuscript.body(),
+                        + json(WritingMaterialSelection.forChapter(bible, contract.toString() + "\n" + manuscript.body()))
+                        + "\n人物档案：" + characterContext(projectId, null, contract, manuscript.body(),
                                 entityCatalog.entities().stream()
                                         .filter(entity -> "CHARACTER".equals(entity.type()) && entity.chapterRelevant())
                                         .map(EntityCatalogContext.EntityCatalogEntry::id).toList())
@@ -222,7 +226,8 @@ class WritingPromptFactory {
                         + "关注对白是否只复述双方已知背景、人物意图是否有文本依据、感知表述是否真正冗余；"
                         + "误认、延迟理解、有限视角、心理描写和平静对白本身不是错误，不按比喻密度、感官数量或固定句长判错。"
                         + EDITOR_RULES
-                        + "\n故事圣经：" + json(bible) + "\n人物档案："
+                        + "\n本章相关设定与全局规则："
+                        + json(WritingMaterialSelection.forChapter(bible, contract.toString() + "\n" + manuscript.body())) + "\n人物档案："
                         + characterContext(projectId, null, contract, manuscript.body(), List.of())
                         + "\n项目写作风格：" + styles.promptContext(projectId)
                         + "\n本章大纲计划：" + json(contract) + "\n正文：" + json(manuscript)

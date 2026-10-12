@@ -1,5 +1,7 @@
 # Novel Agent 简化创作流程
 
+> 2026-10-11：独立故事方向与圣经阶段均已撤销。当前主线为导入/解析确认 → 雪花九步 → 确认雪花规划并同步资料 → 大纲 → 正文及B/C → 作者正史确认。活动目录18种工作流/19份模板。完整现状见[NOVEL_AGENT_CONFIRMED_SNOWFLAKE.md](NOVEL_AGENT_CONFIRMED_SNOWFLAKE.md)。下文2026-10-07流程保留为演进记录，不再代表当前入口。
+
 更新日期：2026-10-07。以 `codex/simplify-agent-workflow` 当前代码为准。
 
 ## 1. 本次变化

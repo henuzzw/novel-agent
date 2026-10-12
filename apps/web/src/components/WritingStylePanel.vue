@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Save, Upload, WandSparkles, RotateCcw, Check, PenLine } from 'lucide-vue-next'
 import StylePreviewEditor from './StylePreviewEditor.vue'
 import WritingStyleCraftEditor from './WritingStyleCraftEditor.vue'
-import { getLatestOutline, getLatestStoryBible } from '@/api/planning'
+import { getLatestOutline, getPlanningSnapshot } from '@/api/planning'
 import { analyzeWritingStyle, applyWritingStyle, generateStylePreview, getStylePresets, getWritingStyle, recommendWritingStyle, uploadWritingStyle, stylePreviewKey, type StyleAnalysis, type StylePreview, type StylePreviewInput, type StyleRecommendation, type StyleRecommendationInput, type WritingStyleProfile } from '@/api/writingQuality'
 
 const props = defineProps<{ projectId: string }>()
@@ -29,7 +29,7 @@ const checkAfterPreview = ref(true)
 const editorsBusy = ref(new Set<string>())
 const { provider: recommendationProvider } = useGlobalModelSettings()
 const recommendationInstruction = ref('')
-const bible = useQuery({ queryKey: computed(() => ['story-bible', props.projectId]), queryFn: () => getLatestStoryBible(props.projectId) })
+const bible = useQuery({ queryKey: computed(() => ['planning-snapshot', props.projectId]), queryFn: () => getPlanningSnapshot(props.projectId) })
 const recommendationResult = useQuery<StyleRecommendation | null>({
   queryKey: computed(() => ['style-recommendation', props.projectId]), queryFn: async () => null, initialData: null, enabled: false,
 })
@@ -163,21 +163,21 @@ function selectFile(event: Event) {
     <p v-if="query.isError.value" class="form-error" role="alert">{{ query.error.value?.message }}</p>
     <label><span>风格预设</span><select v-model="selectedPreset" :disabled="busy" @change="choosePreset"><option value="">选择预设</option><option v-for="p in presets.data.value" :key="p.name" :value="p.name">{{ p.name }}</option></select></label>
     <section class="style-recommendation">
-      <h3>圣经风格建议</h3>
-      <p v-if="bible.isPending.value" role="status">正在读取故事圣经…</p>
+      <h3>规划资料风格建议</h3>
+      <p v-if="bible.isPending.value" role="status">正在读取已确认雪花资料…</p>
       <p v-else-if="bible.isError.value" class="form-error" role="alert">{{ bible.error.value?.message }}</p>
-      <p v-else-if="!bible.data.value" class="preview-status">尚无已保存的故事圣经</p>
-      <p v-else class="preview-status">第 {{ bible.data.value.generationNumber }} 版圣经 · {{ bible.data.value.status === 'PUBLISHED' ? '已发布' : '草稿' }}</p>
+      <p v-else-if="!bible.data.value" class="preview-status">尚未确认雪花规划</p>
+      <p v-else class="preview-status">第 {{ bible.data.value.generationNumber }} 版规划资料 · 已确认</p>
       <div class="style-fields">
         <GlobalModelBadge />
         <label><span>推荐偏好</span><input v-model="recommendationInstruction" maxlength="1000" :disabled="busy" /></label>
       </div>
-      <div class="style-actions"><button type="button" class="button secondary" :disabled="busy || !bible.data.value" @click="generateRecommendation"><WandSparkles :size="16" />{{ recommend.isPending.value ? '正在判断…' : '根据圣经推荐风格' }}</button></div>
+      <div class="style-actions"><button type="button" class="button secondary" :disabled="busy || !bible.data.value" @click="generateRecommendation"><WandSparkles :size="16" />{{ recommend.isPending.value ? '正在判断…' : '根据规划资料推荐风格' }}</button></div>
       <template v-if="recommendationResult.data.value">
-        <p class="preview-status">第 {{ recommendationResult.data.value.bibleGenerationNumber }} 版圣经 · {{ recommendationResult.data.value.recommendationMode === 'TEMPLATE' ? '演示模板' : recommendationResult.data.value.provider === 'LOCAL_CODEX' ? 'Codex' : 'DeepSeek' }}</p>
-        <p v-if="bible.isFetching.value" class="preview-status">正在核对圣经版本…</p>
-        <p v-else-if="!recommendationCurrent && !bible.isError.value" class="form-error">故事圣经已更新，请重新推荐</p>
-        <p v-if="outline.data.value && recommendationResult.data.value.sourceBibleVersionId !== outline.data.value.sourceBibleVersionId" class="preview-status">建议依据与试写大纲关联的圣经不同</p>
+        <p class="preview-status">第 {{ recommendationResult.data.value.bibleGenerationNumber }} 版规划资料 · {{ recommendationResult.data.value.recommendationMode === 'TEMPLATE' ? '演示模板' : recommendationResult.data.value.provider === 'LOCAL_CODEX' ? 'Codex' : 'DeepSeek' }}</p>
+        <p v-if="bible.isFetching.value" class="preview-status">正在核对规划资料版本…</p>
+        <p v-else-if="!recommendationCurrent && !bible.isError.value" class="form-error">已确认雪花资料已更新，请重新推荐</p>
+        <p v-if="outline.data.value && recommendationResult.data.value.sourceBibleVersionId !== outline.data.value.sourceBibleVersionId" class="preview-status">建议依据与试写大纲关联的规划资料不同</p>
         <p>{{ recommendationResult.data.value.summary }}</p>
         <ol class="recommendation-list">
           <li v-for="item in recommendationResult.data.value.recommendations" :key="item.profile.name">

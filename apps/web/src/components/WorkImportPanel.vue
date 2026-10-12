@@ -10,10 +10,10 @@ import { AlertTriangle, Check, Download, FileText, LoaderCircle, Sparkles, Uploa
 import { computed, ref, watch } from 'vue'
 import { generationRequests } from '@/lib/generation-activity'
 
-import { listWorkImports, prepareImportedDirections, pasteWork, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
+import { listWorkImports, prepareImportedSnowflake, pasteWork, uploadWork, workImportSourceUrl, type ImportPlanningMode, type WorkImport } from '@/api/imports'
 
 const props = defineProps<{ projectId: string; autoAnalyze?: boolean }>()
-const emit = defineEmits<{ planningGenerated: [] }>()
+const emit = defineEmits<{ planningConfirmed: [] }>()
 const queryClient = useQueryClient()
 const selectedImportId = ref<string | null>(null)
 const newlyImportedId = ref<string | null>(null)
@@ -69,17 +69,16 @@ const confirmMutation = useMutation({
     const projectId = props.projectId
     const proof = analysisProof.value
     if (!proof || proof.mode !== planningMode.value) throw new Error('请先完成并确认当前使用方式的原文解析。')
-    const result = await prepareImportedDirections(projectId, importId, planningProvider.value, planningMode.value,
+    const result = await prepareImportedSnowflake(projectId, importId, planningProvider.value, planningMode.value,
       planningInstruction.value, proof.id, proof.version, targetWords.value, expandScenes.value)
     return { projectId, importId, result }
   },
   onSuccess: (value) => {
-    queryClient.setQueryData(['story-directions', value.projectId], value.result)
+    queryClient.setQueryData(['snowflake-plan', value.projectId], value.result)
     queryClient.invalidateQueries({ queryKey: ['project', value.projectId] })
     queryClient.invalidateQueries({ queryKey: ['work-imports', value.projectId] })
     if (props.projectId !== value.projectId || selectedImportId.value !== value.importId) return
     actionError.value = ''
-    emit('planningGenerated')
   },
   onError: (reason: Error) => { if (generationScope === `${props.projectId}:${selectedImportId.value}`) actionError.value = reason.message },
 })
@@ -110,7 +109,7 @@ function contentTypeLabel(value: string) {
     <form v-else class="paste-source" @submit.prevent="pasteMutation.mutate()"><label class="instruction-field"><span>故事文字</span><textarea v-model="pastedText" rows="8" :disabled="pasteMutation.isPending.value" /></label><button class="button primary" :disabled="!pastedText.trim() || pasteMutation.isPending.value"><FileText :size="16" />{{ pasteMutation.isPending.value ? '正在导入…' : '导入文字' }}</button></form>
     <CreativeBoundaryPanel :key="projectId" :project-id="projectId" />
     <SnowflakePlanningPanel :project-id="projectId" :import-id="selectedImportId ?? undefined"
-      :planning-status="selectedImport?.planningStatus" @planning-generated="emit('planningGenerated')" />
+      :planning-status="selectedImport?.planningStatus" @planning-confirmed="emit('planningConfirmed')" />
     <div v-if="actionError" class="form-error" role="alert">{{ actionError }}</div>
 
     <div v-if="importsQuery.isPending.value" class="editor-empty">正在读取导入记录…</div>
@@ -144,8 +143,8 @@ function contentTypeLabel(value: string) {
         </section>
 
         <div class="import-actions">
-          <div v-if="planningBusy" class="acceptance-note" role="status"><LoaderCircle :size="16" />雪花规划请求中 · 依次生成底稿和故事方向</div>
-          <div v-if="selectedImport.planningStatus === 'DIRECTIONS_READY'" class="acceptance-note"><Check :size="16" />雪花底稿与故事方向已生成</div>
+          <div v-if="planningBusy" class="acceptance-note" role="status"><LoaderCircle :size="16" />雪花规划请求中</div>
+          <div v-if="selectedImport.planningStatus === 'PLAN_READY'" class="acceptance-note"><Check :size="16" />雪花规划已生成</div>
           <div class="planning-mode-field">
             <span>这份内容怎么使用</span>
             <div class="planning-mode-options">
@@ -158,7 +157,7 @@ function contentTypeLabel(value: string) {
             <label class="instruction-field"><span>改编或续写要求</span><textarea v-model="planningInstruction" rows="2" maxlength="1000" placeholder="可选，例如：扩写为青春校园成长小说，增强人物弧光" /></label>
             <label class="instruction-field"><span>目标字数</span><input v-model.number="targetWords" type="number" min="1000" max="10000000" step="1000" :disabled="planningBusy" /></label>
             <label><input v-model="expandScenes" type="checkbox" :disabled="planningBusy" />执行第9步：关键场景展开</label>
-            <button class="button primary" type="button" :disabled="planningBusy || !analysisProof || targetWords < 1000" @click="confirmMutation.mutate()"><Sparkles :size="16" />{{ planningBusy ? '正在生成雪花底稿…' : '生成雪花底稿与故事方向' }}</button>
+            <button class="button primary" type="button" :disabled="planningBusy || !analysisProof || targetWords < 1000" @click="confirmMutation.mutate()"><Sparkles :size="16" />{{ planningBusy ? '正在生成雪花规划…' : '生成雪花规划' }}</button>
             <p v-if="selectedImport.planningError" class="form-error">上次反推失败：{{ selectedImport.planningError }}</p>
         </div>
       </main>

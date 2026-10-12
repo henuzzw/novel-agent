@@ -10,8 +10,6 @@ import { listPlanningCharacters } from '@/api/planningMaterials'
 import EntityFactsPanel from './EntityFactsPanel.vue'
 import CharacterRelationsPanel from './CharacterRelationsPanel.vue'
 import RelationshipPanel from './RelationshipPanel.vue'
-import { completeStoryBibleCharacters, getLatestStoryBible } from '@/api/planning'
-import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { materialViews, useWorkspaceChoice } from '@/composables/useWorkspaceLocation'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 
@@ -28,8 +26,6 @@ import {
 } from '@/api/writing'
 
 const props = defineProps<{ projectId: string }>()
-const emit = defineEmits<{ openBible: [] }>()
-const { provider } = useGlobalModelSettings()
 const queryClient = useQueryClient()
 const view = useWorkspaceChoice('materials', materialViews, 'profiles')
 const entityType = ref('ALL')
@@ -133,31 +129,13 @@ const missingProfileFields = computed(() => {
   if (!blueprint?.knowledgeBoundaries.length) missing.push('初始知识边界')
   return missing
 })
-const bibleQuery = useQuery({ queryKey: computed(() => ['story-bible', props.projectId]), queryFn: () => getLatestStoryBible(props.projectId) })
-const completionError = ref('')
-const completionNotice = ref('')
-const completeCharacters = useMutation({
-  mutationFn: () => {
-    if (!bibleQuery.data.value) throw new Error('请先保存故事圣经。')
-    if (profileDirty.value) throw new Error('请先保存人物档案或姓名的修改。')
-    return completeStoryBibleCharacters(props.projectId, bibleQuery.data.value, provider.value,
-      '补齐缺失人物设定，包括明确的性别与起点年龄或年龄范围；未知留空，不从姓名或年级推断，不为人物强加秘密。')
-  },
-  onSuccess: value => {
-    queryClient.setQueryData(['story-bible', value.projectId], value)
-    queryClient.invalidateQueries({ queryKey: ['story-bible-versions', value.projectId] })
-    if (value.projectId !== props.projectId) return
-    completionError.value = ''; completionNotice.value = '人物补全草稿已生成，等待确认发布。'
-  },
-  onError: (reason: Error) => { completionError.value = reason.message },
-})
 watch(() => props.projectId, () => {
   for (const key of Object.keys(profileDrafts)) delete profileDrafts[key]
   for (const key of Object.keys(nameDrafts)) delete nameDrafts[key]
   for (const key of Object.keys(profileDraftVersions)) delete profileDraftVersions[key]
   for (const key of Object.keys(nameDraftVersions)) delete nameDraftVersions[key]
   selectedProfileId.value = null; selectedEntityId.value = null
-  profileError.value = ''; nameError.value = ''; completionError.value = ''; completionNotice.value = ''
+  profileError.value = ''; nameError.value = ''
 })
 
 function profileInput(value: CharacterProfile): ProfileDraft {
@@ -264,15 +242,12 @@ function entityTypeLabel(value: string) {
         <div><span class="eyebrow">作者设定</span><h2>人物档案</h2></div>
         <PlanningMaterialSyncButton :project-id="projectId" />
         <button v-if="characterProfilesQuery.data.value?.length" class="button secondary" type="button" :disabled="initializeNamesMutation.isPending.value" @click="initializeNamesMutation.mutate()"><WandSparkles :size="16" />补充识别人物</button>
-        <button class="button secondary" type="button" :disabled="completeCharacters.isPending.value || profileDirty || !bibleQuery.data.value || provider === 'LOCAL_TEMPLATE'" @click="completeCharacters.mutate()"><WandSparkles :size="16" />{{ completeCharacters.isPending.value ? '正在补全人物…' : '补全人物设定' }}</button>
         <span class="version-label">{{ characterProfilesQuery.data.value?.length ?? 0 }} 人</span>
       </div>
-      <p v-if="completionNotice" role="status">{{ completionNotice }} <button class="button secondary" type="button" @click="emit('openBible')">查看待确认圣经</button></p>
-      <p v-if="completionError" class="form-error" role="alert">{{ completionError }}</p>
       <div v-if="characterProfilesQuery.isPending.value" class="editor-empty">正在读取人物档案…</div>
       <div v-else-if="characterProfilesQuery.isError.value" class="status-panel error-panel">人物档案加载失败：{{ characterProfilesQuery.error.value?.message }}</div>
       <div v-else-if="!characterProfilesQuery.data.value?.length" class="editor-empty">
-        <ContactRound :size="30" /><h3>还没有可编辑的人物</h3><button class="button secondary" type="button" :disabled="initializeNamesMutation.isPending.value" @click="initializeNamesMutation.mutate()"><WandSparkles :size="16" />从故事圣经识别人物</button>
+        <ContactRound :size="30" /><h3>还没有可编辑的人物</h3><button class="button secondary" type="button" :disabled="initializeNamesMutation.isPending.value" @click="initializeNamesMutation.mutate()"><WandSparkles :size="16" />从已确认雪花资料识别人物</button>
       </div>
       <div v-else class="profile-layout">
         <aside class="entity-list profile-picker" aria-label="人物列表">

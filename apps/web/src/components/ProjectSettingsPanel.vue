@@ -2,12 +2,14 @@
 import GlobalModelSettingsPanel from '@/components/GlobalModelSettingsPanel.vue'
 import CreativeStrategyPanel from '@/components/CreativeStrategyPanel.vue'
 import CreativeBoundaryPanel from '@/components/CreativeBoundaryPanel.vue'
+import CreativeIntentPanel from '@/components/CreativeIntentPanel.vue'
 import { RouterLink } from 'vue-router'
 import { FilePenLine } from 'lucide-vue-next'
 defineProps<{ projectId: string }>()
 </script>
 <template>
   <div class="project-settings">
+    <CreativeIntentPanel :key="projectId" :project-id="projectId" />
     <CreativeStrategyPanel :key="projectId" :project-id="projectId" />
     <CreativeBoundaryPanel :key="projectId" :project-id="projectId" />
     <GlobalModelSettingsPanel />

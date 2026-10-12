@@ -1,6 +1,6 @@
 import { apiRequest } from '@/api/http'
 
-export type ChatGptTransport = 'APP_SERVER' | 'SIWC_HTTP'
+export type ChatGptTransport = 'APP_SERVER' | 'SIWC_HTTP' | 'SIWC_CODEX'
 export interface ChatGptConnection {
   choice: { transport: ChatGptTransport; version: number }
   auth: { connected: boolean; canGenerate: boolean; email: string | null; expiresAt: string | null;

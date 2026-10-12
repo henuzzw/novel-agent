@@ -9,7 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** Explicit, user-scoped transport choice. Never silently falls back to another account/provider. */
 @Service
 public class ChatGptTransportService {
-    public enum Transport { APP_SERVER, SIWC_HTTP }
+    public enum Transport { APP_SERVER, SIWC_HTTP, SIWC_CODEX }
     public record Choice(Transport transport, long version) { }
     private final JdbcTemplate jdbc;
     private final CurrentActorProvider actors;
@@ -24,20 +24,24 @@ public class ChatGptTransportService {
                 .stream().findFirst().orElse(new Choice(Transport.APP_SERVER, 0));
     }
     public boolean direct() { return get().transport() == Transport.SIWC_HTTP; }
+    public boolean codexOAuth() { return get().transport() == Transport.SIWC_CODEX; }
+    public boolean oauth() { return get().transport() != Transport.APP_SERVER; }
     public void requireIdle() {
         Boolean running = jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM agent_run a JOIN novel_project p ON p.id = a.project_id
                     WHERE p.owner_id = ? AND a.status = 'RUNNING' AND a.started_at >= ?)
                     OR EXISTS (SELECT 1 FROM model_http_conversation c JOIN novel_project p ON p.id=c.project_id
                         WHERE p.owner_id=? AND c.lease_id IS NOT NULL AND c.lease_until > now())
-                """, Boolean.class, actors.currentUserId(), instanceStarted, actors.currentUserId());
+                    OR EXISTS (SELECT 1 FROM model_codex_conversation c JOIN novel_project p ON p.id=c.project_id
+                        WHERE p.owner_id=? AND c.lease_id IS NOT NULL AND c.lease_until > now())
+                """, Boolean.class, actors.currentUserId(), instanceStarted, actors.currentUserId(), actors.currentUserId());
         if (Boolean.TRUE.equals(running)) throw new IllegalStateException("有进行中的模型任务，请先结束任务再切换入口或断开账号");
     }
     @Transactional
     public Choice update(Choice choice) {
         if (choice == null || choice.transport() == null || choice.version() < 0) throw new IllegalArgumentException("请选择 ChatGPT 接入方式");
         requireIdle();
-        if (choice.transport() == Transport.SIWC_HTTP) auth.authorization();
+        if (choice.transport() != Transport.APP_SERVER) auth.authorization();
         int changed = choice.version() == 0 ? jdbc.update("""
                 INSERT INTO user_chatgpt_transport(user_id, transport) VALUES (?, ?) ON CONFLICT DO NOTHING
                 """, actors.currentUserId(), choice.transport().name()) : jdbc.update("""

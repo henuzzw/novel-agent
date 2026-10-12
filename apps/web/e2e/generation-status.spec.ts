@@ -9,7 +9,7 @@ test('shows every stage, immediate request state, failure, and restored backgrou
   const project = { id: 'status-project', name: '纸条与座位', entryMode: 'IDEA', currentCanonVersion: 0, version: 0, creativeIntent: intent }
   const startedAt = new Date(Date.now() - 120_000).toISOString()
   let runs = [
-    { id: 'b', stage: 'IMPORT_REVERSE_BIBLE', status: 'SUCCEEDED', startedAt, completedAt: new Date().toISOString(), durationMs: 120000 },
+    { id: 'b', stage: 'SNOWFLAKE_PLANNING', status: 'SUCCEEDED', startedAt, completedAt: new Date().toISOString(), durationMs: 120000 },
     { id: 'o', stage: 'IMPORT_REVERSE_OUTLINE', status: 'RUNNING', startedAt, completedAt: null, durationMs: null },
     { id: 'c', stage: 'CHAPTER_CONTRACT', status: 'SUCCEEDED', startedAt, completedAt: new Date().toISOString(), durationMs: 1000 },
     { id: 'cr', stage: 'CHAPTER_CONTRACT_REVIEW', status: 'FAILED', startedAt, completedAt: new Date().toISOString(), durationMs: 1000, errorMessage: '合同审阅超时' },
@@ -52,8 +52,8 @@ test('shows every stage, immediate request state, failure, and restored backgrou
   })
   await page.goto('/projects/status-project')
   const panel = page.getByRole('region', { name: '生成状态' })
-  await expect(panel.locator('[data-stage="STORY_BIBLE"]')).toContainText('成功')
-  await expect(panel.locator('[data-stage="STORY_BIBLE"]')).toContainText('模型任务')
+  await expect(panel.locator('[data-stage="SNOWFLAKE_PLANNING"]')).toContainText('成功')
+  await expect(panel.locator('[data-stage="SNOWFLAKE_PLANNING"]')).toContainText('模型任务')
   await expect(panel.locator('[data-stage="OUTLINE"]')).toContainText('请求中')
   await expect(panel.locator('[data-stage="CHAPTER_CONTRACT_REVIEW"]')).toContainText('失败')
   await expect(panel.locator('[data-stage="MANUSCRIPT"]')).toContainText('请求中')

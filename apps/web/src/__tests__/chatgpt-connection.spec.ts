@@ -20,7 +20,7 @@ function render() {
 async function unlock(wrapper: ReturnType<typeof render>) {
   await wrapper.get('#chatgpt-admin-key').setValue('test-management')
   await wrapper.get('form').trigger('submit')
-  await vi.waitFor(() => expect(wrapper.findAll('input[type=radio]')).toHaveLength(2))
+  await vi.waitFor(() => expect(wrapper.findAll('input[type=radio]')).toHaveLength(3))
 }
 describe('ChatGPT connection', () => {
   it('requires an explicit management key and never enables direct mode without usage permission', async () => {
@@ -29,7 +29,18 @@ describe('ChatGPT connection', () => {
     await unlock(wrapper)
     expect(getChatGptConnection).toHaveBeenCalledWith('test-management')
     expect(wrapper.findAll('input[type=radio]')[1]!.attributes('disabled')).toBeDefined()
+    expect(wrapper.findAll('input[type=radio]')[2]!.attributes('disabled')).toBeDefined()
     expect(chooseChatGptTransport).not.toHaveBeenCalled()
+  })
+  it('selects the project Codex runtime explicitly using the current version', async () => {
+    current.auth.connected = true; current.auth.canGenerate = true
+    vi.mocked(chooseChatGptTransport).mockImplementation(async (_key, transport, version) => {
+      current.choice = { transport, version: version + 1 }; return current.choice
+    })
+    const wrapper = render(); await unlock(wrapper)
+    await wrapper.findAll('input[type=radio]')[2]!.trigger('click')
+    await vi.waitFor(() => expect(chooseChatGptTransport).toHaveBeenCalledWith('test-management', 'SIWC_CODEX', 0))
+    await vi.waitFor(() => expect((wrapper.findAll('input[type=radio]')[2]!.element as HTMLInputElement).checked).toBe(true))
   })
   it('does not show a failed transport switch as applied and reports unconfirmed revocation', async () => {
     current.auth.connected = true; current.auth.canGenerate = true

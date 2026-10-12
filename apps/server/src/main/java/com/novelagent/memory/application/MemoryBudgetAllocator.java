@@ -32,8 +32,7 @@ public class MemoryBudgetAllocator {
         int maxSemanticMemories = plan.maxSemanticMemories();
         int maxGraphFacts = plan.maxGraphFacts();
         String boundaryFingerprint = inputFingerprint != null ? inputFingerprint : NovelMemoryContext.fingerprint(semanticCandidates.stream()
-                .filter(candidate -> candidate.recentChapter() || candidate.futurePlan())
-                .map(candidate -> candidate.chapterNumber() + ":" + candidate.canonVersion() + "\n"
+                .map(candidate -> candidate.retrievalKey() + "\n"
                         + candidate.summary() + "\n" + candidate.content()).reduce("", (a, b) -> a + "\n" + b));
         List<String> trimmedSources = new ArrayList<>(previousTrims);
         List<NovelMemoryContext.SemanticMemory> future = new ArrayList<>();
@@ -50,7 +49,7 @@ public class MemoryBudgetAllocator {
                 .forEach(candidate -> recent.putIfAbsent(candidate.chapterNumber(), candidate));
         List<NovelMemoryContext.SemanticMemory> candidates = new ArrayList<>(recent.values());
         semanticCandidates.stream().filter(candidate -> !candidate.recentChapter() && !candidate.futurePlan())
-                .filter(candidate -> !recent.containsKey(candidate.chapterNumber())).forEach(candidates::add);
+                .filter(candidate -> candidate.sourceKey() != null || !recent.containsKey(candidate.chapterNumber())).forEach(candidates::add);
         int factReserve = factCandidates.isEmpty() ? 0 : Math.min(800, budgetTokens / 10);
         int remaining = Math.max(0, budgetTokens - factReserve
                 - estimateTokens(new NovelMemoryContext(List.of(), List.of(), null, future, List.of(), "").toPromptText()));
@@ -59,7 +58,7 @@ public class MemoryBudgetAllocator {
         List<NovelMemoryContext.SemanticMemory> semantic = new ArrayList<>();
         int recentIndex = 0;
         for (NovelMemoryContext.SemanticMemory candidate : candidates.stream().limit(maxSemanticMemories).toList()) {
-            int itemLimit = candidate.recentChapter() ? recentLimit(plan.stage(), budgetTokens, recentIndex++) : 500;
+            int itemLimit = candidate.recentChapter() ? recentLimit(plan.stage(), budgetTokens, recentIndex++) : 900;
             int allowance = Math.min(itemLimit, remaining);
             String summary = trimSummary(candidate.summary(), Math.min(candidate.recentChapter() ? 350 : 500, allowance));
             if (estimateTokens(summary) + 20 > remaining) { truncated = true; continue; }
@@ -87,14 +86,21 @@ public class MemoryBudgetAllocator {
                     trimmedSources.add("第" + candidate.chapterNumber() + "章合同已裁剪");
                 }
             } else {
-                excerpt = trimToTokens(candidate.content(), contentBudget);
+                // Located source chunks are omitted, not turned into partial evidence, when the budget is too small.
+                excerpt = candidate.sourceKey() == null ? trimToTokens(candidate.content(), contentBudget)
+                        : estimateTokens(candidate.content()) <= contentBudget ? nullToEmpty(candidate.content()) : "";
                 truncated |= !excerpt.equals(nullToEmpty(candidate.content()).strip());
+                if (candidate.sourceKey() != null && excerpt.isBlank()) {
+                    trimmedSources.add("定位片段未纳入预算：" + candidate.sourceKey());
+                    truncated = true;
+                    continue;
+                }
             }
             if (summary.isBlank() && excerpt.isBlank()) break;
             remaining -= estimateTokens(summary) + estimateTokens(excerpt) + 50;
             truncated |= !summary.equals(nullToEmpty(candidate.summary()).strip());
             semantic.add(new NovelMemoryContext.SemanticMemory(candidate.chapterNumber(), candidate.canonVersion(),
-                    candidate.similarity(), summary, excerpt, candidate.recentChapter(), contract, body));
+                    candidate.similarity(), summary, excerpt, candidate.recentChapter(), contract, body, candidate.sourceKey()));
             if (remaining <= 0) break;
         }
 

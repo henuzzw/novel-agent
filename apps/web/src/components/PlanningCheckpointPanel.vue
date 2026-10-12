@@ -67,7 +67,7 @@ async function refresh(preferredId = selectedId.value) {
     const detail = id ? await getPlanningBatch(projectId, id) : null
     if (scope !== ownScope || sequence !== readSequence) return
     if (current && (current.status !== 'PUBLISHED' || current.projectId !== projectId)) {
-      throw new Error('当前故事圣经不是本项目已发布版本，请刷新或重新发布。')
+      throw new Error('当前已确认雪花资料不是本项目已发布版本，请刷新或重新发布。')
     }
     if (detail && detail.projectId !== projectId) throw new Error('规划批次不属于当前项目。')
     bible.value = current
@@ -185,8 +185,8 @@ async function cancel() {
     </header>
     <p v-if="loading" role="status">正在读取规划进度…</p>
     <p v-if="readError" class="form-error" role="alert">{{ readError }}</p>
-    <p v-else-if="!loading && !bible" class="planning-notice">请先发布故事圣经，再创建分块规划。</p>
-    <p v-else-if="bible" class="planning-basis">当前已发布圣经：第 {{ bible.generationNumber }} 版 · 修订 {{ bible.version }}</p>
+    <p v-else-if="!loading && !bible" class="planning-notice">请先发布已确认雪花资料，再创建分块规划。</p>
+    <p v-else-if="bible" class="planning-basis">当前已发布规划资料：第 {{ bible.generationNumber }} 版 · 修订 {{ bible.version }}</p>
 
     <form class="planning-create" @submit.prevent="create">
       <label><span>规划至第几章</span><input v-model.number="chapterTo" type="number" min="1" max="500" step="1" required /></label>
@@ -199,9 +199,9 @@ async function cancel() {
     <div v-if="batch" class="planning-progress">
       <div class="planning-progress-heading"><strong>{{ batchLabels[batch.status] }}</strong><span>已完成 {{ completed }} / {{ totalChunks }} 块</span></div>
       <progress :value="completed" :max="totalChunks || 1" aria-label="已完成规划块" />
-      <p class="planning-basis">冻结圣经 {{ batch.bibleId }} · 修订 {{ batch.bibleRowVersion }} · {{ batch.provider }}</p>
+      <p class="planning-basis">冻结规划资料 {{ batch.bibleId }} · 修订 {{ batch.bibleRowVersion }} · {{ batch.provider }}</p>
       <p v-if="batch.instruction" class="planning-basis">{{ batch.instruction }}</p>
-      <p v-if="sourceChanged" class="form-error" role="alert">当前已发布圣经已变化，请创建新的批次。旧块不能继续执行或复用。</p>
+      <p v-if="sourceChanged" class="form-error" role="alert">当前已发布规划资料已变化，请创建新的批次。旧块不能继续执行或复用。</p>
       <p v-if="batch.status === 'RUNNING' || busy === 'run-next'" class="planning-notice">当前块正在执行。中断后可刷新进度；若仍为执行中，可先取消再恢复。</p>
       <p v-if="batch.status === 'FAILED'" class="planning-notice">执行失败。请核对失败块后显式重试或恢复批次；下次推进可能再次产生模型费用。</p>
       <p v-if="batch.status === 'CANCELLED'" class="planning-notice">批次已取消，已完成块保留，恢复后继续复用。</p>

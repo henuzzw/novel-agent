@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.domain.CanonCommit;
-import com.novelagent.memory.application.TextEmbeddingService;
+import com.novelagent.memory.infrastructure.SemanticChunkStore;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
@@ -24,7 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class VectorProjectionConsumerTest {
     private JdbcTemplate jdbc;
     private ManuscriptVersionRepository manuscripts;
-    private TextEmbeddingService embeddings;
+    private SemanticChunkStore chunks;
     private ProjectionCheckpointStore checkpoints;
     private CharacterNameService characterNames;
     private VectorProjectionConsumer consumer;
@@ -34,11 +34,11 @@ class VectorProjectionConsumerTest {
     void setUp() {
         jdbc = mock(JdbcTemplate.class);
         manuscripts = mock(ManuscriptVersionRepository.class);
-        embeddings = mock(TextEmbeddingService.class);
+        chunks = mock(SemanticChunkStore.class);
         checkpoints = mock(ProjectionCheckpointStore.class);
         characterNames = mock(CharacterNameService.class);
         commits = mock(CanonCommitRepository.class);
-        consumer = new VectorProjectionConsumer(new ObjectMapper(), jdbc, manuscripts, embeddings, checkpoints,
+        consumer = new VectorProjectionConsumer(new ObjectMapper(), jdbc, manuscripts, chunks, checkpoints,
                 characterNames, commits);
     }
 
@@ -55,12 +55,11 @@ class VectorProjectionConsumerTest {
                 manuscript.getProjectId(), 1, manuscriptId, UUID.randomUUID(), 1, List.of())));
         when(characterNames.render(any(UUID.class), any(ManuscriptContent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(1));
-        when(embeddings.embed(anyString())).thenReturn(new float[] {0.1f, 0.2f});
-        when(embeddings.modelName()).thenReturn("test-embedding");
 
         consumer.project(message(eventId, manuscriptId));
 
         verify(jdbc, org.mockito.Mockito.times(2)).update(anyString(), any(Object[].class));
+        verify(chunks).synchronize(any(UUID.class));
         verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.PGVECTOR);
     }
 
@@ -77,6 +76,17 @@ class VectorProjectionConsumerTest {
     }
 
     @Test
+    void deletedProjectMessagesCannotRecreateVectorsOrCheckpoints() throws Exception {
+        when(jdbc.queryForObject(anyString(), org.mockito.ArgumentMatchers.eq(Boolean.class), any(UUID.class)))
+                .thenReturn(false);
+        consumer.project(message(UUID.randomUUID(), UUID.randomUUID()));
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
+        verify(chunks, never()).synchronize(any());
+        verify(checkpoints, never()).markCompleted(any(), any());
+        verify(manuscripts, never()).findById(any());
+    }
+
+    @Test
     void removesRetiredManuscriptWithoutEmbeddingItAgain() throws Exception {
         UUID eventId = UUID.randomUUID();
         UUID manuscriptId = UUID.randomUUID();
@@ -89,7 +99,7 @@ class VectorProjectionConsumerTest {
 
         verify(jdbc).update(anyString(), any(Object[].class));
         verify(manuscripts, never()).findById(any());
-        verify(embeddings, never()).embed(anyString());
+        verify(chunks, never()).synchronize(any(UUID.class));
         verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.PGVECTOR);
     }
 

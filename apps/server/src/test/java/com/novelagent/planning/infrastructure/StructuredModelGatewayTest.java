@@ -29,6 +29,7 @@ class StructuredModelGatewayTest {
     private final JsonNode absentSchema = NullNode.getInstance();
     private final String wireStage = "system" + new PlainTextOutputProtocol(schema).instructions();
     private final String wireSystem = AgentPromptDefaults.sessionSystemPrompt() + "\n\n" + AgentPromptService.PROTECTED_RULES;
+    private final String legacySystem = wireSystem + LegacyCodexPromptReducer.READ_RULES;
     private final String wireUser = "【本轮服务端执行规范】\n" + wireStage + "\n【本轮创作资料】\nuser";
     private final UUID project = UUID.randomUUID();
     private final CodexAppServerClient codex = mock(CodexAppServerClient.class);
@@ -40,7 +41,9 @@ class StructuredModelGatewayTest {
     private final StructuredModelGateway gateway = gateway(new ModelContextProperties(), null);
 
     private StructuredModelGateway gateway(ModelContextProperties context, AgentPromptService prompts) {
-        return new StructuredModelGateway(codex, sessions, deepSeek, runs, context, prompts);
+        return new StructuredModelGateway(java.util.List.of(
+                new LegacyCodexExecutor(runs, context, codex, new LegacyCodexPromptGateway(codex, sessions, mapper, context)),
+                new DeepSeekExecutor(runs, context, deepSeek)), new ModelPromptAssembler(prompts, null, null), null);
     }
     @BeforeEach void setup() {
         when(runs.record(any(), anyString(), any(), anyString(), anyString(), any(RequestSnapshot.class), any(), any()))
@@ -57,13 +60,44 @@ class StructuredModelGatewayTest {
         return gateway.request(project, workflow, provider, "system", "user", schema, "schema", 4000, policy);
     }
     private void codexOutput(String thread) {
-        when(codex.runStructuredTurn(eq(thread), eq(project), anyString(), eq(absentSchema), eq(settings), any()))
+        when(codex.runStructuredTurn(eq(thread), eq(project), anyString(), isNull(), eq(settings), any()))
                 .thenReturn(new CodexAppServerClient.TurnResult("turn", "正文文本"));
+    }
+    @Test void oauthCodexSharesPlanningAndWritingButKeepsReviewIsolatedAndRecordsActualDelta() {
+        var transport = mock(com.novelagent.modelaccess.application.ChatGptTransportService.class);
+        when(transport.get()).thenReturn(new com.novelagent.modelaccess.application.ChatGptTransportService.Choice(
+                com.novelagent.modelaccess.application.ChatGptTransportService.Transport.SIWC_CODEX, 1));
+        var direct = mock(com.novelagent.modelaccess.application.ChatGptDirectGateway.class);
+        when(direct.effectiveSettings()).thenReturn(settings);
+        var projectGateway = mock(com.novelagent.modelaccess.application.CodexProjectGateway.class);
+        var prepared = mock(com.novelagent.modelaccess.application.CodexProjectGateway.Prepared.class);
+        when(projectGateway.prepare(eq(project), anyString(), anyBoolean(), anyString())).thenReturn(prepared);
+        when(prepared.instructions(anyString())).thenAnswer(call -> call.getArgument(0) + "\nread rules");
+        when(prepared.wireInput()).thenReturn("current instructions and material_id=exact-data-reference");
+        when(prepared.run(anyString(), eq(settings), eq(4000), any()))
+                .thenReturn(new CodexAppServerClient.TurnResult("turn", "正文文本"));
+        var selectedGateway = new StructuredModelGateway(java.util.List.of(
+                new ProjectCodexExecutor(runs, new ModelContextProperties(), projectGateway, direct)),
+                new ModelPromptAssembler(null, null, null), transport);
+        for (String workflow : new String[]{"SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "OUTLINE", "MANUSCRIPT", "QUALITY_REVIEW"})
+            assertThat(selectedGateway.request(project, workflow, ModelProvider.LOCAL_CODEX, "system", "user", schema,
+                    "schema", 4000, CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
+        verify(projectGateway, times(4)).prepare(eq(project), eq("NOVEL_MAIN"), eq(false), anyString());
+        verify(projectGateway).prepare(eq(project), eq("QUALITY_REVIEW"), eq(true), anyString());
+        var snapshot = ArgumentCaptor.forClass(RequestSnapshot.class);
+        verify(runs, times(5)).record(eq(project), anyString(), eq(ModelProvider.LOCAL_CODEX), anyString(),
+                eq("current instructions and material_id=exact-data-reference"), snapshot.capture(), any(), any());
+        assertThat(snapshot.getAllValues()).allSatisfy(value -> {
+            assertThat(value.schemaHash()).isNull(); assertThat(value.schemaName()).isEqualTo("PLAIN_TEXT");
+            assertThat(value.sessionPolicy()).startsWith("SIWC_CODEX_");
+        });
+        verify(prepared, times(5)).accept();
+        verifyNoInteractions(codex, sessions, deepSeek);
     }
     @Test void standaloneNewThreadReplacesOldSessionAndNeverSendsOutputSchema() {
         var existing = CodexAgentSession.create(project, "QUALITY_REVIEW", "old");
         when(sessions.findByProjectIdAndWorkflowType(project, "QUALITY_REVIEW")).thenReturn(Optional.of(existing));
-        when(codex.startThread(project, wireSystem, settings)).thenReturn("fresh");
+        when(codex.startThread(project, legacySystem, settings)).thenReturn("fresh");
         codexOutput("fresh");
         assertThat(request("QUALITY_REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.NEW_THREAD))
                 .isEqualTo("{\"text\":\"正文文本\"}");
@@ -76,13 +110,13 @@ class StructuredModelGatewayTest {
         when(sessions.findByProjectIdAndWorkflowType(project, PlanningConversationPolicy.KEY)).thenReturn(Optional.of(existing));
         codexOutput("shared");
         for (String workflow : new String[]{"BOOK_TITLE", "IMPORT_SOURCE_ANALYSIS", "SNOWFLAKE_PLANNING",
-                "CHARACTER_DESIGN", "STORY_DIRECTION", "STORY_BIBLE", "OUTLINE", "IMPORT_REVERSE_BIBLE", "IMPORT_REVERSE_OUTLINE"}) {
+                "CHARACTER_DESIGN", "OUTLINE", "IMPORT_REVERSE_OUTLINE"}) {
             assertThat(request(workflow, ModelProvider.LOCAL_CODEX, CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
         }
-        verify(codex, times(9)).resumeThread("shared", project, wireSystem, settings);
+        verify(codex, times(6)).resumeThread("shared", project, legacySystem, settings);
         var prompt = ArgumentCaptor.forClass(String.class);
-        verify(codex, times(9)).runStructuredTurn(eq("shared"), eq(project), prompt.capture(), eq(absentSchema), eq(settings), any());
-        assertThat(prompt.getAllValues()).hasSize(9);
+        verify(codex, times(6)).runStructuredTurn(eq("shared"), eq(project), prompt.capture(), isNull(), eq(settings), any());
+        assertThat(prompt.getAllValues()).hasSize(6);
         for (int i = 0; i < prompt.getAllValues().size(); i++) {
             String extra = i == 1 ? com.novelagent.ingest.infrastructure.ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "";
             assertThat(prompt.getAllValues().get(i)).isEqualTo("【本轮服务端执行规范】\nsystem" + extra
@@ -94,15 +128,15 @@ class StructuredModelGatewayTest {
         var existing = CodexAgentSession.create(project, "QUALITY_REVIEW", "missing");
         when(sessions.findByProjectIdAndWorkflowType(project, "QUALITY_REVIEW")).thenReturn(Optional.of(existing));
         doThrow(new CodexAppServerException("thread not found", -32000))
-                .when(codex).resumeThread("missing", project, wireSystem, settings);
-        when(codex.startThread(project, wireSystem, settings)).thenReturn("replacement");
+                .when(codex).resumeThread("missing", project, legacySystem, settings);
+        when(codex.startThread(project, legacySystem, settings)).thenReturn("replacement");
         codexOutput("replacement");
         assertThat(request("QUALITY_REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.REUSE_THREAD)).contains("正文文本");
         doThrow(new CodexAppServerException("401 authentication: thread not found", -32000))
-                .when(codex).resumeThread("replacement", project, wireSystem, settings);
+                .when(codex).resumeThread("replacement", project, legacySystem, settings);
         assertThatThrownBy(() -> request("QUALITY_REVIEW", ModelProvider.LOCAL_CODEX, CodexSessionPolicy.REUSE_THREAD))
                 .isInstanceOf(CodexAppServerException.class);
-        verify(codex, times(1)).startThread(project, wireSystem, settings);
+        verify(codex, times(1)).startThread(project, legacySystem, settings);
     }
 
     @Test void pairedPlanningRolesReuseOneThreadUntilTheSharedConfigurationChanges() {
@@ -110,25 +144,25 @@ class StructuredModelGatewayTest {
         var existing = CodexAgentSession.create(project, PlanningConversationPolicy.KEY, "shared");
         existing.usePromptRevision("planning:v1");
         when(sessions.findByProjectIdAndWorkflowType(project, PlanningConversationPolicy.KEY)).thenReturn(Optional.of(existing));
-        when(prompts.resolve("STORY_BIBLE", "system")).thenReturn(new AgentPromptService.Resolved("bible phase", "planning:v1", "bible system"));
+        when(prompts.resolve("CHARACTER_DESIGN", "system")).thenReturn(new AgentPromptService.Resolved("character phase", "planning:v1", "character system"));
         when(prompts.resolve("OUTLINE", "system"))
                 .thenReturn(new AgentPromptService.Resolved("outline phase", "planning:v1", "outline system"))
                 .thenReturn(new AgentPromptService.Resolved("edited phase", "planning:v2", "edited system"));
         codexOutput("shared");
         var paired = gateway(new ModelContextProperties(), prompts);
-        for (String workflow : new String[]{"STORY_BIBLE", "OUTLINE"}) {
+        for (String workflow : new String[]{"CHARACTER_DESIGN", "OUTLINE"}) {
             assertThat(paired.request(project, workflow, ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,
                     CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
         }
-        verify(codex).resumeThread("shared", project, "bible system\n\n" + AgentPromptService.PROTECTED_RULES, settings);
-        verify(codex).resumeThread("shared", project, "outline system\n\n" + AgentPromptService.PROTECTED_RULES, settings);
+        verify(codex).resumeThread("shared", project, "character system\n\n" + AgentPromptService.PROTECTED_RULES + LegacyCodexPromptReducer.READ_RULES, settings);
+        verify(codex).resumeThread("shared", project, "outline system\n\n" + AgentPromptService.PROTECTED_RULES + LegacyCodexPromptReducer.READ_RULES, settings);
         verify(codex, never()).startThread(any(), anyString(), any());
-        when(codex.startThread(project, "edited system\n\n" + AgentPromptService.PROTECTED_RULES, settings)).thenReturn("fresh");
+        when(codex.startThread(project, "edited system\n\n" + AgentPromptService.PROTECTED_RULES + LegacyCodexPromptReducer.READ_RULES, settings)).thenReturn("fresh");
         codexOutput("fresh");
         assertThat(paired.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,
                 CodexSessionPolicy.REUSE_THREAD)).contains("正文文本");
         assertThat(existing.getThreadId()).isEqualTo("fresh");
-        verify(codex).startThread(project, "edited system\n\n" + AgentPromptService.PROTECTED_RULES, settings);
+        verify(codex).startThread(project, "edited system\n\n" + AgentPromptService.PROTECTED_RULES + LegacyCodexPromptReducer.READ_RULES, settings);
     }
     @Test void deepSeekRecordsRawTextAndNoSchemaOrCodexSession() {
         when(deepSeek.request("schema", wireSystem, wireUser, absentSchema, 4000, deepSettings))
@@ -146,10 +180,11 @@ class StructuredModelGatewayTest {
     @Test void currentProjectBoundariesReachWireAndFrozenCallsNeverReadMutableSettings() {
         var boundaries = mock(com.novelagent.project.application.CreativeBoundaryService.class);
         when(boundaries.promptContext(project)).thenReturn("\n项目边界快照");
-        gateway.setBoundaries(boundaries);
+        var gateway = new StructuredModelGateway(java.util.List.of(new DeepSeekExecutor(runs, new ModelContextProperties(), deepSeek)),
+                new ModelPromptAssembler(null, boundaries, null), null);
         when(deepSeek.request(anyString(), anyString(), anyString(), eq(absentSchema), anyInt(), any()))
                 .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("文本", null));
-        request("OUTLINE", ModelProvider.DEEPSEEK, CodexSessionPolicy.NEW_THREAD);
+        gateway.request(project, "OUTLINE", ModelProvider.DEEPSEEK, "system", "user", schema, "schema", 4000, CodexSessionPolicy.NEW_THREAD);
         verify(deepSeek).request("schema", wireSystem,
                 "【本轮服务端执行规范】\n" + wireStage + "\n项目边界快照\n【本轮创作资料】\nuser",
                 absentSchema, 4000, deepSettings);
@@ -207,11 +242,11 @@ class StructuredModelGatewayTest {
         verify(deepSeek, times(1)).effectiveSettings();
         verify(runs).record(eq(project), eq("MANUSCRIPT"), eq(ModelProvider.DEEPSEEK), eq(effectiveSystem),
                 eq(effectiveUser), any(RequestSnapshot.class), any(), any());
-        when(codex.startThread(project, effectiveSystem, settings)).thenReturn("custom-thread");
+        when(codex.startThread(project, effectiveSystem + LegacyCodexPromptReducer.READ_RULES, settings)).thenReturn("custom-thread");
         codexOutput("custom-thread");
         assertThat(gateway(new ModelContextProperties(), prompts).request(project, "MANUSCRIPT", ModelProvider.LOCAL_CODEX,
                 "system", "user", schema, "schema", 4000, CodexSessionPolicy.NEW_THREAD)).contains("正文文本");
-        verify(codex).runStructuredTurn(eq("custom-thread"), eq(project), eq(effectiveUser), eq(absentSchema), eq(settings), any());
+        verify(codex).runStructuredTurn(eq("custom-thread"), eq(project), eq(effectiveUser), isNull(), eq(settings), any());
     }
     @Test void outputAndSafetyReservationsCountAtExactCapacityBoundary() {
         var context = new ModelContextProperties();
@@ -227,5 +262,81 @@ class StructuredModelGatewayTest {
                 .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("完整结果", null));
         assertThat(bounded.request(project, "OUTLINE", ModelProvider.DEEPSEEK, "system", "user", schema, "schema", 10,
                 CodexSessionPolicy.NEW_THREAD)).contains("完整结果");
+    }
+
+    @Test void legacyReferencesOnlySuccessfullySavedIdenticalDataAndRecordsActualWire() {
+        when(codex.supportsMaterialTool("shared")).thenReturn(true);
+        var session = CodexAgentSession.create(project, PlanningConversationPolicy.KEY, "shared");
+        session.usePromptRevision(PlanningConversationPolicy.REVISION);
+        when(sessions.findByProjectIdAndWorkflowType(project, PlanningConversationPolicy.KEY)).thenReturn(Optional.of(session));
+        codexOutput("shared");
+        String data = "{\"text\":\"" + "同一份资料".repeat(300) + "\"}";
+        for (int i = 0; i < 2; i++) gateway.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX,
+                "system", data, schema, "schema", 4000, CodexSessionPolicy.REUSE_THREAD);
+        var wire = ArgumentCaptor.forClass(String.class);
+        verify(codex, times(2)).runStructuredTurn(eq("shared"), eq(project), wire.capture(), isNull(), eq(settings), any());
+        assertThat(wire.getAllValues().getFirst()).contains(data);
+        assertThat(wire.getAllValues().getLast()).doesNotContain(data).contains("material_id=", "【本轮服务端执行规范】");
+        var snapshot = ArgumentCaptor.forClass(RequestSnapshot.class);
+        var recorded = ArgumentCaptor.forClass(String.class);
+        verify(runs, times(2)).record(eq(project), eq("OUTLINE"), eq(ModelProvider.LOCAL_CODEX), eq(legacySystem),
+                recorded.capture(), snapshot.capture(), any(), any());
+        assertThat(recorded.getAllValues()).containsExactlyElementsOf(wire.getAllValues());
+        assertThat(snapshot.getAllValues()).allSatisfy(value -> {
+            assertThat(value.sessionPolicy()).isEqualTo("APP_SERVER_DELTA_REUSE_THREAD");
+            assertThat(value.schemaHash()).isNull();
+        });
+    }
+
+    @Test void legacySaveFailureDoesNotAcknowledgeDataAndReleasesProjectLock() {
+        var session = CodexAgentSession.create(project, PlanningConversationPolicy.KEY, "shared");
+        session.usePromptRevision(PlanningConversationPolicy.REVISION);
+        when(sessions.findByProjectIdAndWorkflowType(project, PlanningConversationPolicy.KEY)).thenReturn(Optional.of(session));
+        codexOutput("shared");
+        String data = "{\"text\":\"" + "retry exact data ".repeat(100) + "\"}";
+        assertThatThrownBy(() -> gateway.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", data,
+                schema, "schema", 4000, CodexSessionPolicy.REUSE_THREAD,
+                output -> { throw new IllegalArgumentException("save failed"); })).hasMessage("save failed");
+        verify(sessions, never()).saveAndFlush(any());
+        gateway.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", data, schema, "schema", 4000, CodexSessionPolicy.REUSE_THREAD);
+        var wire = ArgumentCaptor.forClass(String.class);
+        verify(codex, times(2)).runStructuredTurn(eq("shared"), eq(project), wire.capture(), isNull(), eq(settings), any());
+        assertThat(wire.getAllValues()).allSatisfy(value -> assertThat(value).contains(data).doesNotContain("material_id="));
+    }
+
+    @Test void explicitHttpEntryRecordsCompleteHistoryAndOnlyAcceptsAfterBusinessSave() {
+        var transport = mock(com.novelagent.modelaccess.application.ChatGptTransportService.class);
+        when(transport.get()).thenReturn(new com.novelagent.modelaccess.application.ChatGptTransportService.Choice(
+                com.novelagent.modelaccess.application.ChatGptTransportService.Transport.SIWC_HTTP, 1));
+        var direct = mock(com.novelagent.modelaccess.application.ChatGptDirectGateway.class);
+        var prepared = mock(com.novelagent.modelaccess.application.ChatGptDirectGateway.Prepared.class);
+        when(direct.effectiveSettings()).thenReturn(settings);
+        when(direct.prepare(eq(project), eq(PlanningConversationPolicy.KEY), eq(wireSystem), eq(wireUser),
+                eq(CodexSessionPolicy.REUSE_THREAD), eq(PlanningConversationPolicy.REVISION), eq(4000))).thenReturn(prepared);
+        when(prepared.wireInput()).thenReturn("[full history and current input]");
+        when(prepared.budget()).thenReturn(new AgentRunRecorder.ContextBudget(128000, 4000, 20, 4000));
+        var result = new com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient.Result("response", "text", null, mapper.createArrayNode());
+        when(prepared.run(eq(settings), any())).thenReturn(result);
+        var selected = new StructuredModelGateway(java.util.List.of(new ChatGptHttpExecutor(runs, new ModelContextProperties(), direct)),
+                new ModelPromptAssembler(null, null, null), transport);
+        selected.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,
+                CodexSessionPolicy.REUSE_THREAD, output -> verify(prepared, never()).accept(any()));
+        verify(prepared).accept(result);
+        verify(prepared).close();
+        verify(runs).record(eq(project), eq("OUTLINE"), eq(ModelProvider.LOCAL_CODEX), eq(wireSystem),
+                eq("[full history and current input]"), any(RequestSnapshot.class), any(), any());
+        verify(transport, times(1)).get();
+        verifyNoInteractions(codex, sessions, deepSeek);
+    }
+
+    @Test void missingSelectedEntryNeverFallsBackToAnotherProvider() {
+        var transport = mock(com.novelagent.modelaccess.application.ChatGptTransportService.class);
+        when(transport.get()).thenReturn(new com.novelagent.modelaccess.application.ChatGptTransportService.Choice(
+                com.novelagent.modelaccess.application.ChatGptTransportService.Transport.SIWC_CODEX, 1));
+        var selected = new StructuredModelGateway(java.util.List.of(new DeepSeekExecutor(runs, new ModelContextProperties(), deepSeek)),
+                new ModelPromptAssembler(null, null, null), transport);
+        assertThatThrownBy(() -> selected.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema,
+                "schema", 4000, CodexSessionPolicy.REUSE_THREAD)).hasMessageContaining("未初始化");
+        verifyNoInteractions(codex, sessions, deepSeek, runs);
     }
 }

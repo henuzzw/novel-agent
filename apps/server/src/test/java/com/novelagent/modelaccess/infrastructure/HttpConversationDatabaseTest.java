@@ -39,6 +39,9 @@ class HttpConversationDatabaseTest {
         try (var stream = getClass().getResourceAsStream("/db/migration/V056__chatgpt_direct_transport.sql")) {
             jdbc.execute(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
         }
+        try (var stream = getClass().getResourceAsStream("/db/migration/V057__codex_project_sessions.sql")) {
+            jdbc.execute(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
+        }
         jdbc.update("INSERT INTO novel_project VALUES (?, ?)", project, owner);
         store = new HttpConversationStore(jdbc, json, new CurrentActorProvider(owner), manager);
     }
@@ -57,6 +60,28 @@ class HttpConversationDatabaseTest {
         var intruder = new HttpConversationStore(jdbc, json, new CurrentActorProvider(UUID.randomUUID()), manager);
         assertThatThrownBy(() -> intruder.claim(project, "OTHER", "account", "v1", false)).hasMessageContaining("不属于当前用户");
         assertThatThrownBy(() -> store.complete(first, history)).hasMessageContaining("被替换");
+    }
+    @Test void codexLeasesOrderAllProjectStagesAndKeepExactVersionedMaterials() {
+        var codex = new CodexConversationStore(jdbc, json, new CurrentActorProvider(owner), manager);
+        var first = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
+        assertThatThrownBy(() -> codex.claim(project, "QUALITY_REVIEW", "codex-account", true)).hasMessageContaining("正在生成");
+        String content = "完整资料，不是摘要"; String id = CodexMaterialDelta.fingerprint(content);
+        codex.saveMaterials(first, java.util.Map.of(id, content)); codex.bind(first, "persisted-thread");
+        assertThat(codex.readMaterial(first, id)).isEqualTo(content);
+        codex.complete(first, java.util.Set.of(id), 120000);
+        var next = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
+        assertThat(next.thread()).isEqualTo("persisted-thread"); assertThat(next.sent()).containsExactly(id);
+        assertThat(next.contextTokens()).isEqualTo(120000);
+        assertThatThrownBy(() -> codex.readMaterial(first, id)).hasMessageContaining("租约");
+        codex.abort(next);
+        var retry = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
+        assertThat(retry.thread()).isNull(); assertThat(retry.sent()).isEmpty();
+        assertThat(codex.readMaterial(retry, id)).isEqualTo(content);
+        codex.bind(retry, "retry-thread"); codex.complete(retry, java.util.Set.of(id), 100);
+        var changed = codex.claim(project, "NOVEL_MAIN", "different-account", false);
+        assertThat(changed.thread()).isNull(); assertThat(changed.sent()).isEmpty(); codex.release(changed);
+        var intruder = new CodexConversationStore(jdbc, json, new CurrentActorProvider(UUID.randomUUID()), manager);
+        assertThatThrownBy(() -> intruder.claim(project, "NOVEL_MAIN", "codex-account", false)).hasMessageContaining("不属于");
     }
     @Test void transportChangesAreExplicitVersionedAndBlockedWhileGenerating() {
         var auth = mock(ChatGptOAuthService.class);
@@ -105,7 +130,8 @@ class HttpConversationDatabaseTest {
                     com.novelagent.planning.application.ModelProvider.LOCAL_CODEX, "test-model", "high", "deepseek-flash", 9));
             var direct = new com.novelagent.modelaccess.application.ChatGptDirectGateway(auth, store, responses, settings,
                     new com.novelagent.memory.application.ModelContextProperties());
-            var transport = mock(ChatGptTransportService.class); when(transport.direct()).thenReturn(true);
+            var transport = mock(ChatGptTransportService.class);
+            when(transport.get()).thenReturn(new ChatGptTransportService.Choice(ChatGptTransportService.Transport.SIWC_HTTP, 1));
             var codex = mock(com.novelagent.planning.infrastructure.CodexAppServerClient.class);
             var deepSeek = mock(com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient.class);
             var runs = mock(com.novelagent.agent.application.AgentRunRecorder.class);
@@ -117,9 +143,10 @@ class HttpConversationDatabaseTest {
             var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
             when(prompts.resolve(anyString(), anyString())).thenAnswer(call -> new com.novelagent.prompt.application.AgentPromptService.Resolved(
                     call.getArgument(0) + " phase", "wire-revision", call.getArgument(0) + " instructions"));
-            var gateway = new com.novelagent.planning.infrastructure.StructuredModelGateway(codex,
-                    mock(com.novelagent.planning.infrastructure.CodexAgentSessionRepository.class), deepSeek, runs,
-                    new com.novelagent.memory.application.ModelContextProperties(), prompts, direct, transport);
+            var gateway = new com.novelagent.planning.infrastructure.StructuredModelGateway(java.util.List.of(
+                    new com.novelagent.planning.infrastructure.ChatGptHttpExecutor(runs,
+                            new com.novelagent.memory.application.ModelContextProperties(), direct)),
+                    new com.novelagent.planning.infrastructure.ModelPromptAssembler(prompts, null, null), transport);
             var schema = json.createObjectNode().put("type", "object"); schema.putObject("properties").putObject("text").put("type", "string");
             for (String phase : new String[]{"STORY_BIBLE", "OUTLINE"})
                 assertThat(gateway.request(project, phase, com.novelagent.planning.application.ModelProvider.LOCAL_CODEX,

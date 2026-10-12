@@ -74,7 +74,7 @@ public class AgentToolOrchestrator {
             List<NovelMemoryContext.SemanticMemory> candidates) {
         Map<String, NovelMemoryContext.SemanticMemory> unique = new LinkedHashMap<>();
         for (NovelMemoryContext.SemanticMemory candidate : candidates) {
-            String key = candidate.chapterNumber() + ":" + candidate.canonVersion();
+            String key = candidate.retrievalKey();
             unique.merge(key, candidate, AgentToolOrchestrator::mergeMemory);
         }
         return List.copyOf(unique.values());
@@ -91,7 +91,7 @@ public class AgentToolOrchestrator {
         return new NovelMemoryContext.SemanticMemory(first.chapterNumber(), first.canonVersion(), similarity,
                 first.summary(), content, first.recentChapter() || second.recentChapter(),
                 first.chapterContract() != null ? first.chapterContract() : second.chapterContract(),
-                first.chapterBody() != null ? first.chapterBody() : second.chapterBody());
+                first.chapterBody() != null ? first.chapterBody() : second.chapterBody(), first.sourceKey());
     }
 
     private static List<NovelMemoryContext.GraphFact> deduplicateFacts(List<NovelMemoryContext.GraphFact> candidates) {

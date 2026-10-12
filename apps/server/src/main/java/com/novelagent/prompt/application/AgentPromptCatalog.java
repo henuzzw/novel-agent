@@ -9,14 +9,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class AgentPromptCatalog {
     private static final Set<String> SHARED_PLANNING = Set.of("BOOK_TITLE", "IMPORT_SOURCE_ANALYSIS",
-            "SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "STORY_DIRECTION", "STORY_BIBLE", "OUTLINE",
-            "IMPORT_REVERSE_BIBLE", "IMPORT_REVERSE_OUTLINE", "PLANNING_CHECKPOINT");
+            "SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "OUTLINE",
+            "IMPORT_REVERSE_OUTLINE", "PLANNING_CHECKPOINT");
 
     public static boolean sharesConversation(String workflow) { return SHARED_PLANNING.contains(workflow); }
     private final List<Definition> definitions = List.of(
             define("BOOK_TITLE", "自动书名", "导入"),
-            define("STORY_DIRECTION", "故事方向", "规划"),
-            define("STORY_BIBLE", "故事圣经", "规划"),
             define("OUTLINE", "分层大纲", "规划"),
             define("SNOWFLAKE_PLANNING", "雪花渐进规划", "规划"),
             define("CHARACTER_DESIGN", "统一人物设计", "规划"),
@@ -33,8 +31,6 @@ public class AgentPromptCatalog {
             define("STYLE_PREVIEW_REVIEW", "试写审阅", "风格"),
             define("STYLE_PREVIEW_REVISION", "试写修订", "风格"),
             define("IMPORT_SOURCE_ANALYSIS", "原文解析", "导入"),
-            new Definition("IMPORT_REVERSE_BIBLE_ADAPT", "IMPORT_REVERSE_BIBLE", "导入圣经 · 改编", "导入"),
-            new Definition("IMPORT_REVERSE_BIBLE_CONTINUE", "IMPORT_REVERSE_BIBLE", "导入圣经 · 续写", "导入"),
             new Definition("IMPORT_REVERSE_OUTLINE_ADAPT", "IMPORT_REVERSE_OUTLINE", "导入大纲 · 改编", "导入"),
             new Definition("IMPORT_REVERSE_OUTLINE_CONTINUE", "IMPORT_REVERSE_OUTLINE", "导入大纲 · 续写", "导入"));
 

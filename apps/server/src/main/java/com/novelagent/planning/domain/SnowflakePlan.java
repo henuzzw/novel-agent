@@ -10,6 +10,20 @@ public record SnowflakePlan(UUID id, UUID projectId, String mode, ModelProvider 
         String plot, String errorMessage, Instant createdAt, Instant updatedAt, java.util.Map<String, String> steps,
         UUID sourceImportId) {
 
+    /** Read-only warning projection; persisted responses are changed only by an explicit resume. */
+    @com.fasterxml.jackson.annotation.JsonProperty("invalidSteps")
+    public java.util.Map<String, String> invalidSteps() {
+        var invalid = new java.util.LinkedHashMap<String, String>();
+        boolean contaminated = false;
+        for (var stage : com.novelagent.planning.application.SnowflakeStep.values()) {
+            String text = steps.get(stage.name());
+            if (text == null || text.isBlank()) continue;
+            if (com.novelagent.agent.application.ModelOutputAvailability.unavailable(text)) contaminated = true;
+            if (contaminated) invalid.put(stage.name(), "资料未读取或依赖无效底稿，继续时需重新生成");
+        }
+        return java.util.Map.copyOf(invalid);
+    }
+
     public SnowflakePlan(UUID id, UUID projectId, String mode, ModelProvider provider,
             String status, String activeStage, String core, String characters, String world,
             String plot, String errorMessage, Instant createdAt, Instant updatedAt, java.util.Map<String, String> steps) {

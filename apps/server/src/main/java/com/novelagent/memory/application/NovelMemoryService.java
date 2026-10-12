@@ -4,6 +4,7 @@ import com.novelagent.agent.application.AgentStage;
 import com.novelagent.agent.tool.AgentToolOrchestrator;
 import com.novelagent.agent.tool.NovelToolRequest;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -31,13 +32,18 @@ public class NovelMemoryService {
      */
     public NovelMemoryContext recall(AgentStage stage, UUID projectId, int chapterNumber,
             long canonVersion, String query, MemoryBudgetPlan budget) {
+        return recall(stage, projectId, chapterNumber, canonVersion, query, budget, null, List.of());
+    }
+
+    public NovelMemoryContext recall(AgentStage stage, UUID projectId, int chapterNumber,
+            long canonVersion, String query, MemoryBudgetPlan budget, UUID planningVersionId, List<String> keywords) {
         NovelToolRequest request = new NovelToolRequest(
                 projectId,
                 chapterNumber,
                 canonVersion,
                 query,
                 Math.min(30, budget.maxSemanticMemories() * 2),
-                Math.min(40, budget.maxGraphFacts() * 2));
+                Math.min(40, budget.maxGraphFacts() * 2), planningVersionId, keywords);
         return tools.gather(stage, request, budget);
     }
 }

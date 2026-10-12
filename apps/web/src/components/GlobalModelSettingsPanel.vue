@@ -14,7 +14,7 @@ watch(settings, (value) => { draft.value = value ? { ...value } : null }, { imme
 const models = useQuery({ queryKey: ['global-chatgpt-models'], queryFn: getChatGptModels, retry: false, staleTime: 300_000,
   enabled: computed(() => draft.value?.provider === 'LOCAL_CODEX') })
 const selectedModel = computed(() => models.data.value?.find(model => model.model === draft.value?.codexModel))
-const efforts = computed(() => transport.value === 'SIWC_HTTP' ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] : selectedModel.value?.efforts ?? [])
+const efforts = computed(() => transport.value !== 'APP_SERVER' ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'] : selectedModel.value?.efforts ?? [])
 const effortLabels: Record<string, string> = { none: '不推理', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '极高', max: '最高', ultra: '超高' }
 watch(() => draft.value?.codexModel, () => {
   if (draft.value && selectedModel.value && !efforts.value.includes(draft.value.codexEffort)) draft.value.codexEffort = selectedModel.value.defaultEffort

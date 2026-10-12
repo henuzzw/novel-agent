@@ -1,69 +1,55 @@
 package com.novelagent.planning.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.domain.CharacterBlueprint;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.prompt.application.AgentPromptDefaults;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
-/** One character-design Agent, shared by import planning, missing-field completion and preparation. */
+/** Projects Snowflake step 7 through the single active character-design Agent. */
 @Service
 public class CharacterDesignService {
     private final StructuredModelGateway models;
     private final ObjectMapper mapper;
     private final StoryBibleOutputSchema schemas;
-    private final com.novelagent.planning.infrastructure.FreeTextPlanningRequest texts;
-
-    public CharacterDesignService(StructuredModelGateway models, ObjectMapper mapper, StoryBibleOutputSchema schemas, com.novelagent.planning.infrastructure.FreeTextPlanningRequest texts) {
+    public CharacterDesignService(StructuredModelGateway models, ObjectMapper mapper, StoryBibleOutputSchema schemas) {
         this.models = models;
         this.mapper = mapper;
         this.schemas = schemas;
-        this.texts = texts;
     }
 
-    /** Natural prose for progressive planning; no drive-triangle or arc-field validator. */
-    public String designText(UUID projectId, ModelProvider provider, String prompt) {
-        return texts.request(projectId, "CHARACTER_DESIGN", provider, prompt, "CHARACTERS", 10000);
-    }
-
-    public String designText(UUID projectId, ModelProvider provider, String prompt, String frozenBoundaries) {
-        return texts.request(projectId, "CHARACTER_DESIGN", provider, prompt, "CHARACTERS", 10000, frozenBoundaries);
-    }
-
-    public List<CharacterBlueprint> design(UUID projectId, ModelProvider provider, JsonNode input) {
-        var schema = mapper.createObjectNode().put("type", "object").put("additionalProperties", false);
-        schema.putArray("required").add("characterBlueprints");
-        schema.putObject("properties").set("characterBlueprints",
-                schemas.value().at("/properties/content/properties/characterBlueprints"));
-        try {
-            var root = mapper.readTree(request(projectId, provider, input, schema, "character_design", 10000));
-            if (root == null || !root.isObject() || root.size() != 1 || !root.path("characterBlueprints").isArray()) {
-                throw new IllegalArgumentException("人物设计输出结构不合法");
-            }
-            List<CharacterBlueprint> result = mapper.convertValue(root.get("characterBlueprints"), new TypeReference<>() { });
-            if (result.isEmpty() || result.size() > 12 || result.stream().anyMatch(java.util.Objects::isNull)
-                    || result.stream().map(CharacterBlueprint::name).distinct().count() != result.size()) {
-                throw new IllegalArgumentException("人物设计未返回有效且姓名唯一的蓝图");
-            }
-            return List.copyOf(result);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("人物设计输出格式不合法", exception);
-        }
-    }
-
-    /** Different output schemas are modes of this same Agent, not separate character planners. */
-    public String request(UUID projectId, ModelProvider provider, JsonNode input, JsonNode schema, String schemaName, int maxTokens) {
+    /** Step 7 also projects already designed rules and promises for the data pages. Provider output stays plain text. */
+    public com.novelagent.planning.domain.StoryBibleContent designPlanning(UUID projectId, ModelProvider provider,
+            String prompt, String frozenBoundaries) {
         if (provider == null || provider == ModelProvider.LOCAL_TEMPLATE) {
-            throw new IllegalArgumentException("人物设计请选择真实模型，本地模板不能生成人物设定");
+            throw new IllegalArgumentException("人物设计请选择真实模型");
         }
-        return models.request(projectId, "CHARACTER_DESIGN", provider, AgentPromptDefaults.system("CHARACTER_DESIGN"),
-                input.toString(), schema, schemaName, maxTokens, CodexSessionPolicy.NEW_THREAD);
+        var schema = mapper.createObjectNode().put("type", "object").put("additionalProperties", false);
+        schema.putArray("required").add("materials");
+        schema.putObject("properties").set("materials", schemas.value().at("/properties/content"));
+        var input = mapper.createObjectNode().put("stage", "CHARACTER_SETTINGS").put("creativeData", prompt)
+                .put("creativeBoundarySnapshot", frozenBoundaries)
+                .put("execution", "执行雪花第7步，完善人物并整理前6步已有世界规则、秘密、初始关系和明确伏笔承诺。"
+                        + "这不是独立圣经任务，不另起故事，不新增核心剧情；硬约束只来自作者明确限制。"
+                        + "按本轮纯文本保存标题交付完整人物和资料，未提供的事实保持未知，未来计划不是正史。");
+        try {
+            var root = mapper.readTree(models.request(projectId, "CHARACTER_DESIGN", provider,
+                    AgentPromptDefaults.system("CHARACTER_DESIGN"), input.toString(), schema,
+                    "snowflake_character_materials", 12000, CodexSessionPolicy.REUSE_THREAD));
+            if (root == null || !root.path("materials").isObject()) {
+                throw new IllegalArgumentException("雪花第7步没有返回完整资料");
+            }
+            var materials = mapper.treeToValue(root.path("materials"), com.novelagent.planning.domain.StoryBibleContent.class);
+            if (materials == null || materials.characterBlueprints().isEmpty()) {
+                throw new IllegalArgumentException("雪花第7步没有返回人物档案");
+            }
+            return materials;
+        } catch (JsonProcessingException failure) {
+            throw new IllegalArgumentException("雪花第7步资料无法保存", failure);
+        }
     }
+
 }

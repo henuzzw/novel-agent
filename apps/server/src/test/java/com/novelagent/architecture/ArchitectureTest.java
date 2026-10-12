@@ -75,10 +75,8 @@ class ArchitectureTest {
         assertThat(readers).containsExactly("com.novelagent.project.application.ProjectAccessService");
         for (String type : List.of(
                 "project.application.ProjectService",
-                "planning.application.StoryDirectionService",
-                "planning.application.StoryBibleService",
+                "planning.application.ConfirmedSnowflakeService",
                 "planning.application.OutlineService",
-                "planning.application.CharacterBlueprintDraftStore",
                 "agent.application.AutomationRunStore",
                 "ingest.application.WorkImportService",
                 "canon.application.CanonCommitService",
@@ -95,6 +93,8 @@ class ArchitectureTest {
     @Test void sourceFingerprintsUseTheSharedDigestImplementation() {
         assertThat(methodCalls.entrySet().stream()
                 .filter(entry -> entry.getValue().contains("java.security.MessageDigest#getInstance"))
+                // OAuth's PKCE challenge is a security protocol, not a source fingerprint.
+                .filter(entry -> !entry.getKey().equals("com.novelagent.modelaccess.application.ChatGptOAuthService"))
                 .map(Map.Entry::getKey).toList())
                 .containsExactly("com.novelagent.platform.support.Sha256");
         assertThat(dependencies.get("com.novelagent.platform.support.Sha256"))
@@ -104,8 +104,11 @@ class ArchitectureTest {
     @Test void modelGatewayDelegatesSessionAndBudgetPolicies() {
         var gateway = dependencies.get("com.novelagent.planning.infrastructure.StructuredModelGateway");
         assertThat(gateway).contains(
-                "com.novelagent.planning.infrastructure.CodexSessionManager",
-                "com.novelagent.planning.infrastructure.StructuredRequestBudget");
+                "com.novelagent.planning.infrastructure.AbstractModelExecutor",
+                "com.novelagent.planning.infrastructure.ModelPromptAssembler");
+        assertThat(dependencies.get("com.novelagent.planning.infrastructure.AbstractModelExecutor"))
+                .contains("com.novelagent.planning.infrastructure.StructuredRequestBudget",
+                        "com.novelagent.agent.application.AgentRunRecorder");
         assertThat(methodCalls.get("com.novelagent.planning.infrastructure.StructuredModelGateway"))
                 .doesNotContain(
                         "com.novelagent.planning.infrastructure.CodexAppServerClient#startThread",
@@ -113,6 +116,27 @@ class ArchitectureTest {
                         "com.novelagent.planning.infrastructure.CodexAgentSessionRepository#saveAndFlush");
         assertThat(dependencies.get("com.novelagent.planning.infrastructure.CodexSessionManager"))
                 .doesNotContain("com.novelagent.prompt.application.AgentPromptService");
+    }
+
+    @Test void planningOrchestratorsDelegateGenerationAndImportStatusWrites() {
+        var snowflake = dependencies.get("com.novelagent.planning.application.SnowflakePlanningService");
+        assertThat(snowflake).contains("com.novelagent.planning.application.SnowflakeStageGenerator");
+        assertThat(snowflake).doesNotContain("com.novelagent.planning.infrastructure.FreeTextPlanningRequest",
+                "com.novelagent.planning.application.CharacterDesignService");
+        var imported = dependencies.get("com.novelagent.ingest.application.ImportedStoryBlueprintService");
+        assertThat(imported).contains("com.novelagent.ingest.infrastructure.ImportedPlanningStore",
+                "com.novelagent.ingest.application.ImportedPlanningSources");
+        assertThat(imported).noneMatch(type -> type.startsWith("org.springframework.jdbc."));
+        assertThat(dependencies.get("com.novelagent.planning.application.SnowflakeStageGenerator"))
+                .doesNotContain("com.novelagent.planning.infrastructure.SnowflakePlanStore");
+        for (Class<?> type : List.of(com.novelagent.planning.application.SnowflakePlanningService.class,
+                com.novelagent.ingest.application.ImportedStoryBlueprintService.class,
+                com.novelagent.planning.application.SnowflakeStageGenerator.class)) {
+            assertThat(AnnotatedElementUtils.findMergedAnnotation(type, Transactional.class)).isNull();
+            for (var method : type.getDeclaredMethods()) {
+                assertThat(AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class)).isNull();
+            }
+        }
     }
 
     @Test void writingFacadeOnlyCoordinatesThreeUseCaseServices() {
@@ -135,11 +159,7 @@ class ArchitectureTest {
     @Test void modelAdaptersUseTheSharedStructuredModelGateway() {
         Set<String> adapters = Set.of(
                 "com.novelagent.planning.infrastructure.CodexAppServerOutlineGenerator",
-                "com.novelagent.planning.infrastructure.CodexAppServerStoryBibleGenerator",
-                "com.novelagent.planning.infrastructure.CodexAppServerStoryDirectionGenerator",
                 "com.novelagent.planning.infrastructure.DeepSeekOutlineGenerator",
-                "com.novelagent.planning.infrastructure.DeepSeekStoryBibleGenerator",
-                "com.novelagent.planning.infrastructure.DeepSeekStoryDirectionGenerator",
                 "com.novelagent.ingest.infrastructure.ImportedPlanningModelGateway",
                 "com.novelagent.writing.infrastructure.WritingModelRouter");
         Set<String> infrastructureDetails = Set.of(

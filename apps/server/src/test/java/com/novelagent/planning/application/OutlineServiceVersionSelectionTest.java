@@ -237,7 +237,7 @@ class OutlineServiceVersionSelectionTest {
         when(intents.findById(projectId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.generate(projectId, new GenerateOutlineRequest(
                 ModelProvider.LOCAL_TEMPLATE, null, GenerationMode.REGENERATE, null)))
-                .hasMessageContaining("目标字数").hasMessageContaining("故事方向中保存创作要求");
+                .hasMessageContaining("目标字数").hasMessageContaining("项目设置中保存创作要求");
         verify(workflow, never()).generate(any(), any(), any(), any(), any(), any(), any());
     }
 

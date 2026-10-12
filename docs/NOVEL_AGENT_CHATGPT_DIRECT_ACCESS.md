@@ -1,5 +1,9 @@
 # ChatGPT OAuth 直连接入
 
+## 新增 Codex 项目会话入口（2026-10-10）
+
+保留本页原 SIWC_HTTP 行为，新增显式 `SIWC_CODEX`：使用相同登录授权、专用 App Server 持久主线程和原生压缩。规划与正文共享、检查隔离；资料精确引用与只读补读，纯文本输出不变。每轮 `thread/resume` 更新真实阶段指令，已挂载线程不再提前返回；原 App Server 同样应用此指令更新修复。本页下文关于旧缺口、直连完整历史的描述是原实现基线，不适用于新入口。详见 [Codex 项目会话](NOVEL_AGENT_CODEX_PROJECT_SESSION.md)。
+
 ## 非事件流响应诊断（2026-10-09）
 
 请求仍发送 `store=false/stream=true`，只有收到有效 `response.completed` 才完成生成，遵守[官方模型与流式推理说明](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)。HTTP200的JSON、HTML或其他类型不会被保存为有效结果或会话历史。

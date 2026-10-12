@@ -5,9 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.planning.infrastructure.StoryBibleModelOutputParser;
 import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
-import com.novelagent.planning.application.ModelProvider;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -67,7 +65,7 @@ class CharacterBlueprintTest {
         var output = json.createObjectNode();
         output.set("content", json.valueToTree(bible));
         output.putArray("changeSummary");
-        assertThat(new StoryBibleModelOutputParser(json).parse(ModelProvider.DEEPSEEK, output.toString()).content())
+        assertThat(json.treeToValue(output.get("content"), StoryBibleContent.class))
                 .isEqualTo(bible);
     }
 
@@ -79,13 +77,6 @@ class CharacterBlueprintTest {
         assertThatThrownBy(() -> json.convertValue(node, CharacterBlueprint.class)).hasMessageContaining("列表项");
     }
 
-    @Test void newModelOutputCannotSilentlyOmitTheMainCharacterBlueprint() {
-        var output = json.createObjectNode();
-        output.set("content", json.valueToTree(CharacterBlueprintFixtures.bible(List.of())));
-        output.putArray("changeSummary");
-        assertThatThrownBy(() -> new StoryBibleModelOutputParser(json).parse(ModelProvider.DEEPSEEK, output.toString()))
-                .hasMessageContaining("格式不合法").hasRootCauseMessage("模型输出缺少主角人物底稿");
-    }
 
     @Test void richCharacterBackgroundAndFullNotesSurviveParsingSerializationAndOutlineInput() throws Exception {
         String background = "【新增设计】父母轮班工作，他习惯替大人协调时间，也习惯先答应再解释。\n"
@@ -99,7 +90,7 @@ class CharacterBlueprintTest {
         var output = json.createObjectNode();
         output.set("content", json.valueToTree(bible));
         output.putArray("changeSummary");
-        var parsed = new StoryBibleModelOutputParser(json).parse(ModelProvider.DEEPSEEK, output.toString()).content();
+        var parsed = json.treeToValue(output.get("content"), StoryBibleContent.class);
         assertThat(parsed.characterBlueprints().getFirst().background()).isEqualTo(background);
         assertThat(parsed.developmentNotes()).isEqualTo(bible.developmentNotes());
         var restored = json.readValue(json.writeValueAsString(parsed), StoryBibleContent.class);

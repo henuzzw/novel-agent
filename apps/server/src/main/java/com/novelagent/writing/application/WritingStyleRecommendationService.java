@@ -2,7 +2,7 @@ package com.novelagent.writing.application;
 
 import com.novelagent.planning.api.StoryBibleResponse;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.application.StoryBibleService;
+import com.novelagent.planning.application.ConfirmedSnowflakeService;
 import com.novelagent.writing.api.RecommendWritingStyleRequest;
 import com.novelagent.writing.api.WritingStyleRecommendationResponse;
 import com.novelagent.writing.domain.WritingStyleProfile;
@@ -11,17 +11,17 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 /**
- * 圣经风格推荐。
+ * 已确认规划资料的风格推荐。
  *
  * <p>根据指定圣经和当前数据库预设目录请求推荐，核对来源版本、内容及目录未变。推荐含可核验的圣经原文依据，不自动应用风格。</p>
  */
 @Service
 public class WritingStyleRecommendationService {
-    private final StoryBibleService bibles;
+    private final ConfirmedSnowflakeService bibles;
     private final WritingGenerationWorkflow workflow;
     private final WritingStyleService styles;
 
-    public WritingStyleRecommendationService(StoryBibleService bibles, WritingGenerationWorkflow workflow, WritingStyleService styles) {
+    public WritingStyleRecommendationService(ConfirmedSnowflakeService bibles, WritingGenerationWorkflow workflow, WritingStyleService styles) {
         this.bibles = bibles;
         this.workflow = workflow;
         this.styles = styles;

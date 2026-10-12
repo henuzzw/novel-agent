@@ -15,7 +15,7 @@ vi.mock('@/api/writing', () => ({ listCanonEntities: vi.fn(), listCharacterNames
   listCanonTimeline: vi.fn(), initializeCharacterNames: vi.fn(), updateCharacterName: vi.fn(), updateCharacterProfile: vi.fn(),
   getEntityState: vi.fn(), listEntityAliases: vi.fn(), listEntityMentions: vi.fn(), addEntityAlias: vi.fn(),
   listRelationships: vi.fn(), listCharacterKnowledge: vi.fn() }))
-vi.mock('@/api/planning', () => ({ getLatestStoryBible: vi.fn(), completeStoryBibleCharacters: vi.fn() }))
+vi.mock('@/api/planning', () => ({ getPlanningSnapshot: vi.fn() }))
 vi.mock('@/api/planningMaterials', () => ({ listPlanningCharacters: vi.fn(), listPlanningRelationships: vi.fn(), syncPlanningMaterials: vi.fn() }))
 const profile = (): CharacterProfile => ({ ...character(), characterId: 'c1', roleKey: 'PROTAGONIST', canonicalName: '江澈',
   gender: '', ageDescription: '', notes: '', version: 1 })
@@ -24,7 +24,7 @@ beforeEach(() => {
     { id: 'item1', type: 'ITEM', name: '眼镜', status: 'PLANNED', canonVersionFrom: 0 }])
   vi.mocked(writing.listCharacterNames).mockResolvedValue([{ id: 'c1', canonicalName: '江澈', sourceName: '江澈', roleKey: 'PROTAGONIST', nickname: null, title: null, version: 0 }])
   vi.mocked(writing.listCharacterProfiles).mockResolvedValue([profile()])
-  vi.mocked(planning.getLatestStoryBible).mockResolvedValue(bible())
+  vi.mocked(planning.getPlanningSnapshot).mockResolvedValue(bible())
   vi.mocked(materials.listPlanningCharacters).mockResolvedValue([{ sourceBibleId: 'bible-1', characterId: 'c1', blueprint: character() }])
   vi.mocked(materials.listPlanningRelationships).mockResolvedValue([{ id: 'r1', sourceBibleId: 'bible-1', characterId: 'c1', description: '与同学相识一年，互相讲题' }])
   vi.mocked(writing.getEntityState).mockResolvedValue([])
@@ -75,20 +75,13 @@ describe('unified character dossier', () => {
       expect(wrapper.text()).toContain('版本冲突')
     } finally { close() }
   })
-  it('makes model completion an explicit draft, not profile publication or canonical facts', async () => {
-    const { wrapper, client, close } = setup()
+  it('does not offer the retired independent Bible completion workflow', async () => {
+    const { wrapper, close } = setup()
     try {
       await flushPromises()
-      expect(planning.completeStoryBibleCharacters).not.toHaveBeenCalled()
-      vi.mocked(planning.completeStoryBibleCharacters).mockResolvedValue({ ...bible(), id: 'new-draft' })
-      await wrapper.findAll('button').find(button => button.text() === '补全人物设定')!.trigger('click')
-      await flushPromises()
-      expect(planning.completeStoryBibleCharacters).toHaveBeenCalledWith('project-1', bible(), 'DEEPSEEK', expect.stringContaining('未知留空'))
-      expect(wrapper.text()).toContain('等待确认发布')
-      expect(client.getQueryData(['character-profiles', 'project-1'])).toEqual([profile()])
+      expect(wrapper.findAll('button').some(button => button.text() === '补全人物设定')).toBe(false)
       expect(writing.updateCharacterProfile).not.toHaveBeenCalled()
-      await wrapper.findAll('button').find(button => button.text() === '查看待确认圣经')!.trigger('click')
-      expect(wrapper.emitted('openBible')).toHaveLength(1)
+      expect(wrapper.emitted('openBible')).toBeUndefined()
     } finally { close() }
   })
   it('keeps an unsaved name and sends its original version after a background rename', async () => {

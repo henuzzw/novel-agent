@@ -23,7 +23,7 @@ const display = computed(() => {
 })
 const categories: Record<string, string> = {
   TIMEOUT: '等待超时', USAGE_LIMIT: '额度或限流', AUTHENTICATION: '认证或权限', NETWORK: '网络连接', OTHER: '调用失败',
-  CANCELLED: '已停止',
+  CANCELLED: '已停止', OUTPUT_VALIDATION: '输出校验失败', INPUT_UNAVAILABLE: '创作资料不可用',
 }
 
 function stop() { subscriptionNumber++; disconnect?.(); disconnect = null }
@@ -75,7 +75,9 @@ onBeforeUnmount(stop)
       <p v-if="query.data.value.status === 'FAILED' && !query.data.value.errorType">这条历史任务未保存具体错误原因。</p>
       <p v-if="query.data.value.status === 'RUNNING' && !display">尚未收到正文输出。</p>
       <p v-else-if="!display">{{ query.data.value.responseText == null ? '这条历史任务未保存模型响应。' : '未收到可展示的模型响应。' }}</p>
-      <p v-if="['FAILED', 'CANCELLED'].includes(query.data.value.status) && display">未完成响应，不作为有效规划或正文。</p>
+      <p v-if="query.data.value.status === 'FAILED' && display && query.data.value.errorCategory === 'OUTPUT_VALIDATION'">模型已返回内容，但校验未通过，未保存为有效结果。</p>
+      <p v-else-if="query.data.value.status === 'FAILED' && display && query.data.value.errorCategory === 'INPUT_UNAVAILABLE'">模型未取得必需资料，读取失败说明未保存为创作结果。</p>
+      <p v-else-if="['FAILED', 'CANCELLED'].includes(query.data.value.status) && display">未完成响应，不作为有效规划或正文。</p>
       <p v-if="query.data.value.truncated">响应超过展示上限，仅保留前 200,000 字符。</p>
       <pre v-if="display" class="model-response">{{ display }}</pre>
     </template>

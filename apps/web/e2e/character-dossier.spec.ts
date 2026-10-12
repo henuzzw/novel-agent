@@ -20,7 +20,7 @@ test('unifies character details, relations and facts while preserving independen
       return route.fulfill({ json: { id: 'c1', sourceName: '江澈', canonicalName: name, nickname: null, title: null, roleKey: 'PROTAGONIST', version } })
     }
     if (path.endsWith('/project-1')) return route.fulfill({ json: { id: 'project-1', name: '人物档案整合验证', entryMode: 'IDEA', currentCanonVersion: 1, version: 0 } })
-    if (path.endsWith('/story-bibles/latest')) return route.fulfill({ json: { ...bible(), status: 'PUBLISHED' } })
+    if (path.endsWith('/planning-snapshot')) return route.fulfill({ json: { ...bible(), status: 'PUBLISHED' } })
     if (path.endsWith('/characters') && !path.includes('/planning-materials/')) return route.fulfill({ json: [{ id: 'c1', canonicalName: name, sourceName: '江澈', roleKey: 'PROTAGONIST', version }] })
     if (path.endsWith('/character-profiles')) return route.fulfill({ json: [{ ...blueprint, characterId: 'c1', canonicalName: name, roleKey: 'PROTAGONIST', gender: '', ageDescription: '', notes: '', version: 1 }] })
     if (path.endsWith('/planning-materials/characters')) return route.fulfill({ json: [{ sourceBibleId: 'bible-1', characterId: 'c1', blueprint }] })

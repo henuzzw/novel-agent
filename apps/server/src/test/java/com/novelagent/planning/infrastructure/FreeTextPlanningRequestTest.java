@@ -35,9 +35,16 @@ class FreeTextPlanningRequestTest {
         }
     }
 
+    @Test void nonEmptyInputFailureIsRejectedInsideRecordedCallback() {
+        stub(mapper.createObjectNode().put("text", "当前环境没有可用的本地文件读取工具，无法读取指定完整来源。").toString());
+        assertThatThrownBy(() -> texts.request(UUID.randomUUID(), "SNOWFLAKE_PLANNING", ModelProvider.DEEPSEEK,
+                "来源", "CORE", 8000)).isInstanceOf(com.novelagent.agent.application.ModelInputUnavailableException.class);
+    }
+
     private void stub(String output) {
         org.mockito.Mockito.reset(models);
-        when(models.request(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any(), any()))
+        when(models.requestWithBoundaries(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any(), any(),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
                 .thenAnswer(call -> {
                     JsonNode schema = call.getArgument(5);
                     assertThat(schema.path("properties").size()).isEqualTo(1);

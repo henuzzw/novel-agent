@@ -4,46 +4,15 @@ import { createUuid } from '@/lib/uuid'
 export type ModelProvider = 'LOCAL_CODEX' | 'DEEPSEEK' | 'LOCAL_TEMPLATE'
 export type GenerationMode = 'REVISE' | 'REGENERATE'
 
-export interface StoryDirectionCandidate {
-  id: string
-  title: string
-  premise: string
-  centralConflict: string
-  protagonistArc: string
-  structure: string
-  endingDirection: string
-  audienceFit: string
-  strengths: string[]
-  risks: string[]
-  distinctiveFeatures: string[]
-}
-
-export interface StoryDirectionSet {
-  id: string
-  projectId: string
-  generationNumber: number
-  schemaVersion: string
-  status: 'DRAFT' | 'SELECTED'
-  generatorType: 'LOCAL_TEMPLATE' | string
-  authorInstruction: string | null
-  sourceIntentVersion: number
-  wordBudget?: {
-    targetWords: number
-    acceptableMinWords: number
-    acceptableMaxWords: number
-    recommendedVolumeCount: number
-    recommendedChapterCount: number
-    averageChapterWords: number
-    recommendedChapterMinWords: number
-    recommendedChapterMaxWords: number
-  }
-  directions: StoryDirectionCandidate[]
-  questionsForAuthor: string[]
-  changeSummary: string[]
-  selectedCandidateId: string | null
-  version: number
-  createdAt: string
-  updatedAt: string
+export interface OutlineWordBudget {
+  targetWords: number
+  acceptableMinWords: number
+  acceptableMaxWords: number
+  recommendedVolumeCount: number
+  recommendedChapterCount: number
+  averageChapterWords: number
+  recommendedChapterMinWords: number
+  recommendedChapterMaxWords: number
 }
 
 export interface CharacterBlueprint {
@@ -103,21 +72,13 @@ export interface StoryBibleVersion {
   sourceDirectionSetId: string | null
   sourceCandidateId: string | null
   sourceImportId: string | null
+  sourceSnowflakeId?: string | null
   baseBibleVersionId: string | null
   content: StoryBibleContent
   changeSummary: string[]
   version: number
   createdAt: string
   updatedAt: string
-}
-
-export interface StoryBibleVersionSummary {
-  id: string
-  generationNumber: number
-  status: 'DRAFT' | 'PUBLISHED'
-  logline: string
-  baseBibleVersionId: string | null
-  createdAt: string
 }
 
 export interface ChapterPlan {
@@ -166,7 +127,7 @@ export interface OutlineVersion {
   authorInstruction: string | null
   sourceBibleVersionId: string
   baseOutlineVersionId: string | null
-  wordBudget: NonNullable<StoryDirectionSet['wordBudget']>
+  wordBudget: OutlineWordBudget
   content: OutlineContent
   changeSummary: string[]
   version: number
@@ -185,107 +146,8 @@ export interface OutlineVersionSummary {
   createdAt: string
 }
 
-export function getLatestStoryDirections(projectId: string): Promise<StoryDirectionSet | null> {
-  return apiRequest<StoryDirectionSet | null>(`/api/v1/projects/${projectId}/story-directions/latest`)
-}
-
-export function generateStoryDirections(
-  projectId: string,
-  instruction: string,
-  provider: ModelProvider,
-  mode: GenerationMode,
-): Promise<StoryDirectionSet> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-directions/actions/generate`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': createUuid() },
-    body: JSON.stringify({ instruction: instruction.trim() || null, provider, mode }),
-  })
-}
-
-export function selectStoryDirection(
-  projectId: string,
-  set: StoryDirectionSet,
-  candidateId: string,
-): Promise<StoryDirectionSet> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-directions/${set.id}/actions/select`, {
-    method: 'POST',
-    headers: { 'If-Match': `"${set.version}"` },
-    body: JSON.stringify({ candidateId }),
-  })
-}
-
-export function getLatestStoryBible(projectId: string): Promise<StoryBibleVersion | null> {
-  return apiRequest<StoryBibleVersion | null>(`/api/v1/projects/${projectId}/story-bibles/latest`)
-}
-
-export function listStoryBibleVersions(projectId: string): Promise<StoryBibleVersionSummary[]> {
-  return apiRequest<StoryBibleVersionSummary[]>(`/api/v1/projects/${projectId}/story-bibles`)
-}
-
-export function getStoryBibleVersion(projectId: string, versionId: string): Promise<StoryBibleVersion> {
-  return apiRequest<StoryBibleVersion>(`/api/v1/projects/${projectId}/story-bibles/${versionId}`)
-}
-
-export function generateStoryBible(
-  projectId: string,
-  instruction: string,
-  provider: ModelProvider,
-  mode: GenerationMode,
-  baseBibleVersionId: string | null = null,
-): Promise<StoryBibleVersion> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/actions/generate`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': createUuid() },
-    body: JSON.stringify({ instruction: instruction.trim() || null, provider, mode,
-      baseBibleVersionId: mode === 'REVISE' ? baseBibleVersionId : null }),
-  })
-}
-
-export function updateStoryBible(
-  projectId: string,
-  bible: StoryBibleVersion,
-  content: StoryBibleContent,
-): Promise<StoryBibleVersion> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}`, {
-    method: 'PUT',
-    headers: { 'If-Match': `"${bible.version}"` },
-    body: JSON.stringify({ content }),
-  })
-}
-
-export function createStoryBibleRevision(
-  projectId: string,
-  bible: StoryBibleVersion,
-  content: StoryBibleContent,
-): Promise<StoryBibleVersion> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}/actions/create-revision`, {
-    method: 'POST',
-    headers: { 'If-Match': `"${bible.version}"` },
-    body: JSON.stringify({ content }),
-  })
-}
-
-export function publishStoryBible(
-  projectId: string,
-  bible: StoryBibleVersion,
-): Promise<StoryBibleVersion> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}/actions/publish`, {
-    method: 'POST',
-    headers: { 'If-Match': `"${bible.version}"` },
-  })
-}
-
-export function completeStoryBibleCharacters(
-  projectId: string,
-  bible: StoryBibleVersion,
-  provider: ModelProvider,
-  instruction = '',
-): Promise<StoryBibleVersion> {
-  return apiRequest(`/api/v1/projects/${projectId}/story-bibles/${bible.id}/actions/complete-characters`, {
-    method: 'POST',
-    headers: { 'If-Match': `"${bible.version}"` },
-    body: JSON.stringify({ provider, instruction: instruction.trim() || null }),
-  })
+export function getPlanningSnapshot(projectId: string): Promise<StoryBibleVersion | null> {
+  return apiRequest<StoryBibleVersion | null>(`/api/v1/projects/${projectId}/planning-snapshot`)
 }
 
 export function getLatestOutline(projectId: string): Promise<OutlineVersion | null> {

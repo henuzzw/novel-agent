@@ -1,5 +1,6 @@
 import { apiRequest } from '@/api/http'
-import type { ModelProvider, StoryDirectionSet } from '@/api/planning'
+import type { ModelProvider } from '@/api/planning'
+import type { SnowflakePlan } from '@/api/snowflake'
 
 export interface ImportedChapter {
   id: string
@@ -21,7 +22,7 @@ export interface WorkImport {
   parserVersion: string
   detectedContentType: 'MANUSCRIPT' | 'OUTLINE' | 'MATERIALS'
   status: 'PARSED' | 'CONFIRMED'
-  planningStatus: 'NOT_STARTED' | 'GENERATING' | 'GENERATED' | 'DIRECTIONS_READY' | 'FAILED' | 'CANCELLED'
+  planningStatus: 'NOT_STARTED' | 'GENERATING' | 'GENERATED' | 'PLAN_READY' | 'FAILED' | 'CANCELLED'
   planningMode: ImportPlanningMode | null
   generatedBibleVersionId: string | null
   generatedOutlineVersionId: string | null
@@ -44,16 +45,16 @@ export function pasteWork(projectId: string, text: string): Promise<WorkImport> 
   return apiRequest(`/api/v1/projects/${projectId}/imports/text`, { method: 'POST', body: JSON.stringify({ text }) })
 }
 
-export function prepareImportedDirections(projectId: string, importId: string,
+export function prepareImportedSnowflake(projectId: string, importId: string,
   provider: Exclude<ModelProvider, 'LOCAL_TEMPLATE'>, mode: ImportPlanningMode, instruction: string,
-  analysisId: string, analysisVersion: number, targetWords: number, expandScenes: boolean): Promise<StoryDirectionSet> {
-  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/prepare-directions`, {
+  analysisId: string, analysisVersion: number, targetWords: number, expandScenes: boolean): Promise<SnowflakePlan> {
+  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/prepare-snowflake`, {
     method: 'POST', body: JSON.stringify({ provider, mode, instruction, analysisId, analysisVersion, targetWords, expandScenes }),
   })
 }
 
-export function resumeImportedDirections(projectId: string, importId: string, planId: string): Promise<StoryDirectionSet> {
-  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/resume-directions`, {
+export function resumeImportedSnowflake(projectId: string, importId: string, planId: string): Promise<SnowflakePlan> {
+  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/resume-snowflake`, {
     method: 'POST', body: JSON.stringify({ planId }),
   })
 }

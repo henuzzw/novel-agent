@@ -21,7 +21,7 @@ const canonForeshadows = ref<Foreshadow[]>([])
 function originLabel(id: string) {
   const origin = origins.value.find(item => item.planId === id)
   if (!origin) return '作者录入'
-  const labels = { BIBLE: '故事圣经规划', OUTLINE: '大纲规划', CANON: '正史伏笔', PREPARATION: '创作准备规划' }
+  const labels = { BIBLE: '已确认雪花资料规划', OUTLINE: '大纲规划', CANON: '正史伏笔', PREPARATION: '创作准备规划' }
   return `${labels[origin.sourceKind]}${origin.current ? '' : ' · 来源已替换'}`
 }
 const manuscripts = ref<ReaderExperienceManuscript[]>([])

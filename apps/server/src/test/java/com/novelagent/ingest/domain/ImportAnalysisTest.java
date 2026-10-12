@@ -61,4 +61,52 @@ class ImportAnalysisTest {
         var content = new ImportAnalysis.Content(List.of(), List.of()).append(batch, 0).append(batch, 1);
         assertThat(content.items()).extracting(ImportAnalysis.Item::key).containsExactly("b0_note", "b1_note");
     }
+    @Test void restoresOmittedEmphasisInsideAnOtherwiseExactCrossParagraphQuote() {
+        String first = "我只是想找个安静又自在的位置，她却把我的离开理解成了厌烦。";
+        String second = "我心想：我犯得着吗？于是索性不再去那个角落。";
+        var source = chapter("前文。\n\n*" + first + "*\n\n" + second + "\n后文。");
+        var quote = new ImportAnalysis.Evidence(chapterId, first + "\n\n" + second, 0);
+        var normalized = ImportAnalysis.normalizeBatch(new ImportAnalysis.Batch("摘要", List.of(item("FACT", List.of(quote)))),
+                ImportAnalysis.slices(List.of(source)).getFirst(), List.of(source));
+        var actual = normalized.items().getFirst().evidence().getFirst();
+        assertThat(actual.quote()).isEqualTo(first + "*\n\n" + second);
+        assertThat(source.content()).contains(actual.quote());
+        assertThat(normalized.items().getFirst().description()).isEqualTo("纸条来源仍不明确");
+    }
+    @Test void preservesRawLineEndingsAndWholeChapterOffsetsForWorldEvidence() {
+        var source = chapter("前文\r\n**现实校园。**\r\n\r\n没有架空设定。\r\n");
+        var quote = new ImportAnalysis.Evidence(chapterId, "现实校园。\n\n没有架空设定。", 42);
+        var assessment = new ImportAnalysis.WorldAssessment(com.novelagent.project.domain.CreativeBoundaries.WorldMode.REALISTIC,
+                "依据校园场景", List.of(quote));
+        int start = source.content().indexOf("**");
+        var normalized = ImportAnalysis.normalizeBatch(new ImportAnalysis.Batch("摘要", List.of(), assessment),
+                new ImportAnalysis.Slice(chapterId, 1, "第一章", start, source.content().length()), List.of(source));
+        var actual = normalized.worldAssessment().evidence().getFirst();
+        assertThat(actual.quote()).isEqualTo("现实校园。**\r\n\r\n没有架空设定。");
+        assertThat(ImportAnalysis.locate(actual, source.content())).isEqualTo(start + 2);
+        assertThat(actual.occurrence()).isZero();
+    }
+    @Test void rejectsAmbiguousPresentationMatchesEvenWithAnOrdinal() {
+        var source = chapter("*纸条。*\n\n后文。\n\n_纸条。_\n\n后文。");
+        var evidence = new ImportAnalysis.Evidence(chapterId, "纸条。\n\n后文。", 1);
+        assertThatThrownBy(() -> ImportAnalysis.normalizeBatch(new ImportAnalysis.Batch("摘要", List.of(item("FACT", List.of(evidence)))),
+                ImportAnalysis.slices(List.of(source)).getFirst(), List.of(source)))
+                .hasMessageContaining("items[0].evidence[0]").hasMessageContaining("多处原文");
+    }
+    @Test void doesNotRemoveCodeMarkersMeaningfulPunctuationOrMissingSentences() {
+        for (String text : List.of("```text\n*纸条。*\n\n后文。\n```", "纸条。*\n\n后文。", "*纸条。*\n\n不能遗漏。\n\n后文。")) {
+            var source = chapter(text);
+            var evidence = new ImportAnalysis.Evidence(chapterId, "纸条。\n\n后文。", 0);
+            assertThatThrownBy(() -> ImportAnalysis.normalizeBatch(new ImportAnalysis.Batch("摘要", List.of(item("FACT", List.of(evidence)))),
+                    ImportAnalysis.slices(List.of(source)).getFirst(), List.of(source)))
+                    .hasMessageContaining("证据不存在");
+        }
+    }
+    @Test void formattingFallbackCannotReadOutsideTheProvidedSlice() {
+        var source = chapter("*纸条。*\n\n后文。");
+        var evidence = new ImportAnalysis.Evidence(chapterId, "纸条。\n\n后文。", 0);
+        assertThatThrownBy(() -> ImportAnalysis.normalizeBatch(new ImportAnalysis.Batch("摘要", List.of(item("FACT", List.of(evidence)))),
+                new ImportAnalysis.Slice(chapterId, 1, "第一章", 0, 6), List.of(source)))
+                .hasMessageContaining("证据不存在");
+    }
 }

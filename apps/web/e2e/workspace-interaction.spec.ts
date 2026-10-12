@@ -36,8 +36,8 @@ async function fixture(page: Page, entryMode = 'IDEA') {
         id: `d${number}`, title: `方向 ${number} · 谁应该先说清楚`, premise: '一张未递出的纸条，改变了三个人对彼此的判断。',
         centralConflict: '主角想维持平静，却需要承担选择', protagonistArc: '从回避到主动承担',
         structure: '小误会逐渐累积为公开的抉择', endingDirection: '完成责任，不强求全面谅解', strengths: ['行动推动关系变化'], risks: ['避免无依据推测'] })) } })
-    if (path.endsWith('/story-bibles/latest')) return route.fulfill({ json: { ...bible(), projectId: 'ux' } })
-    if (path.endsWith('/story-bibles/current')) return route.fulfill({ json: { ...bible(), projectId: 'ux', status: 'PUBLISHED' } })
+    if (path.endsWith('/planning-snapshot')) return route.fulfill({ json: { ...bible(), projectId: 'ux' } })
+    if (path.endsWith('/planning-snapshot')) return route.fulfill({ json: { ...bible(), projectId: 'ux', status: 'PUBLISHED' } })
     if (path.endsWith('/story-bibles')) return route.fulfill({ json: [] })
     if (path.endsWith('/outlines/latest') || path.endsWith('/outlines/current')) return route.fulfill({ json: outline })
     if (path.endsWith('/outlines')) return route.fulfill({ json: [] })

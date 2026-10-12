@@ -52,7 +52,6 @@ class AgentPromptIntegrationTest {
     @Autowired private com.novelagent.ingest.application.WorkImportService imports;
     @Autowired private com.novelagent.ingest.application.ImportAnalysisStore analyses;
     @Autowired private com.novelagent.ingest.application.ImportAnalysisRunner analysisRunner;
-    @Autowired private StoryDirectionSetRepository directions;
     @Autowired private com.novelagent.writing.application.DraftLoopStore draftLoops;
     @Autowired private com.novelagent.writing.application.DraftLoopService draftLoopService;
     @Autowired private com.novelagent.writing.infrastructure.ManuscriptVersionRepository manuscripts;
@@ -129,7 +128,7 @@ class AgentPromptIntegrationTest {
 
     @Test void savesThroughTheApiAppliesToARealRecordedCallAndResetsWithoutWritingCanon() throws Exception {
         var defaultResponse = mvc.perform(get("/api/v1/settings/prompts")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(23)).andReturn();
+                .andExpect(jsonPath("$.length()").value(19)).andReturn();
         for (var prompt : mapper.readTree(defaultResponse.getResponse().getContentAsByteArray())) {
             String key = prompt.path("key").asText();
             assertThat(prompt.path("systemPrompt").asText()).as(key)
@@ -173,91 +172,7 @@ class AgentPromptIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM manuscript_version WHERE project_id=?", Integer.class, projectId)).isZero();
     }
 
-    @Test void snowflakeProseIsPersistedAndReadableWithoutPublishingAnything() throws Exception {
-        var projectId = UUID.randomUUID();
-        projects.saveAndFlush(NovelProject.create(projectId, actor.currentUserId(), "雪花隔离验证", EntryMode.IDEA));
-        var selected = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 0L);
-        when(deepSeek.effectiveSettings()).thenReturn(selected);
-        when(deepSeek.request(anyString(), anyString(), anyString(), any(), anyInt(), eq(selected)))
-                .thenAnswer(call -> new DeepSeekStructuredOutputClient.ResponseResult(
-                        mapper.createObjectNode().put("text", "自由文本：" + call.getArgument(0)).toString(), null));
-        var service = new com.novelagent.planning.application.SnowflakePlanningService(
-                new com.novelagent.project.application.ProjectAccessService(projects, actor),
-                new SnowflakePlanStore(jdbc), new FreeTextPlanningRequest(models, mapper),
-                new com.novelagent.planning.application.CharacterDesignService(models, mapper,
-                        new StoryBibleOutputSchema(mapper), new FreeTextPlanningRequest(models, mapper)));
-        var result = service.generate(projectId, ModelProvider.DEEPSEEK,
-                mapper.createObjectNode().put("mode", "CONTINUE_MANUSCRIPT").put("authorInstruction", "只设计未来"));
-        assertThat(result.status()).isEqualTo("SUCCEEDED");
-        assertThat(result.context()).contains("snowflake_core", "snowflake_characters", "snowflake_world", "snowflake_plot");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE project_id = ? AND status = 'SUCCEEDED'",
-                Integer.class, projectId)).isEqualTo(4);
-        mvc.perform(get("/api/v1/projects/" + projectId + "/snowflake-plans/latest")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.mode").value("CONTINUE_MANUSCRIPT"))
-                .andExpect(jsonPath("$.plot").value("自由文本：snowflake_plot"));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM story_bible_version WHERE project_id = ?", Integer.class, projectId)).isZero();
 
-        when(deepSeek.request(eq("snowflake_world"), anyString(), anyString(), any(), anyInt(), eq(selected)))
-                .thenThrow(new IllegalStateException("模拟供应商超时"));
-        assertThatThrownBy(() -> service.generate(projectId, ModelProvider.DEEPSEEK,
-                mapper.createObjectNode().put("mode", "ADAPT_SOURCE"))).hasMessageContaining("模拟供应商超时");
-        var failed = service.latest(projectId).orElseThrow();
-        assertThat(failed.status()).isEqualTo("FAILED");
-        assertThat(failed.activeStage()).isEqualTo("WORLD");
-        assertThat(failed.core()).isNotBlank();
-        assertThat(failed.characters()).isNotBlank();
-        assertThat(failed.world()).isNull();
-        assertThat(failed.plot()).isNull();
-        mvc.perform(get("/api/v1/projects/" + projectId + "/snowflake-plans/latest")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FAILED")).andExpect(jsonPath("$.errorMessage").value("模拟供应商超时"));
-        var foreignId = UUID.randomUUID();
-        projects.saveAndFlush(NovelProject.create(foreignId, UUID.randomUUID(), "他人项目", EntryMode.IDEA));
-        mvc.perform(get("/api/v1/projects/" + foreignId + "/snowflake-plans/latest")).andExpect(status().isNotFound());
-    }
-
-    @Test void newBibleApiRunsTheFourStagesThenAssemblesOneDraftAndKeepsNotesForOutline() throws Exception {
-        UUID projectId = UUID.randomUUID();
-        projects.saveAndFlush(NovelProject.create(projectId, actor.currentUserId(), "渐进圣经完整链路", EntryMode.IDEA));
-        var snapshot = new com.novelagent.planning.domain.CreativeIntentSnapshot("校园关系", java.util.List.of("校园"),
-                "青年", "江澈", "回避选择", java.util.List.of("克制"), 50000, "承担责任",
-                java.util.List.of("保留选座"), java.util.List.of(), java.util.List.of(), 0L);
-        var candidate = new com.novelagent.planning.domain.StoryDirectionCandidate(UUID.randomUUID(), "方向",
-                "主角试图维持平静却必须作出选择", "回避选择", "主动承担", "三幕", "承担责任", "青年",
-                java.util.List.of(), java.util.List.of(), java.util.List.of());
-        var other = new com.novelagent.planning.domain.StoryDirectionCandidate(UUID.randomUUID(), "备选",
-                "另外方向", "冲突", "弧光", "结构", "结局", "青年", java.util.List.of(), java.util.List.of(), java.util.List.of());
-        var direction = com.novelagent.planning.domain.StoryDirectionSet.create(UUID.randomUUID(), projectId, 1,
-                "TEST", null, snapshot, java.util.List.of(candidate, other), java.util.List.of());
-        direction.select(candidate.id());
-        directions.saveAndFlush(direction);
-        var content = com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(
-                java.util.List.of(com.novelagent.planning.domain.CharacterBlueprintFixtures.character("江澈")));
-        var bibleOutput = mapper.createObjectNode();
-        bibleOutput.set("content", mapper.valueToTree(content));
-        bibleOutput.putArray("changeSummary");
-        var selected = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 0L);
-        when(deepSeek.effectiveSettings()).thenReturn(selected);
-        when(deepSeek.request(anyString(), anyString(), anyString(), any(), anyInt(), eq(selected)))
-                .thenAnswer(call -> new DeepSeekStructuredOutputClient.ResponseResult(
-                        "story_bible".equals(call.getArgument(0)) ? bibleOutput.toString()
-                                : mapper.createObjectNode().put("text", "原始自由文本：" + call.getArgument(0)).toString(), null));
-        var response = mvc.perform(post("/api/v1/projects/" + projectId + "/story-bibles/actions/generate")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(mapper.createObjectNode().put("provider", "DEEPSEEK").put("mode", "REGENERATE")
-                        .put("instruction", "保留选座开场").toString()))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("DRAFT"))
-                .andExpect(jsonPath("$.authorInstruction").value("保留选座开场")).andReturn();
-        var saved = mapper.readTree(response.getResponse().getContentAsByteArray());
-        String notes = saved.path("content").path("developmentNotes").asText();
-        assertThat(notes).contains("snowflake_core", "snowflake_characters", "snowflake_world", "snowflake_plot");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM agent_run WHERE project_id = ? AND status = 'SUCCEEDED'",
-                Integer.class, projectId)).isEqualTo(5);
-        assertThat(projects.findById(projectId).orElseThrow().getCurrentBibleVersionId()).isNull();
-        var restored = mapper.treeToValue(saved.path("content"), com.novelagent.planning.domain.StoryBibleContent.class);
-        String outlinePrompt = new OutlineModelPromptFactory(mapper).userPrompt(restored,
-                new com.novelagent.planning.domain.OutlineWordBudgetPolicy().plan(50000), null, "按因果展开");
-        assertThat(outlinePrompt).contains(mapper.writeValueAsString(notes), "developmentNotes");
-    }
 
     @Test void draftLoopPersistsCheckJudgmentAndDraftVersionsWithoutAcceptingOrWritingCanon() throws Exception {
         var projectId = UUID.randomUUID();

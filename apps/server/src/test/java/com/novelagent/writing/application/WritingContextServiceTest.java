@@ -37,7 +37,8 @@ class WritingContextServiceTest {
     private final NovelMemoryService memory = mock(NovelMemoryService.class);
     private final OutlineVersion outline = mock(OutlineVersion.class);
     private final StoryBibleVersion bible = mock(StoryBibleVersion.class);
-    private final WritingContextService service = new WritingContextService(access, outlines, bibles, memory);
+    private final WritingContextService service = new WritingContextService(access, outlines, bibles, memory,
+            mock(com.novelagent.canon.application.CharacterNameService.class));
 
     @BeforeEach
     void sources() {

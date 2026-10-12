@@ -129,10 +129,10 @@ public class ManuscriptService {
         ManuscriptContent previousContent = base == null ? null : base.getContent();
         String styleContext = styles.promptContext(projectId);
         MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.MANUSCRIPT, provider,
-                context.budgetInputs(context.bible().getContent(), context.arc(), context.chapter(), plan,
+                context.budgetInputs(context.writingMaterials(), context.writingArc(), context.chapter(), plan,
                         previousContent, request.instruction(), styleContext));
         NovelMemoryContext recalled = contexts.recall(AgentStage.MANUSCRIPT, context, request.instruction(), budget);
-        GeneratedManuscript generated = workflow.generateManuscript(projectId, context.bible().getContent(), context.arc(),
+        GeneratedManuscript generated = workflow.generateManuscript(projectId, context.writingMaterials(), context.writingArc(),
                 context.chapter(), plan, recalled, previousContent, provider,
                 context.instructionWithPreparation(normalize(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));

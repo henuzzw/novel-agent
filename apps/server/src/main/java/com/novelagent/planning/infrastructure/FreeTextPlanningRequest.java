@@ -42,7 +42,9 @@ public class FreeTextPlanningRequest {
             if (root == null || !root.path("text").isTextual() || root.path("text").asText().isBlank()) {
                 throw new IllegalArgumentException("雪花规划未返回非空文本");
             }
-            return root.path("text").asText().trim();
+            String text = root.path("text").asText().trim();
+            com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(text);
+            return text;
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("雪花规划响应无法读取", exception);
         }

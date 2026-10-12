@@ -1,8 +1,8 @@
 import { computed, inject, ref } from 'vue'
 import { routeLocationKey, routerKey, type LocationQueryRaw, type Router } from 'vue-router'
 
-export const workspaceSections = ['imports', 'directions', 'bible', 'outline', 'materials', 'experience', 'runs', 'settings', 'writing'] as const
-export const planningViews = ['directions', 'bible', 'outline', 'style'] as const
+export const workspaceSections = ['imports', 'outline', 'materials', 'experience', 'runs', 'settings', 'writing'] as const
+export const planningViews = ['outline', 'style'] as const
 export const writingViews = ['manuscript', 'quality', 'opening', 'review', 'memory'] as const
 export const materialViews = ['profiles', 'entities', 'timeline', 'foreshadows', 'relations', 'style'] as const
 

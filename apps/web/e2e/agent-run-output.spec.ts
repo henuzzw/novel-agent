@@ -3,7 +3,7 @@ import { createModelSettingsFixture } from './model-settings-fixture'
 
 test('shows SSE response and timeout details without issuing another generation request', async ({ page }) => {
   const models = createModelSettingsFixture()
-  const run = { id: 'run-1', stage: 'IMPORT_REVERSE_BIBLE', provider: 'LOCAL_CODEX', status: 'RUNNING',
+  const run = { id: 'run-1', stage: 'SNOWFLAKE_PLANNING', provider: 'LOCAL_CODEX', status: 'RUNNING',
     inputTokens: 4541, outputTokens: 0, tokenSource: 'ESTIMATED', estimatedCost: 0, durationMs: null,
     errorMessage: null, startedAt: new Date().toISOString(), completedAt: null }
   const initial = { id: 'run-1', status: 'RUNNING', responseText: '', truncated: false,

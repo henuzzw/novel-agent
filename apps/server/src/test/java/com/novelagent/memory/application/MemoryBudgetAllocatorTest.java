@@ -9,6 +9,23 @@ import org.junit.jupiter.api.Test;
 
 class MemoryBudgetAllocatorTest {
     @Test
+    void retainsDistinctLocatedChunksAndSeparatesPlanningFromFacts() {
+        var located = new NovelMemoryContext.SemanticMemory(3, 5, 0.1, "来源项目=p；来源版本=m；范围=[600,610)",
+                "前章中段的重要证据。", false, null, null, "chunk-a");
+        var planning = new NovelMemoryContext.SemanticMemory(0, NovelMemoryContext.AUTHOR_PLANNING, 0.1,
+                "来源项目=p；来源版本=b", "未来秘密仅为计划。", false, null, null, "chunk-b");
+        var context = new MemoryBudgetAllocator().allocate(List.of(recent(3, "前章结尾", "计划"), located, planning),
+                List.of(), plan(5000), List.of());
+        assertThat(context.semanticMemories()).hasSize(3);
+        assertThat(context.semanticMemories()).extracting(NovelMemoryContext.SemanticMemory::sourceKey)
+                .contains("chunk-a", "chunk-b");
+        assertThat(context.toPromptText()).contains("前章中段的重要证据。", "作者侧规划", "非已发生事实");
+        assertThat(context.graphFacts()).isEmpty();
+        var constrained = new MemoryBudgetAllocator().allocate(List.of(located), List.of(), plan(80), List.of());
+        assertThat(constrained.semanticMemories()).isEmpty();
+        assertThat(constrained.usage().estimatedTokens()).isLessThanOrEqualTo(80);
+    }
+    @Test
     void keepsPromptWithinBudgetAndPrioritizesSummary() {
         MemoryBudgetAllocator allocator = new MemoryBudgetAllocator();
         var context = allocator.allocate(List.of(new NovelMemoryContext.SemanticMemory(

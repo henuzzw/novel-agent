@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 public record StoryBibleResponse(UUID id, UUID projectId, int generationNumber, String schemaVersion,
         StoryBibleStatus status, String generatorType, String authorInstruction,
-        UUID sourceDirectionSetId, UUID sourceCandidateId, UUID sourceImportId, UUID baseBibleVersionId,
+        UUID sourceDirectionSetId, UUID sourceCandidateId, UUID sourceImportId, UUID baseBibleVersionId, UUID sourceSnowflakeId,
         StoryBibleContent content,
         List<String> changeSummary, long version, Instant createdAt, Instant updatedAt) {
     /**
@@ -38,7 +38,7 @@ public record StoryBibleResponse(UUID id, UUID projectId, int generationNumber, 
         return new StoryBibleResponse(value.getId(), value.getProjectId(), value.getGenerationNumber(),
                 value.getSchemaVersion(), value.getStatus(), value.getGeneratorType(), value.getAuthorInstruction(),
                 value.getSourceDirectionSetId(), value.getSourceCandidateId(), value.getSourceImportId(),
-                value.getBaseBibleVersionId(), content,
+                value.getBaseBibleVersionId(), value.getSourceSnowflakeId(), content,
                 value.getChangeSummary(), value.getRowVersion(), value.getCreatedAt(), value.getUpdatedAt());
     }
 }

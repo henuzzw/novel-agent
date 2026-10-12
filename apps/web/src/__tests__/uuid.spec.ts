@@ -68,8 +68,8 @@ describe('createUuid', () => {
 
   it('tracks generation requests without the native UUID method', () => {
     withoutNativeUuid()
-    const id = beginGenerationRequest('/api/v1/projects/project/story-bibles/actions/generate', 'POST')
+    const id = beginGenerationRequest('/api/v1/projects/project/imports/i/actions/prepare-snowflake', 'POST')
     expect(id).toMatch(uuidV4)
-    expect(generationRequests.value[0]).toMatchObject({ id, stage: 'STORY_BIBLE', status: 'RUNNING' })
+    expect(generationRequests.value[0]).toMatchObject({ id, stage: 'IMPORT_PLANNING', status: 'RUNNING' })
   })
 })

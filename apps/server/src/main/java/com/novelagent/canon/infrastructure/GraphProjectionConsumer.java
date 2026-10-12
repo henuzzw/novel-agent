@@ -40,7 +40,11 @@ class GraphProjectionConsumer {
     public void project(String message) throws Exception {
         CanonProjectionEvent event = CanonProjectionEvent.parse(message, mapper);
         if (checkpoints.isCompleted(event.eventId(), ProjectionCheckpointStore.ProjectionType.NEO4J)) return;
-        CanonCommit commit = commits.findById(event.commitId()).orElseThrow();
+        var savedCommit = commits.findById(event.commitId());
+        // A deleted project may still have Kafka messages; never recreate its graph or retry forever.
+        if (savedCommit.isEmpty() && Boolean.FALSE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM novel_project WHERE id = ?)", Boolean.class, event.projectId()))) return;
+        CanonCommit commit = savedCommit.orElseThrow();
         if (!commit.isActive()) {
             checkpoints.markCompleted(event.eventId(), ProjectionCheckpointStore.ProjectionType.NEO4J);
             return;

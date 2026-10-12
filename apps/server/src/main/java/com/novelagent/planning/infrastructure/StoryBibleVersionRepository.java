@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * <p>保存圣经生成历史并提供项目限定查询。最新生成草稿与项目当前发布圣经不同，调用方不得仅取最新来替换有效依据。</p>
  */
 public interface StoryBibleVersionRepository extends JpaRepository<StoryBibleVersion, UUID> {
+    Optional<StoryBibleVersion> findByProjectIdAndSourceSnowflakeIdAndSourceDirectionSetIdIsNull(UUID projectId, UUID planId);
     /**
      * 返回项目最新生成版本；最新可能是草稿，不能因此替换项目当前发布指针。
      *

@@ -31,18 +31,31 @@ class SnowflakePlanningServiceTest {
     private final UUID project = UUID.randomUUID();
     private final UUID id = UUID.randomUUID();
     private final ObjectMapper mapper = new ObjectMapper();
+    private final com.novelagent.planning.domain.StoryBibleContent materials = mapper.convertValue(
+            java.util.Map.ofEntries(
+                    java.util.Map.entry("logline", "共同参赛"), java.util.Map.entry("theme", "合作"),
+                    java.util.Map.entry("worldSetting", "校园"), java.util.Map.entry("worldRules", java.util.List.of("现实校园")),
+                    java.util.Map.entry("protagonist", "陆舟"), java.util.Map.entry("protagonistArc", "学会回应"),
+                    java.util.Map.entry("supportingCharacters", java.util.List.of()), java.util.Map.entry("relationshipDynamics", java.util.List.of()),
+                    java.util.Map.entry("centralConflict", "分工冲突"), java.util.Map.entry("stakes", "信任"),
+                    java.util.Map.entry("narrativeStyle", "清楚"), java.util.Map.entry("endingDirection", "共同选择"),
+                    java.util.Map.entry("hardConstraints", java.util.List.of()), java.util.Map.entry("openQuestions", java.util.List.of()),
+                    java.util.Map.entry("characterBlueprints", java.util.List.of(java.util.Map.of(
+                            "name", "陆舟", "role", "PROTAGONIST", "identity", "学生", "coreDesire", "参赛")))),
+            com.novelagent.planning.domain.StoryBibleContent.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final SnowflakePlanStore store = mock(SnowflakePlanStore.class);
     private final FreeTextPlanningRequest texts = mock(FreeTextPlanningRequest.class);
     private final CharacterDesignService characters = mock(CharacterDesignService.class);
-    private final SnowflakePlanningService service = new SnowflakePlanningService(access, store, texts, characters);
+    private final SnowflakePlanningService service = new SnowflakePlanningService(access, store,
+            new SnowflakeStageGenerator(texts, characters, mapper));
 
     @BeforeEach void setup() {
         when(access.requireOwnedProject(project)).thenReturn(mock(NovelProject.class));
         when(store.create(eq(project), eq(ModelProvider.DEEPSEEK), any())).thenReturn(id);
         when(texts.request(eq(project), anyString(), eq(ModelProvider.DEEPSEEK), anyString(), eq("CORE"), anyInt(), anyString()))
                 .thenReturn("CORE底稿");
-        when(characters.designText(eq(project), eq(ModelProvider.DEEPSEEK), anyString(), anyString())).thenReturn("人物不按字段写也可以");
+        when(characters.designPlanning(eq(project), eq(ModelProvider.DEEPSEEK), anyString(), anyString())).thenReturn(materials);
         when(texts.request(eq(project), anyString(), eq(ModelProvider.DEEPSEEK), anyString(), anyString(), anyInt(), anyString()))
                 .thenAnswer(call -> call.getArgument(4) + "底稿");
         when(store.get(project, id)).thenReturn(new SnowflakePlan(id, project, "NEW_STORY", ModelProvider.DEEPSEEK,
@@ -63,9 +76,9 @@ class SnowflakePlanningServiceTest {
             order.verify(store).start(project, id, step.name());
             if (step == SnowflakeStep.CHARACTER_SETTINGS) {
                 var captured = ArgumentCaptor.forClass(String.class);
-                order.verify(characters).designText(eq(project), any(), captured.capture(), eq(boundaries));
+                order.verify(characters).designPlanning(eq(project), any(), captured.capture(), eq(boundaries));
                 assertThat(captured.getValue()).contains("保留QQ相册开头", "CORE底稿", "CHARACTER_BIOGRAPHIES底稿");
-                order.verify(store).save(project, id, step.name(), "人物不按字段写也可以");
+                order.verify(store).saveMaterials(eq(project), eq(id), anyString(), eq(mapper.valueToTree(materials)));
             } else {
                 order.verify(texts).request(eq(project), eq("SNOWFLAKE_PLANNING"), any(), anyString(), eq(step.name()), eq(step.maxTokens()), eq(boundaries));
                 order.verify(store).save(project, id, step.name(), step.name() + "底稿");
@@ -76,7 +89,7 @@ class SnowflakePlanningServiceTest {
     }
 
     @Test void keepsPrecedingStagesAndStopsOnFailure() {
-        when(characters.designText(eq(project), any(), anyString(), anyString())).thenThrow(new IllegalArgumentException("人物请求失败"));
+        when(characters.designPlanning(eq(project), any(), anyString(), anyString())).thenThrow(new IllegalArgumentException("人物请求失败"));
         assertThatThrownBy(() -> service.generate(project, ModelProvider.DEEPSEEK, mapper.createObjectNode()))
                 .hasMessageContaining("人物请求失败");
         verify(store).save(project, id, "CORE", "CORE底稿");
@@ -85,7 +98,7 @@ class SnowflakePlanningServiceTest {
     }
 
     @Test void cancellationCannotContinueToNextStage() {
-        when(characters.designText(eq(project), any(), anyString(), anyString())).thenThrow(new GenerationStoppedException());
+        when(characters.designPlanning(eq(project), any(), anyString(), anyString())).thenThrow(new GenerationStoppedException());
         assertThatThrownBy(() -> service.generate(project, ModelProvider.DEEPSEEK, mapper.createObjectNode()))
                 .isInstanceOf(GenerationStoppedException.class);
         verify(store).finish(eq(project), eq(id), eq("CANCELLED"), anyString());
@@ -128,7 +141,7 @@ class SnowflakePlanningServiceTest {
         verify(store).resume(project, id);
         verify(store, org.mockito.Mockito.never()).create(any(), any(), any());
         var prompt = ArgumentCaptor.forClass(String.class);
-        verify(characters).designText(eq(project), eq(ModelProvider.DEEPSEEK), prompt.capture(), anyString());
+        verify(characters).designPlanning(eq(project), eq(ModelProvider.DEEPSEEK), prompt.capture(), anyString());
         for (var entry : steps.entrySet()) {
             assertThat(prompt.getValue()).contains(entry.getValue());
             verify(store, org.mockito.Mockito.never()).start(project, id, entry.getKey());
@@ -143,11 +156,40 @@ class SnowflakePlanningServiceTest {
     @Test void optionalStageStaysDisabledAndAnotherStopPreservesPriorWork() {
         resumeInput(false);
         stopped(java.util.Map.of("CORE", "已有核心"));
-        when(characters.designText(eq(project), any(), anyString(), anyString())).thenThrow(new GenerationStoppedException());
+        when(characters.designPlanning(eq(project), any(), anyString(), anyString())).thenThrow(new GenerationStoppedException());
         assertThatThrownBy(() -> service.resume(project, id)).isInstanceOf(GenerationStoppedException.class);
         verify(store).finish(eq(project), eq(id), eq("CANCELLED"), anyString());
         verify(store, org.mockito.Mockito.never()).save(eq(project), eq(id), eq("CORE"), anyString());
         verify(texts, org.mockito.Mockito.never()).request(any(), anyString(), any(), anyString(), eq("SCENE_EXPANSION"), anyInt(), anyString());
+    }
+
+    @Test void explicitResumeRestartsAtFirstUnreadableStageAndDiscardsItsDependentSuffix() {
+        resumeInput(false);
+        var previous = java.util.Map.of("CORE", "当前环境没有可用的本地文件读取工具，无法读取指定完整来源。",
+                "SYNOPSIS", "看似成功但依赖无效CORE的梗概");
+        stopped(previous);
+        service.resume(project, id);
+        verify(store).resumeWithValidPrefix(project, id, previous, java.util.Map.of());
+        verify(store).start(project, id, "CORE");
+        var prompt = ArgumentCaptor.forClass(String.class);
+        verify(characters).designPlanning(eq(project), any(), prompt.capture(), anyString());
+        assertThat(prompt.getValue()).doesNotContain(previous.get("CORE"), previous.get("SYNOPSIS"));
+        verify(store).finish(project, id, "SUCCEEDED", null);
+    }
+
+    @Test void normalPrefixIsKeptButNoAccessFailureCanStartAnotherStage() {
+        resumeInput(false);
+        var previous = java.util.Map.of("CORE", "真正的故事核心", "SYNOPSIS", "当前仍没有本地文件读取工具，不能生成梗概。");
+        stopped(previous);
+        when(texts.request(eq(project), anyString(), any(), anyString(), eq("SYNOPSIS"), anyInt(), anyString()))
+                .thenReturn("当前仍没有本地文件读取工具，不能生成梗概。");
+        assertThatThrownBy(() -> service.resume(project, id))
+                .isInstanceOf(com.novelagent.agent.application.ModelInputUnavailableException.class);
+        verify(store).resumeWithValidPrefix(project, id, previous, java.util.Map.of("CORE", "真正的故事核心"));
+        verify(store, org.mockito.Mockito.never()).start(project, id, "CORE");
+        verify(store, org.mockito.Mockito.never()).start(project, id, "CHARACTER_ARCS");
+        verify(store, org.mockito.Mockito.never()).save(eq(project), eq(id), eq("SYNOPSIS"), anyString());
+        verify(store).finish(eq(project), eq(id), eq("FAILED"), anyString());
     }
 
     @Test void changedBoundariesBrokenPrefixAndDuplicateClaimsCannotInvokeModels() {
@@ -185,10 +227,10 @@ class SnowflakePlanningServiceTest {
                 .put("sourceText", "她只在原文中被称作老师");
         service.generate(project, ModelProvider.DEEPSEEK, input);
         var prompt = ArgumentCaptor.forClass(String.class);
-        verify(characters).designText(eq(project), eq(ModelProvider.DEEPSEEK), prompt.capture(), anyString());
+        verify(characters).designPlanning(eq(project), eq(ModelProvider.DEEPSEEK), prompt.capture(), anyString());
         assertThat(prompt.getValue()).contains("【当前任务模式】\n" + mode, "保留老师称谓，不擅自改名",
                 "她只在原文中被称作老师", "CORE底稿");
         assertThat(input.path("mode").asText()).isEqualTo(mode);
-        verify(store).save(project, id, "CHARACTER_SETTINGS", "人物不按字段写也可以");
+        verify(store).saveMaterials(eq(project), eq(id), anyString(), eq(mapper.valueToTree(materials)));
     }
 }

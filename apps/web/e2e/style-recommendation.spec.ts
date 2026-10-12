@@ -27,7 +27,7 @@ test('recommends from a saved bible, loads an unapplied candidate and tries the 
       if (request.method() === 'PUT') { expect(request.postDataJSON().expectedVersion).toBe(8); applied = request.postDataJSON().profile }
       return route.fulfill({ json: { profile: applied, version: applied ? 9 : 8 } })
     }
-    if (path.endsWith('/story-bibles/latest')) return route.fulfill({ json: bible })
+    if (path.endsWith('/planning-snapshot')) return route.fulfill({ json: bible })
     if (path.endsWith('/outlines/latest')) return route.fulfill({ json: outline })
     if (path.endsWith('/writing-style/actions/recommend')) {
       expect(request.postDataJSON()).toEqual({ bibleVersionId: 'b1', expectedBibleVersion: 2, provider: 'DEEPSEEK', instruction: '保留生活温度' })

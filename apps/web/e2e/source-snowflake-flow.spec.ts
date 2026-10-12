@@ -6,6 +6,8 @@ async function fixture(page: Page) {
   let createdBody = ''
   let title = '待生成书名'
   let report: Record<string, unknown> | null = null
+  let snapshot: Record<string, unknown> | null = null
+  let confirmations = 0
   const imported = { id: 'import-1', projectId: 'source-test', originalFilename: '粘贴故事.txt', mediaType: 'text/plain',
     status: 'PARSED', planningStatus: 'NOT_STARTED', planningMode: null, planningError: null, warnings: [], sizeBytes: 80,
     chapters: [{ id: 'chapter-1', ordinal: 1, title: '故事', content: '她递还纸条，他第一次没能用笑话带过去。', characterCount: 23, selected: true }] }
@@ -31,13 +33,20 @@ async function fixture(page: Page) {
     if (path.endsWith('/analyses')) return route.fulfill({ json: report ? [{ report, stale: false }] : [] })
     if (/\/projects\/source-test$/.test(path)) return route.fulfill({ json: project() })
     if (path.endsWith('/imports')) return route.fulfill({ json: [imported] })
+    if (path.endsWith('/snowflake-plans/snowflake-1/actions/confirm')) {
+      confirmations++
+      snapshot = { id: 'snapshot-1', projectId: 'source-test', sourceSnowflakeId: 'snowflake-1', status: 'PUBLISHED' }
+      return route.fulfill({ json: snapshot })
+    }
+    if (path.endsWith('/planning-snapshot')) return snapshot ? route.fulfill({ json: snapshot }) : route.fulfill({ status: 204 })
     if (path.endsWith('/snowflake-plans/latest')) return route.fulfill({ json: { id: 'snowflake-1', projectId: 'source-test',
+      sourceImportId: 'import-1',
       status: 'SUCCEEDED', activeStage: 'SCENE_LIST', steps: { CORE: '他必须澄清误会，否则失去信任。', SYNOPSIS: '从误会走向承担。',
         CHARACTER_SETTINGS: '许言川习惯用笑话回避选择。', SCENE_LIST: '第一章：纸条递还，引发选择。' } } })
     if (/\/(agent-runs|generation-requests|projects)$/.test(path)) return route.fulfill({ json: [] })
     return route.fulfill({ status: 204 })
   })
-  return { get body() { return createdBody } }
+  return { get body() { return createdBody }, get confirmations() { return confirmations } }
 }
 
 test('creates from text with optional name, then automatically analyzes in import', async ({ page }) => {
@@ -53,11 +62,11 @@ test('creates from text with optional name, then automatically analyzes in impor
   expect(state.body).toContain('她递还纸条')
 })
 
-test('eight primary menu items retain their route and snowflake prose after reload', async ({ page }) => {
+test('six primary menu items retain their route and snowflake prose after reload', async ({ page }) => {
   await fixture(page)
   await page.goto('/projects/source-test')
   const nav = page.getByRole('complementary', { name: '项目导航' })
-  await expect(nav.locator('button')).toHaveText(['导入','故事方向','圣经','大纲','资料','伏笔和承诺','任务','设置'])
+  await expect(nav.locator('button')).toHaveText(['导入','大纲','资料','伏笔和承诺','任务','设置'])
   await expect(page.getByRole('heading', { name: '导入与章节识别' })).toBeVisible()
   await expect(page.getByText('创作准备', { exact: true })).toHaveCount(0)
   await page.getByText('1 · 一句话故事核心', { exact: true }).click()
@@ -68,6 +77,20 @@ test('eight primary menu items retain their route and snowflake prose after relo
   await expect(nav.getByRole('button', { name: '任务', exact: true })).toHaveAttribute('aria-current', 'page')
   await nav.getByRole('button', { name: '导入', exact: true }).click()
   await expect(page).toHaveURL(/section=imports/)
+})
+
+test('confirms the exact snowflake and moves to outline without a direction request', async ({ page }) => {
+  const state = await fixture(page)
+  const requests: string[] = []
+  page.on('request', request => requests.push(request.url()))
+  await page.goto('/projects/source-test?section=imports')
+  await page.getByRole('button', { name: '确认雪花规划', exact: true }).click()
+  await expect(page).toHaveURL(/section=outline/)
+  expect(state.confirmations).toBe(1)
+  expect(requests.some(url => url.includes('story-directions'))).toBe(false)
+  await page.getByRole('complementary', { name: '项目导航' }).getByRole('button', { name: '导入', exact: true }).click()
+  await expect(page.getByRole('button', { name: '确认雪花规划', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: '雪花渐进规划' })).toContainText('已确认')
 })
 
 test('source form remains readable on narrow screens', async ({ page }) => {

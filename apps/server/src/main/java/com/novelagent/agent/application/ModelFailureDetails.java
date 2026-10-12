@@ -14,9 +14,14 @@ public record ModelFailureDetails(String type, String category, String summary, 
         } else if (exception instanceof GenerationStoppedException) {
             category = "CANCELLED";
             summary = text;
-        } else if (text.startsWith("原文解析输出校验失败")) {
+        } else if (exception instanceof ModelInputUnavailableException) {
+            category = "INPUT_UNAVAILABLE";
+            summary = text;
+        } else if (text.startsWith("原文解析输出校验失败") || text.startsWith("纯文本响应无法保存")) {
             category = "OUTPUT_VALIDATION";
-            summary = "模型已返回内容，但原文解析结构或证据校验未通过，请查看具体字段与响应；未保存为有效报告。";
+            summary = text.startsWith("原文解析输出校验失败")
+                    ? "模型已返回内容，但原文解析结构或证据校验未通过，请查看具体字段与响应；未保存为有效报告。"
+                    : "模型已返回内容，但保存格式校验未通过，请查看具体字段与响应；未保存为有效结果。";
         } else if (hasTimeoutCause(exception) || normalized.contains("timeout") || normalized.contains("超时")) {
             category = "TIMEOUT";
             summary = text.contains("连续无新进展")

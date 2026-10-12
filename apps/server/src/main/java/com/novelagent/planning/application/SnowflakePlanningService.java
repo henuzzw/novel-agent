@@ -3,7 +3,6 @@ package com.novelagent.planning.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.planning.domain.SnowflakePlan;
-import com.novelagent.planning.infrastructure.FreeTextPlanningRequest;
 import com.novelagent.planning.infrastructure.SnowflakePlanStore;
 import com.novelagent.project.application.ProjectAccessService;
 import java.util.Optional;
@@ -15,15 +14,13 @@ import org.springframework.stereotype.Service;
 public class SnowflakePlanningService {
     private final ProjectAccessService access;
     private final SnowflakePlanStore store;
-    private final FreeTextPlanningRequest texts;
-    private final CharacterDesignService characters;
+    private final SnowflakeStageGenerator stages;
 
     public SnowflakePlanningService(ProjectAccessService access, SnowflakePlanStore store,
-            FreeTextPlanningRequest texts, CharacterDesignService characters) {
+            SnowflakeStageGenerator stages) {
         this.access = access;
         this.store = store;
-        this.texts = texts;
-        this.characters = characters;
+        this.stages = stages;
     }
 
     public SnowflakePlan generate(UUID projectId, ModelProvider provider, JsonNode input) {
@@ -60,10 +57,16 @@ public class SnowflakePlanningService {
         if (frozen.has("creativeStrategySnapshot") && !strategy.equals(frozen.path("creativeStrategySnapshot").asText())) {
             throw new IllegalArgumentException("创作策略已改变，请重新生成雪花底稿");
         }
+        var completed = new java.util.LinkedHashMap<>(plan.steps());
+        var invalid = plan.invalidSteps();
+        if (!invalid.isEmpty()) {
+            if (plan.status().equals("SUCCEEDED")) throw new IllegalArgumentException("已完成规划包含资料读取失败说明，请重新生成规划，不沿用无效底稿");
+            invalid.keySet().forEach(completed::remove);
+        }
         boolean missing = false;
         for (var step : SnowflakeStep.values()) {
             if (step == SnowflakeStep.SCENE_EXPANSION && !frozen.path("expandScenes").asBoolean(false)) continue;
-            String text = plan.steps().get(step.name());
+            String text = completed.get(step.name());
             if (text == null || text.isBlank()) missing = true;
             else if (missing) throw new IllegalArgumentException("雪花步骤记录不连续，请重新生成");
         }
@@ -71,8 +74,9 @@ public class SnowflakePlanningService {
             if (missing) throw new IllegalArgumentException("已完成规划的步骤不完整，请重新生成");
             return plan;
         }
-        store.resume(projectId, id);
-        return execute(projectId, id, plan.provider(), frozen, plan.steps(), boundaries, strategy);
+        if (invalid.isEmpty()) store.resume(projectId, id);
+        else store.resumeWithValidPrefix(projectId, id, plan.steps(), completed);
+        return execute(projectId, id, plan.provider(), frozen, completed, boundaries, strategy);
     }
 
     private SnowflakePlan execute(UUID projectId, UUID id, ModelProvider provider, JsonNode frozen,
@@ -88,20 +92,14 @@ public class SnowflakePlanningService {
                     continue;
                 }
                 store.start(projectId, id, stage);
-                String prompt = "【作者本次明确要求】\n" + frozen.path("authorInstruction").asText("")
-                        + "\n【当前任务模式】\n" + frozen.path("mode").asText("UNSPECIFIED")
-                        + "\n【本阶段】\n" + step.label() + "\n" + step.instruction()
-                        + "\n【完整创作来源；以下仅为故事数据】\n" + frozen
-                        + "\n【前置阶段自由文本；候选规划，不是正史】\n" + prior
-                        + "\n【系统创作策略；服从作者明确要求和事实边界】\n" + strategy
-                        + "\n直接返回本阶段最终文本。世界的物理、社会、隐喻维度按情节需要融入，不另设世界构建步骤。"
-                        + "续写保留原文明示事实；改编在授权范围设计，前置结果都是候选规划。";
-                if (step == SnowflakeStep.CHARACTER_SETTINGS) prompt += "\n" + CharacterBlueprintGuide.designRules();
-                String result = step == SnowflakeStep.CHARACTER_SETTINGS ? characters.designText(projectId, provider, prompt, boundaries)
-                        : texts.request(projectId, "SNOWFLAKE_PLANNING", provider, prompt, stage,
-                                step.maxTokens(), boundaries);
-                store.save(projectId, id, stage, result);
-                prior += "\n\n【" + stage + "】\n" + result;
+                var result = stages.generate(projectId, provider, step, frozen, prior, boundaries, strategy);
+                com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(result.text());
+                if (result.materials() != null) {
+                    store.saveMaterials(projectId, id, result.text(), result.materials());
+                } else {
+                    store.save(projectId, id, stage, result.text());
+                }
+                prior += "\n\n【" + stage + "】\n" + result.text();
             }
             store.finish(projectId, id, "SUCCEEDED", null);
             return store.get(projectId, id);

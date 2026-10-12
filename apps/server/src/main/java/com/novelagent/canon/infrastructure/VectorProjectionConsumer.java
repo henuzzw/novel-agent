@@ -1,9 +1,8 @@
 package com.novelagent.canon.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.agent.tool.PgVectorSupport;
 import com.novelagent.canon.application.CharacterNameService;
-import com.novelagent.memory.application.TextEmbeddingService;
+import com.novelagent.memory.infrastructure.SemanticChunkStore;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import java.nio.charset.StandardCharsets;
@@ -21,20 +20,21 @@ class VectorProjectionConsumer {
             INSERT INTO semantic_document(
                 id, project_id, source_type, source_id, canon_version,
                 content, summary, embedding, embedding_model, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS public.vector), ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
             ON CONFLICT(source_type, source_id) DO UPDATE SET
                 canon_version = EXCLUDED.canon_version,
                 content = EXCLUDED.content,
                 summary = EXCLUDED.summary,
                 embedding = EXCLUDED.embedding,
                 embedding_model = EXCLUDED.embedding_model,
+                chunked_content_hash = NULL,
                 updated_at = EXCLUDED.updated_at
             """;
 
     private final ObjectMapper mapper;
     private final JdbcTemplate jdbc;
     private final ManuscriptVersionRepository manuscripts;
-    private final TextEmbeddingService embeddings;
+    private final SemanticChunkStore chunks;
     private final ProjectionCheckpointStore checkpoints;
     private final CharacterNameService characterNames;
     private final CanonCommitRepository commits;
@@ -43,13 +43,13 @@ class VectorProjectionConsumer {
             ObjectMapper mapper,
             JdbcTemplate jdbc,
             ManuscriptVersionRepository manuscripts,
-            TextEmbeddingService embeddings,
+            SemanticChunkStore chunks,
             ProjectionCheckpointStore checkpoints,
             CharacterNameService characterNames, CanonCommitRepository commits) {
         this.mapper = mapper;
         this.jdbc = jdbc;
         this.manuscripts = manuscripts;
-        this.embeddings = embeddings;
+        this.chunks = chunks;
         this.checkpoints = checkpoints;
         this.characterNames = characterNames;
         this.commits = commits;
@@ -63,7 +63,10 @@ class VectorProjectionConsumer {
             return;
         }
 
-        var commit = commits.findById(event.commitId()).orElseThrow();
+        var savedCommit = commits.findById(event.commitId());
+        if (savedCommit.isEmpty() && Boolean.FALSE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM novel_project WHERE id = ?)", Boolean.class, event.projectId()))) return;
+        var commit = savedCommit.orElseThrow();
         if (!commit.isActive()) {
             jdbc.update("DELETE FROM semantic_document WHERE source_type = 'MANUSCRIPT' AND source_id = ?",
                     event.manuscriptVersionId());
@@ -86,9 +89,8 @@ class VectorProjectionConsumer {
                 event.canonVersion(),
                 content,
                 manuscript.getContent().summary(),
-                PgVectorSupport.literal(embeddings.embed(content)),
-                embeddings.modelName(),
                 Timestamp.from(Instant.now()));
+        chunks.synchronize(documentId(manuscript.getId()));
 
         checkpoints.markCompleted(event.eventId(), ProjectionCheckpointStore.ProjectionType.PGVECTOR);
     }
@@ -99,10 +101,6 @@ class VectorProjectionConsumer {
 
     private String documentContent(ManuscriptVersion manuscript) {
         var content = characterNames.render(manuscript.getProjectId(), manuscript.getContent());
-        return String.join(
-                "\n",
-                content.title(),
-                content.summary(),
-                content.body());
+        return content.body();
     }
 }
