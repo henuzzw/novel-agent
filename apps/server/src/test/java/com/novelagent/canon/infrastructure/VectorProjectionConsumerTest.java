@@ -56,9 +56,12 @@ class VectorProjectionConsumerTest {
         when(characterNames.render(any(UUID.class), any(ManuscriptContent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(1));
 
-        consumer.project(message(eventId, manuscriptId));
+        consumer.project(message(eventId, manuscriptId).replace("\"canonVersion\":1", "\"canonVersion\":23"));
 
         verify(jdbc, org.mockito.Mockito.times(2)).update(anyString(), any(Object[].class));
+        var args = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).update(org.mockito.ArgumentMatchers.contains("INSERT INTO semantic_document"), args.capture());
+        org.assertj.core.api.Assertions.assertThat(args.getValue()[4]).isEqualTo(1L);
         verify(chunks).synchronize(any(UUID.class));
         verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.PGVECTOR);
     }

@@ -9,6 +9,19 @@ import org.junit.jupiter.api.Test;
 
 class MemoryBudgetAllocatorTest {
     @Test
+    void preservesFingerprintFormatAndCandidateOrderRegardlessOfTrimming() {
+        var first = new NovelMemoryContext.SemanticMemory(1, 3, 0.9, "第一章摘要", "第一章正文");
+        var second = new NovelMemoryContext.SemanticMemory(2, 4, 0.8, "第二章摘要", "第二章正文");
+        var allocator = new MemoryBudgetAllocator();
+        var candidates = List.of(first, second);
+        String expected = NovelMemoryContext.fingerprint("\n1:3\n第一章摘要\n第一章正文\n2:4\n第二章摘要\n第二章正文");
+        assertThat(allocator.allocate(candidates, List.of(), plan(80), List.of()).boundaryFingerprint()).isEqualTo(expected);
+        assertThat(allocator.allocate(candidates, List.of(), plan(5000), List.of()).boundaryFingerprint()).isEqualTo(expected);
+        assertThat(allocator.allocate(List.of(), List.of(), plan(80), List.of()).boundaryFingerprint())
+                .isEqualTo(NovelMemoryContext.fingerprint(""));
+    }
+
+    @Test
     void retainsDistinctLocatedChunksAndSeparatesPlanningFromFacts() {
         var located = new NovelMemoryContext.SemanticMemory(3, 5, 0.1, "来源项目=p；来源版本=m；范围=[600,610)",
                 "前章中段的重要证据。", false, null, null, "chunk-a");

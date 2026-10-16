@@ -15,6 +15,8 @@ import java.math.BigDecimal;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class AgentRunRecorderTest {
@@ -112,12 +114,15 @@ class AgentRunRecorderTest {
         assertThat(updates.getValue()[15]).isEqualTo("Failure");
     }
 
-    @Test
-    void outputValidationFailureStoresResponseUsageAndSpecificErrorInsteadOfSuccess() {
+    @ParameterizedTest
+    @ValueSource(strings = {"IMPORT_SOURCE_ANALYSIS", "FIRST_THREE_CHAPTERS_REVIEW"})
+    void outputValidationFailureStoresResponseUsageAndSpecificErrorInsteadOfSuccess(String stage) {
         var usage = new AgentRunRecorder.Usage(100, 45, 145L, null, null);
         var result = new com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient.ResponseResult("{invalid output}", usage);
-        var error = new IllegalArgumentException("原文解析输出校验失败：items[2].category：分类无效");
-        assertThatThrownBy(() -> recorder.record(UUID.randomUUID(), "IMPORT_SOURCE_ANALYSIS", ModelProvider.DEEPSEEK,
+        var error = new IllegalArgumentException(stage.equals("IMPORT_SOURCE_ANALYSIS")
+                ? "原文解析输出校验失败：items[2].category：分类无效"
+                : "三章报告输出校验失败：assessments.[0].evidence 字段格式或类型不符合返回协议");
+        assertThatThrownBy(() -> recorder.record(UUID.randomUUID(), stage, ModelProvider.DEEPSEEK,
                 "system", "input", null, () -> result, value -> { throw error; })).isSameAs(error);
         ArgumentCaptor<Object[]> updates = ArgumentCaptor.forClass(Object[].class);
         verify(jdbc).update(argThat(sql -> sql.contains("UPDATE agent_run")), updates.capture());

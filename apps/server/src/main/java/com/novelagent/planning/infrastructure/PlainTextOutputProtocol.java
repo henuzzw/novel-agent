@@ -6,15 +6,52 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Models return prose; only the server projects labelled sections into persistence DTOs. */
-final class PlainTextOutputProtocol {
+final class PlainTextOutputProtocol implements ModelOutputProtocol {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern HEADING = Pattern.compile("(?m)^## @([A-Za-z0-9_/-]+)[ \\t]*\\r?$");
     private final JsonNode contract;
 
-    PlainTextOutputProtocol(JsonNode contract) { this.contract = contract; }
+    PlainTextOutputProtocol(JsonNode contract) {
+        this.contract = expand(contract, contract, new HashSet<>(), 0);
+    }
+
+    /** Resolve server-owned local references before both describing and decoding the same contract. */
+    private static JsonNode expand(JsonNode node, JsonNode root, Set<String> references, int depth) {
+        if (depth > 64) throw invalid("返回协议嵌套过深");
+        if (node.isObject() && node.has("$ref")) {
+            String reference = node.path("$ref").asText();
+            if (!reference.startsWith("#/")) throw invalid("返回协议只支持本地字段引用");
+            if (!references.add(reference)) throw invalid("返回协议包含循环引用 " + reference);
+            JsonNode target = root.at(reference.substring(1));
+            if (!target.isObject()) throw invalid("返回协议引用不存在 " + reference);
+            ObjectNode resolved = (ObjectNode) expand(target, root, references, depth + 1);
+            references.remove(reference);
+            node.fields().forEachRemaining(field -> {
+                if (!field.getKey().equals("$ref")) resolved.set(field.getKey(),
+                        expand(field.getValue(), root, references, depth + 1));
+            });
+            return resolved;
+        }
+        if (node.isObject()) {
+            ObjectNode result = JSON.createObjectNode();
+            node.fields().forEachRemaining(field -> {
+                if (!field.getKey().equals("$defs") && !field.getKey().equals("definitions"))
+                    result.set(field.getKey(), expand(field.getValue(), root, references, depth + 1));
+            });
+            return result;
+        }
+        if (node.isArray()) {
+            ArrayNode result = JSON.createArrayNode();
+            node.forEach(item -> result.add(expand(item, root, references, depth + 1)));
+            return result;
+        }
+        return node.deepCopy();
+    }
 
     /** Remove obsolete transport-only instructions from saved templates, without changing their creative rules. */
     static String withoutLegacyProtocol(String prompt) {
@@ -31,7 +68,7 @@ final class PlainTextOutputProtocol {
                 .replace("格式按本次JSON Schema", "格式按本次纯文本保存标题组织");
     }
 
-    String instructions() {
+    public String instructions() {
         String unavailable = com.novelagent.agent.application.ModelOutputAvailability.INSTRUCTIONS;
         if (freeText()) return "\n【本次输出】直接返回最终创作文本，不使用 JSON、代码块或说明。" + unavailable;
         StringBuilder guide = new StringBuilder("\n【本次纯文本输出约定，取代旧版返回格式指令】\n"
@@ -62,7 +99,7 @@ final class PlainTextOutputProtocol {
         }
     }
 
-    String decode(String raw) {
+    public String decode(String raw) {
         if (raw == null || raw.isBlank()) throw new IllegalArgumentException("模型未返回可读文本");
         com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(raw);
         // Accept internal test fixtures and old locally generated DTOs; neither provider is asked for this format.
@@ -134,6 +171,8 @@ final class PlainTextOutputProtocol {
                 }
             }
             if (array.size() < schema.path("minItems").asInt(0)) throw invalid(path + " 记录不足");
+            if (schema.has("maxItems") && array.size() > schema.path("maxItems").asInt())
+                throw invalid(path + " 记录超过上限");
             return array;
         }
         if (value == null) throw invalid("缺少标题 " + path);

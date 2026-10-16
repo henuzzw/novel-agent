@@ -8,6 +8,22 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WritingMaterialSelectionTest {
+    @Test void openingKeepsConstraintsAndPromisesButExcludesLaterDetailedChaptersAndRawNotes() {
+        var source = new StoryBibleContent("核心", "主题", "校园", List.of("规则"), "主角", "弧光",
+                List.of("配角"), List.of("关系"), "冲突", "代价", "风格", "结局", List.of("硬约束"), List.of())
+                .withDevelopmentNotes("完整九步底稿".repeat(10000));
+        assertThat(WritingMaterialSelection.forOpening(source)).isEqualTo(source.withDevelopmentNotes(null));
+        assertThat(source.developmentNotes()).hasSize(60000);
+        var chapters = java.util.stream.IntStream.rangeClosed(1, 17).mapToObj(number ->
+                new ChapterPlan(number, "章" + number, "完整计划" + number,
+                        com.novelagent.planning.domain.ChapterPlanStatus.PLANNED)).toList();
+        var outline = new com.novelagent.planning.domain.OutlineContent("书名", "核心", "全书方向", "节奏", 40000, 50000,
+                List.of(new OutlineArc(1, "阶段", "目标", "冲突", "转折", "结果", 40000, 50000, chapters)));
+        var selected = WritingMaterialSelection.forOpening(outline);
+        assertThat(selected.arcs().getFirst().chapters()).containsExactlyElementsOf(chapters.subList(0, 3));
+        assertThat(selected.structureSummary()).isEqualTo(outline.structureSummary());
+        assertThat(outline.chapterCount()).isEqualTo(17);
+    }
     @Test void onlyFiltersCharactersForFullyResolvedExplicitRoster() throws Exception {
         var json = new com.fasterxml.jackson.databind.ObjectMapper();
         var a = json.readValue("{\"name\":\"江澈\",\"role\":\"PROTAGONIST\",\"identity\":\"学生\",\"coreDesire\":\"学习\"}",

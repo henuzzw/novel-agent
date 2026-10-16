@@ -46,11 +46,27 @@ public class StructuredModelGateway {
     public String requestWithBoundaries(UUID projectId, String workflow, ModelProvider provider,
             String systemPrompt, String userPrompt, JsonNode schema, String schemaName,
             int maxOutputTokens, CodexSessionPolicy sessionPolicy, Consumer<String> processOutput, String frozenBoundaries) {
+        return execute(projectId, workflow, provider, systemPrompt, userPrompt, schema, schemaName,
+                maxOutputTokens, sessionPolicy, processOutput, frozenBoundaries, false);
+    }
+
+    /** B/C machine reports opt in explicitly; ordinary writing and planning remain prose. */
+    public String requestJsonWithBoundaries(UUID projectId, String workflow, ModelProvider provider,
+            String systemPrompt, String userPrompt, JsonNode schema, String schemaName,
+            int maxOutputTokens, CodexSessionPolicy sessionPolicy, Consumer<String> processOutput, String frozenBoundaries) {
+        return execute(projectId, workflow, provider, systemPrompt, userPrompt, schema, schemaName,
+                maxOutputTokens, sessionPolicy, processOutput, frozenBoundaries, true);
+    }
+
+    private String execute(UUID projectId, String workflow, ModelProvider provider,
+            String systemPrompt, String userPrompt, JsonNode schema, String schemaName,
+            int maxOutputTokens, CodexSessionPolicy sessionPolicy, Consumer<String> processOutput,
+            String frozenBoundaries, boolean nativeJson) {
         var entry = select(provider);
         var executor = executors.get(entry);
         if (executor == null) throw new IllegalStateException("模型入口未初始化：" + entry);
         var request = prompts.assemble(projectId, workflow, provider, systemPrompt, userPrompt, schema, schemaName,
-                maxOutputTokens, sessionPolicy, frozenBoundaries);
+                maxOutputTokens, sessionPolicy, frozenBoundaries, nativeJson);
         return executor.execute(request, processOutput);
     }
 

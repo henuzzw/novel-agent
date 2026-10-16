@@ -17,11 +17,15 @@ public record ModelFailureDetails(String type, String category, String summary, 
         } else if (exception instanceof ModelInputUnavailableException) {
             category = "INPUT_UNAVAILABLE";
             summary = text;
-        } else if (text.startsWith("原文解析输出校验失败") || text.startsWith("纯文本响应无法保存")) {
+        } else if (text.startsWith("原文解析输出校验失败") || text.startsWith("纯文本响应无法保存")
+                || text.startsWith("自动编辑输出协议错误") || text.startsWith("三章报告输出校验失败")
+                || text.startsWith("检查证据不在当前正文中") || text.startsWith("JSON响应输出校验失败")) {
             category = "OUTPUT_VALIDATION";
             summary = text.startsWith("原文解析输出校验失败")
                     ? "模型已返回内容，但原文解析结构或证据校验未通过，请查看具体字段与响应；未保存为有效报告。"
-                    : "模型已返回内容，但保存格式校验未通过，请查看具体字段与响应；未保存为有效结果。";
+                    : text.startsWith("检查证据不在当前正文中")
+                        ? "模型已返回检查意见，但正文引文校验未通过，请查看问题编号和证据段落；未进入自动修订。"
+                        : "模型已返回内容，但保存格式校验未通过，请查看具体字段与响应；未保存为有效结果。";
         } else if (hasTimeoutCause(exception) || normalized.contains("timeout") || normalized.contains("超时")) {
             category = "TIMEOUT";
             summary = text.contains("连续无新进展")

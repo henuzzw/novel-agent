@@ -24,7 +24,6 @@ public class ChatGptTransportService {
                 .stream().findFirst().orElse(new Choice(Transport.APP_SERVER, 0));
     }
     public boolean direct() { return get().transport() == Transport.SIWC_HTTP; }
-    public boolean codexOAuth() { return get().transport() == Transport.SIWC_CODEX; }
     public boolean oauth() { return get().transport() != Transport.APP_SERVER; }
     public void requireIdle() {
         Boolean running = jdbc.queryForObject("""

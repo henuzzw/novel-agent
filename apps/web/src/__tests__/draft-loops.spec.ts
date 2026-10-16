@@ -68,6 +68,20 @@ it('change view handles insertion deletion and unchanged text', () => {
   expect(draftChange('old', '')).toEqual({ before: 'old', after: '' })
   expect(draftChange('same', 'same')).toEqual({ before: 'same', after: 'same' })
 })
+it('renders nonadjacent evidence separately without labels or object serialization', async () => {
+  const first = '“我等会儿去趟超市。”\n\n“不用买。”她说。'
+  const second = '“我还以为你听完就算了。”她说。'
+  vi.mocked(listDraftLoops).mockResolvedValue([record({ status: 'STOPPED', stopReason: 'C_NO_CHANGE', rounds: [{
+    number: 1, beforeManuscriptId: 'm1', afterManuscriptId: null,
+    before: { title: '生日', body: first + '\n\n出去再回来。\n\n' + second, summary: '摘要', continuityNotes: [] },
+    check: { summary: '逻辑检查', issues: [{ id: 'B-LOGIC-001', category: 'LOGIC', description: '对照前后信息',
+      evidence: [{ quote: first }, { quote: second }], existingBasis: '当前正文', gap: '', candidateDesign: '', impact: '', suggestion: '澄清' }] },
+    judgment: null,
+  }] })])
+  const wrapper = render(); await flushPromises()
+  expect(wrapper.findAll('blockquote').map(quote => quote.element.textContent)).toEqual([first, second])
+  expect(wrapper.text()).not.toContain('[object Object]')
+})
 it('refreshes a completed artifact once when the manuscript arrives late, but preserves unsaved edits', async () => {
   vi.mocked(listDraftLoops).mockResolvedValue([record({ status: 'STOPPED', stopReason: 'B_CLEAR' })])
   const wrapper = render(true); await flushPromises()

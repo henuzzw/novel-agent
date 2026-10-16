@@ -63,7 +63,9 @@ class RecentChapterSummariesTool implements NovelReadTool {
                       FROM (
                         SELECT m.chapter_number, c.canon_version, m.version_number,
                                m.content->>'summary' AS summary, m.content->>'body' AS body,
-                               COALESCE(m.writing_basis->'plan', ct.content)::text AS contract_content, c.accepted_facts::text AS accepted_facts,
+                               COALESCE(m.writing_basis->'plan', ct.content)::text AS contract_content,
+                               CASE WHEN EXISTS (SELECT 1 FROM story_fact f WHERE f.source_commit_id=c.id
+                                     AND f.canon_version_from>?) THEN NULL ELSE c.accepted_facts::text END AS accepted_facts,
                                m.id::text AS manuscript_id, m.row_version AS manuscript_row_version,
                                ct.id::text AS contract_id, ct.row_version AS contract_row_version,
                                ct.version_number AS contract_version_number, source_o.id::text AS source_outline_id,
@@ -108,7 +110,7 @@ class RecentChapterSummariesTool implements NovelReadTool {
                                             ? "" : "\n正文：" + result.getString("body")),
                             true, result.getString("contract_content"), result.getString("body")),
                             result.getString("accepted_facts")),
-                    request.projectId(), chapter, request.canonVersion(), request.projectId(), chapter);
+                    request.canonVersion(), request.projectId(), chapter, request.canonVersion(), request.projectId(), chapter);
             if (chapters.isEmpty()) {
                 memories.add(new NovelMemoryContext.SemanticMemory(chapter, -2, 1.0,
                         "第" + chapter + "章前文缺失：无有效正史正文或作者确认正文。", "", true));

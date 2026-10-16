@@ -1,20 +1,15 @@
 package com.novelagent.agent.tool;
 
 import com.novelagent.memory.application.NovelMemoryContext;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
 class RelatedCanonFactsTool implements NovelReadTool {
-    private final Neo4jClient neo4j;
     private final JdbcTemplate jdbc;
 
-    RelatedCanonFactsTool(Neo4jClient neo4j, JdbcTemplate jdbc) {
-        this.neo4j = neo4j;
+    RelatedCanonFactsTool(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
@@ -25,58 +20,33 @@ class RelatedCanonFactsTool implements NovelReadTool {
 
     @Override
     public boolean optional() {
-        return true;
+        return false;
     }
 
     @Override
     public NovelToolResult execute(NovelToolRequest request) {
-        List<Long> activeVersions = jdbc.queryForList("""
-                SELECT canon_version FROM canon_commit
-                 WHERE project_id = ? AND active = TRUE AND chapter_number < ? AND canon_version <= ?
-                """, Long.class, request.projectId(), request.chapterNumber(), request.canonVersion());
-        if (activeVersions.isEmpty()) return NovelToolResult.facts(List.of());
-        List<NovelMemoryContext.GraphFact> facts = query(request, activeVersions, true, request.graphFactCandidateLimit());
+        List<NovelMemoryContext.GraphFact> facts = query(request, true, request.graphFactCandidateLimit());
         if (facts.isEmpty()) {
-            facts = query(request, activeVersions, false, Math.min(4, request.graphFactCandidateLimit()));
+            facts = query(request, false, Math.min(4, request.graphFactCandidateLimit()));
         }
         return NovelToolResult.facts(facts);
     }
 
-    private List<NovelMemoryContext.GraphFact> query(NovelToolRequest request, List<Long> activeVersions,
-            boolean relevantOnly, int limit) {
-        String relevance = relevantOnly ? "AND ($query CONTAINS entity.name OR $query CONTAINS fact.object)" : "";
-        var rows = neo4j.query("""
-                MATCH (entity:StoryEntity {projectId: $projectId})-[:ASSERTS]->
-                      (fact:StoryFact {projectId: $projectId})
-                WHERE fact.canonVersion IN $activeVersions %s
-                RETURN fact.canonVersion AS canonVersion,
-                       entity.name AS subject,
-                       fact.predicate AS predicate,
-                       fact.object AS object,
-                       fact.evidence AS evidence
-                ORDER BY fact.canonVersion DESC
-                LIMIT $limit
-                """.formatted(relevance))
-                .bindAll(Map.of(
-                        "projectId", request.projectId().toString(),
-                        "activeVersions", activeVersions,
-                        "query", request.query(),
-                        "limit", limit))
-                .fetch()
-                .all();
-        List<NovelMemoryContext.GraphFact> facts = new ArrayList<>();
-        for (Map<String, Object> row : rows) {
-            facts.add(new NovelMemoryContext.GraphFact(
-                    ((Number) row.get("canonVersion")).longValue(),
-                    string(row.get("subject")),
-                    string(row.get("predicate")),
-                    string(row.get("object")),
-                    string(row.get("evidence"))));
-        }
-        return List.copyOf(facts);
-    }
-
-    private static String string(Object value) {
-        return value == null ? "" : value.toString();
+    private List<NovelMemoryContext.GraphFact> query(NovelToolRequest request, boolean relevantOnly, int limit) {
+        String relevance = relevantOnly ? "AND (strpos(?, COALESCE(e.canonical_name,f.subject_text))>0 OR strpos(?, f.object_text)>0)" : "";
+        String sql = """
+                SELECT c.canon_version, COALESCE(e.canonical_name,f.subject_text), f.predicate, f.object_text, f.evidence_ref
+                FROM story_fact f JOIN canon_commit c ON c.id=f.source_commit_id AND c.project_id=f.project_id
+                LEFT JOIN story_entity e ON e.id=f.subject_entity_id AND e.project_id=f.project_id AND e.canon_version_to IS NULL
+                WHERE f.project_id=? AND c.active AND c.chapter_number<? AND c.canon_version<=?
+                  AND f.canon_version_from<=? AND (f.canon_version_to IS NULL OR f.canon_version_to>?)
+                  %s
+                ORDER BY c.chapter_number DESC, f.canon_version_from DESC, f.id LIMIT ?
+                """.formatted(relevance);
+        Object[] args = relevantOnly
+                ? new Object[] { request.projectId(), request.chapterNumber(), request.canonVersion(), request.canonVersion(), request.canonVersion(), request.query(), request.query(), limit }
+                : new Object[] { request.projectId(), request.chapterNumber(), request.canonVersion(), request.canonVersion(), request.canonVersion(), limit };
+        return jdbc.query(sql, (rs, row) -> new NovelMemoryContext.GraphFact(rs.getLong(1), rs.getString(2),
+                rs.getString(3), rs.getString(4), rs.getString(5)), args);
     }
 }

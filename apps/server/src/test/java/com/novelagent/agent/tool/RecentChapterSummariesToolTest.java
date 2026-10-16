@@ -43,8 +43,8 @@ class RecentChapterSummariesToolTest {
                         "c.accepted_facts::text",
                         "LEFT JOIN chapter_contract_version", "m.content->>'body' AS body",
                         "ORDER BY priority, version_number DESC", "m.project_id = c.project_id", "ct.project_id = m.project_id"));
-        assertThat(parameters.getAllValues().get(1)).containsExactly(projectId, 3, 8L, projectId, 3);
-        assertThat(parameters.getAllValues().get(2)).containsExactly(projectId, 2, 8L, projectId, 2);
+        assertThat(parameters.getAllValues().get(1)).containsExactly(8L, projectId, 3, 8L, projectId, 3);
+        assertThat(parameters.getAllValues().get(2)).containsExactly(8L, projectId, 2, 8L, projectId, 2);
     }
 
     @Test

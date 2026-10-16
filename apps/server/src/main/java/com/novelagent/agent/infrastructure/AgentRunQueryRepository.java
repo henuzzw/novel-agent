@@ -2,6 +2,7 @@ package com.novelagent.agent.infrastructure;
 
 import com.novelagent.agent.api.AgentRunResponse;
 import com.novelagent.agent.api.AgentRunSummary;
+import com.novelagent.agent.api.AgentTokenUsage;
 import com.novelagent.agent.api.AgentRunPromptResponse;
 import com.novelagent.agent.api.AgentRunOutputResponse;
 import com.novelagent.agent.api.AgentRunResponse.RequestSnapshotResponse;
@@ -9,6 +10,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.time.OffsetDateTime;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +61,21 @@ public class AgentRunQueryRepository {
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      */
     public AgentRunSummary summary(UUID projectId) {
+        return summary(projectId, null, null);
+    }
+
+    /** Read both periods with one cutoff; the service holds a repeatable-read snapshot. */
+    public AgentTokenUsage usage(UUID projectId, OffsetDateTime asOf) {
+        var from = asOf.minusHours(5);
+        return new AgentTokenUsage(asOf, from, summary(projectId, null, asOf), summary(projectId, from, asOf));
+    }
+
+    private AgentRunSummary summary(UUID projectId, OffsetDateTime from, OffsetDateTime until) {
+        var parameters = new java.util.ArrayList<Object>();
+        parameters.add(projectId);
+        String range = "";
+        if (from != null) { range += " AND started_at >= ?"; parameters.add(from); }
+        if (until != null) { range += " AND started_at <= ?"; parameters.add(until); }
         return jdbc.queryForObject("""
                 SELECT count(*) AS calls,
                        count(*) FILTER (WHERE status = 'FAILED') AS failures,
@@ -66,8 +84,8 @@ public class AgentRunQueryRepository {
                        coalesce(sum(estimated_cost), 0) AS estimated_cost,
                        coalesce(sum(actual_input_tokens), 0) AS actual_input_tokens,
                        coalesce(sum(actual_output_tokens), 0) AS actual_output_tokens,
-                       coalesce(sum(estimated_input_tokens), 0) AS estimated_input_tokens,
-                       coalesce(sum(estimated_output_tokens), 0) AS estimated_output_tokens,
+                       coalesce(sum(coalesce(estimated_input_tokens, input_tokens)), 0) AS estimated_input_tokens,
+                       coalesce(sum(coalesce(estimated_output_tokens, output_tokens)), 0) AS estimated_output_tokens,
                        count(*) FILTER (WHERE token_source = 'ACTUAL') AS actual_calls,
                        count(*) FILTER (WHERE token_source = 'ESTIMATED') AS estimated_calls,
                        count(*) FILTER (WHERE token_source = 'UNKNOWN') AS unknown_calls,
@@ -75,12 +93,16 @@ public class AgentRunQueryRepository {
                             WHEN count(DISTINCT token_source) = 1 THEN min(token_source)
                             ELSE 'MIXED' END AS token_source
                   FROM agent_run WHERE project_id = ?
-                """, (rs, row) -> new AgentRunSummary(rs.getLong("calls"), rs.getLong("failures"),
+                """ + range, (rs, row) -> mapSummary(rs), parameters.toArray());
+    }
+
+    private static AgentRunSummary mapSummary(ResultSet rs) throws SQLException {
+        return new AgentRunSummary(rs.getLong("calls"), rs.getLong("failures"),
                 rs.getLong("input_tokens"), rs.getLong("output_tokens"),
                 rs.getBigDecimal("estimated_cost"), "CNY", rs.getString("token_source"),
                 rs.getLong("actual_input_tokens"), rs.getLong("actual_output_tokens"),
                 rs.getLong("estimated_input_tokens"), rs.getLong("estimated_output_tokens"),
-                rs.getLong("actual_calls"), rs.getLong("estimated_calls"), rs.getLong("unknown_calls")), projectId);
+                rs.getLong("actual_calls"), rs.getLong("estimated_calls"), rs.getLong("unknown_calls"));
     }
 
     /**

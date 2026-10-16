@@ -106,11 +106,9 @@ public class QualityReviewStore {
         }
         ManuscriptContent rendered = names.render(projectId, manuscript.getContent());
         String profile = names.render(projectId, profiles.promptContext(projectId));
-        String prepared = "";
         String style = styles.promptContext(projectId);
-        var context = WritingContextService.resolve(outline, bible, chapter, CreativeStrategyPolicy.from(project));
-        context = new WritingContextService.Context(outline, bible, context.arc(), context.chapter(),
-                context.previous(), context.next(), context.creativeStrategy(), prepared);
+        var context = WritingContextService.prepared(
+                WritingContextService.resolve(outline, bible, chapter, CreativeStrategyPolicy.from(project)), project);
         var writingBasis = ChapterWritingBasisService.requireCurrent(manuscript, context, contracts);
         return new Snapshot(project, manuscript, writingBasis, bible, rendered, style, profile,
                 fingerprint(rendered.toString() + "\n" + profile + "\n" + style + "\n" + project.getCurrentCanonVersion()

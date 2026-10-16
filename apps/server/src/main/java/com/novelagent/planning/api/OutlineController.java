@@ -1,6 +1,8 @@
 package com.novelagent.planning.api;
 
 import com.novelagent.planning.application.OutlineService;
+import com.novelagent.planning.domain.OutlineContent;
+import com.novelagent.platform.api.ContentUpdateRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -90,7 +92,8 @@ public class OutlineController {
      */
     @PutMapping("/{outlineId}")
     public ResponseEntity<OutlineResponse> update(@PathVariable UUID projectId, @PathVariable UUID outlineId,
-            @RequestHeader("If-Match") String ifMatch, @Valid @RequestBody UpdateOutlineRequest request) {
+            @RequestHeader("If-Match") String ifMatch,
+            @Valid @RequestBody ContentUpdateRequest<OutlineContent> request) {
         OutlineResponse value = service.update(projectId, outlineId, parse(ifMatch), request.content());
         return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
     }

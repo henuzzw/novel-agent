@@ -24,12 +24,19 @@ public class ModelPromptAssembler {
     public AbstractModelExecutor.Request assemble(UUID project, String workflow, ModelProvider provider,
             String system, String user, JsonNode schema, String schemaName, int outputReserve,
             CodexSessionPolicy policy, String frozenBoundaries) {
+        return assemble(project, workflow, provider, system, user, schema, schemaName, outputReserve, policy,
+                frozenBoundaries, false);
+    }
+
+    public AbstractModelExecutor.Request assemble(UUID project, String workflow, ModelProvider provider,
+            String system, String user, JsonNode schema, String schemaName, int outputReserve,
+            CodexSessionPolicy policy, String frozenBoundaries, boolean nativeJson) {
         var resolved = prompts == null ? new AgentPromptService.Resolved(system, null) : prompts.resolve(workflow, system);
-        var protocol = new PlainTextOutputProtocol(schema);
+        ModelOutputProtocol protocol = nativeJson ? new JsonSchemaOutputProtocol(schema) : new PlainTextOutputProtocol(schema);
         boolean chapterBlocks = schema != null &&
                 (schema.at("/properties/content/properties/arcs/items/properties/chapters/items/properties").has("content")
                         || schema.at("/properties/arcs/items/properties/chapters/items/properties").has("content"));
-        String stage = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.systemPrompt())
+        String stage = protocol.preparePrompt(resolved.systemPrompt())
                 + (workflow.equals("IMPORT_SOURCE_ANALYSIS")
                         ? com.novelagent.ingest.infrastructure.ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "")
                 + (chapterBlocks ? "\n" + com.novelagent.planning.application.ScenePlanningGuide.planningRules() : "")
@@ -38,8 +45,9 @@ public class ModelPromptAssembler {
                 : boundaries == null ? "" : boundaries.promptContext(project);
         String input = "【本轮服务端执行规范】\n" + stage + boundary + titleContext(project, workflow)
                 + "\n【本轮创作资料】\n" + user;
-        String instructions = PlainTextOutputProtocol.withoutLegacyProtocol(resolved.sessionSystemPrompt())
-                + "\n\n" + AgentPromptService.protectedRules(workflow);
+        String instructions = protocol.preparePrompt(resolved.sessionSystemPrompt())
+                + "\n\n" + protocol.preparePrompt(AgentPromptService.protectedRules(workflow))
+                + (nativeJson ? protocol.instructions() : "");
         boolean shared = provider == ModelProvider.LOCAL_CODEX && PlanningConversationPolicy.shares(workflow);
         return new AbstractModelExecutor.Request(project, workflow, provider, instructions, input, schemaName, protocol,
                 outputReserve, shared ? CodexSessionPolicy.REUSE_THREAD : policy,

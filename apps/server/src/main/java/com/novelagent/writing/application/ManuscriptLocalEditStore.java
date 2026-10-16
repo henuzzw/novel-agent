@@ -8,7 +8,6 @@ import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.writing.api.ManuscriptLocalEditRequest;
 import com.novelagent.writing.api.ManuscriptResponse;
-import com.novelagent.writing.domain.ChapterContractStatus;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ManuscriptLocalEditSelection;
 import com.novelagent.writing.domain.ManuscriptVersion;
@@ -93,7 +92,11 @@ public class ManuscriptLocalEditStore {
         ManuscriptContent rendered = names.render(projectId, source.getContent());
         String context = names.render(projectId, mapper.valueToTree(basis.bible().getContent()).toString())
                 + "\n本章大纲写作依据：" + names.render(projectId, mapper.valueToTree(writingBasis.plan()).toString())
-                + "\n当前章与相邻章边界：" + names.render(projectId, basis.toString())
+                // Entity.toString() includes process-local identity, which changes across transactions.
+                + "\n当前章所在卷：" + names.render(projectId, mapper.valueToTree(basis.writingArc()).toString())
+                + "\n前章规划：" + names.render(projectId, mapper.valueToTree(basis.previous()).toString())
+                + "\n相邻章边界：" + names.render(projectId, basis.futureContext())
+                + "\n项目创作边界：" + basis.preparationContext()
                 + "\n人物档案：" + names.render(projectId, profiles.promptContext(projectId))
                 + "\n写作风格：" + styles.promptContext(projectId)
                 + "\n创作策略：" + basis.creativeStrategy()

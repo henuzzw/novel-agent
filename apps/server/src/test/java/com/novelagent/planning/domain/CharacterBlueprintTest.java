@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class CharacterBlueprintTest {
     private final ObjectMapper json = new ObjectMapper();
 
-    @Test void demographicFieldsAreOptionalForLegacyDataAndOnlyFillBlanks() {
+    @Test void demographicFieldsAreOptionalForLegacyDataAndBoundedWhenPresent() {
         ObjectNode legacy = json.valueToTree(CharacterBlueprintFixtures.character("江澈"));
         legacy.remove(List.of("gender", "ageDescription"));
         var original = json.convertValue(legacy, CharacterBlueprint.class);
@@ -21,11 +21,8 @@ class CharacterBlueprintTest {
         assertThat(original.ageDescription()).isEmpty();
         legacy.put("gender", "男").put("ageDescription", "16岁");
         var proposed = json.convertValue(legacy, CharacterBlueprint.class);
-        var filled = original.fillMissingFrom(proposed);
-        assertThat(filled.gender()).isEqualTo("男");
-        assertThat(filled.ageDescription()).isEqualTo("16岁");
-        legacy.put("gender", "女").put("ageDescription", "17岁");
-        assertThat(filled.fillMissingFrom(json.convertValue(legacy, CharacterBlueprint.class))).isEqualTo(filled);
+        assertThat(proposed.gender()).isEqualTo("男");
+        assertThat(proposed.ageDescription()).isEqualTo("16岁");
         legacy.put("gender", "x".repeat(41));
         assertThatThrownBy(() -> json.convertValue(legacy, CharacterBlueprint.class)).hasMessageContaining("40");
     }

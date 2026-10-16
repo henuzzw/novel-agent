@@ -79,4 +79,5 @@ public class DraftLoopContext {
         return new Source(new DraftLoopRun.Basis(source.basis().fingerprint(), prompt, source.basis().writingBasis()),
                 source.context(), source.latest());
     }
+    public void requireReadyForWriting(UUID projectId, int chapter) { contexts.requireMemoryReady(projectId, chapter); }
 }

@@ -3,7 +3,7 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import GenerationStatusPanel from '@/components/GenerationStatusPanel.vue'
 import { listAgentRuns, stopGeneration, type AgentRun } from '@/api/agentRuns'
-import { beginGenerationRequest, endGenerationRequest, generationRequests } from '@/lib/generation-activity'
+import { beginGenerationRequest, endGenerationRequest, generationRequests, generationRows } from '@/lib/generation-activity'
 
 vi.mock('@/api/agentRuns', () => ({ listAgentRuns: vi.fn(), stopGeneration: vi.fn() }))
 const cleanup: (() => void)[] = []
@@ -18,6 +18,27 @@ function run(stage: string, status: AgentRun['status']) {
   return { id: stage, stage, status, startedAt: new Date(Date.now() - 120_000).toISOString(), completedAt: null, errorMessage: status === 'FAILED' ? '模型额度不足' : null } as AgentRun
 }
 describe('project generation status', () => {
+  it('selects the latest stage across unsorted and aliased runs, keeping the first timestamp tie', () => {
+    const old = { ...run('OUTLINE', 'FAILED'), id: 'old', startedAt: '2026-10-01T00:00:00Z' }
+    const latest = { ...run('IMPORT_REVERSE_OUTLINE', 'SUCCEEDED'), id: 'latest', startedAt: '2026-10-02T00:00:00Z' }
+    const tied = { ...latest, id: 'tied', stage: 'OUTLINE' }
+    const runs = [old, latest, tied]
+    const row = generationRows('p', runs).find(row => row.stage === 'OUTLINE')!
+    expect(row.activity?.id).toBe('latest')
+    expect(row.model?.id).toBe('latest')
+    expect(runs.map(run => run.id)).toEqual(['old', 'latest', 'tied'])
+  })
+
+  it('keeps a request save failure until a model call starts after that request completed', () => {
+    const id = beginGenerationRequest('/api/v1/projects/p/outlines/actions/generate', 'POST')!
+    endGenerationRequest(id, new Error('保存失败'))
+    const request = generationRequests.value[0]!
+    const model = { ...run('OUTLINE', 'SUCCEEDED'), startedAt: request.startedAt }
+    expect(generationRows('p', [model]).find(row => row.stage === 'OUTLINE')?.activity?.id).toBe(id)
+    const later = { ...model, startedAt: new Date(Date.parse(request.completedAt!) + 1000).toISOString() }
+    expect(generationRows('p', [later]).find(row => row.stage === 'OUTLINE')?.activity?.source).toBe('model')
+  })
+
   it('starts compact, retains running and failed rows, and expands the complete stage list', async () => {
     vi.mocked(listAgentRuns).mockResolvedValue([run('MANUSCRIPT', 'RUNNING'), run('OUTLINE', 'FAILED'), run('SNOWFLAKE_PLANNING', 'SUCCEEDED')])
     const wrapper = render()
@@ -36,6 +57,7 @@ describe('project generation status', () => {
     expect(wrapper.get('[data-stage="SNOWFLAKE_PLANNING"]').text()).toContain('成功')
     expect(wrapper.get('[data-stage="SNOWFLAKE_PLANNING"]').text()).toContain('模型任务')
     expect(wrapper.get('[data-stage="CHAPTER_REVIEW"]').text()).toContain('模型额度不足')
+    expect(wrapper.get('[data-stage="CHAPTER_REVIEW"]').text()).toContain('发布后记忆整理')
     expect(wrapper.emitted('busy')?.slice(-1)[0]).toEqual([true])
     await wrapper.get('.generation-tasks').trigger('click')
     expect(wrapper.emitted('openTasks')).toHaveLength(1)

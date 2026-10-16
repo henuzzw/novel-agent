@@ -34,13 +34,17 @@ public class ChatGptDirectGateway {
     }
     public Prepared prepare(UUID project, String workflow, String instructions, String user, CodexSessionPolicy policy,
             String revision, int outputReserve) {
+        return prepare(project, workflow, instructions, user, policy, revision, outputReserve, null);
+    }
+    public Prepared prepare(UUID project, String workflow, String instructions, String user, CodexSessionPolicy policy,
+            String revision, int outputReserve, com.fasterxml.jackson.databind.JsonNode schema) {
         String binding = ChatGptResponsesClient.accountBinding(auth.authorization());
         var lease = conversations.claim(project, workflow, binding, revision, policy == CodexSessionPolicy.NEW_THREAD);
         try {
             ArrayNode input = lease.history().deepCopy();
             input.addObject().put("role", "user").put("content", user);
             var capacity = context.require(ModelProvider.LOCAL_CODEX);
-            long tokens = MemoryBudgetAllocator.estimateTokens(instructions + "\n" + input);
+            long tokens = MemoryBudgetAllocator.estimateTokens(instructions + "\n" + input + (schema == null ? "" : schema));
             if (tokens + outputReserve + capacity.getSafetyMarginTokens() > capacity.getContextWindowTokens())
                 throw new IllegalArgumentException("完整会话历史超过上下文容量；请缩小资料或明确开启新会话，系统不会静默丢弃历史");
             var budget = new AgentRunRecorder.ContextBudget(capacity.getContextWindowTokens(), capacity.getSafetyMarginTokens(), tokens, outputReserve);
@@ -59,12 +63,19 @@ public class ChatGptDirectGateway {
         public String wireInput() { return input.toString(); }
         public AgentRunRecorder.ContextBudget budget() { return budget; }
         public ChatGptResponsesClient.Result run(EffectiveSettings selected, Consumer<String> progress) {
+            return run(selected, progress, null, null);
+        }
+        public ChatGptResponsesClient.Result run(EffectiveSettings selected, Consumer<String> progress,
+                String schemaName, com.fasterxml.jackson.databind.JsonNode schema) {
             var renewed = new AtomicLong(System.nanoTime());
-            return responses.request(instructions, input, selected, binding, progress, () -> {
+            Runnable renew = () -> {
                 if (System.nanoTime() - renewed.get() > java.time.Duration.ofMinutes(1).toNanos()) {
                     conversations.renew(lease); renewed.set(System.nanoTime());
                 }
-            });
+            };
+            return schema == null || schema.isNull()
+                    ? responses.request(instructions, input, selected, binding, progress, renew)
+                    : responses.request(instructions, input, selected, binding, progress, renew, schemaName, schema);
         }
         public void accept(ChatGptResponsesClient.Result result) {
             ArrayNode history = input.deepCopy();

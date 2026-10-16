@@ -48,6 +48,10 @@ public class CodexProjectGateway {
         public String wireInput() { return delta.text(); }
         public String instructions(String current) { return current + CodexMaterialDelta.READ_RULES; }
         public CodexAppServerClient.TurnResult run(String system, EffectiveSettings choice, int outputReserve, Consumer<String> progress) {
+            return run(system, choice, outputReserve, null, progress);
+        }
+        public CodexAppServerClient.TurnResult run(String system, EffectiveSettings choice, int outputReserve,
+                com.fasterxml.jackson.databind.JsonNode schema, Consumer<String> progress) {
             attempted = true;
             var timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
             var lostLease = new java.util.concurrent.atomic.AtomicBoolean();
@@ -65,10 +69,10 @@ public class CodexProjectGateway {
                 codex.openScope(thread, lease, delta.materials().keySet(), binding);
                 var capacity = context.require(choice.provider());
                 long previous = Math.max(lease.contextTokens(), codex.contextTokens(thread));
-                long incoming = com.novelagent.memory.application.MemoryBudgetAllocator.estimateTokens(system + delta.text());
+                long incoming = com.novelagent.memory.application.MemoryBudgetAllocator.estimateTokens(system + delta.text() + (schema == null ? "" : schema));
                 if (previous > 0 && previous + incoming + outputReserve + capacity.getSafetyMarginTokens()
                         > capacity.getContextWindowTokens()) codex.compactThread(thread);
-                return codex.runStructuredTurn(thread, lease.project(), delta.text(), null, choice, progress);
+                return codex.runStructuredTurn(thread, lease.project(), delta.text(), schema, choice, progress);
             } finally {
                 heartbeat.cancel(false); timer.shutdownNow();
                 if (thread != null) codex.closeScope(thread);

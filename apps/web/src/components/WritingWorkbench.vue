@@ -6,13 +6,14 @@ import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { useWorkspaceChapter, useWorkspaceChoice, writingViews } from '@/composables/useWorkspaceLocation'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
-import { BrainCircuit, Check, Download, FileSearch, FileText, RefreshCw, Save } from 'lucide-vue-next'
+import { BrainCircuit, Check, Download, FileSearch, FileText, GitCompareArrows, RefreshCw, Save } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue'
 import QualityReviewPanel from './QualityReviewPanel.vue'
 import PublishedMemoryPanel from './PublishedMemoryPanel.vue'
 import DraftLoopPanel from './DraftLoopPanel.vue'
 import FirstThreeChaptersPanel from './FirstThreeChaptersPanel.vue'
 import ManuscriptLocalEditPanel from './ManuscriptLocalEditPanel.vue'
+import ManuscriptHistoryPanel from './ManuscriptHistoryPanel.vue'
 import type { QualityReportState } from '@/api/writingQuality'
 import type { AutomationChapterTarget } from '@/api/automation'
 import { getCurrentOutline, type GenerationMode } from '@/api/planning'
@@ -45,6 +46,8 @@ const draftLoopBusy = ref(false)
 const draftLoopRefreshes = ref(0)
 const draftLoopEditingLocked = computed(() => draftLoopBusy.value || draftLoopRefreshes.value > 0)
 const localEditBusy = ref(false)
+const localEditRefreshing = ref(false)
+const localEditRefreshVersion = ref(0)
 const openingBusy = ref(false)
 const openingOpened = ref(false)
 const openingRefresh = ref(0)
@@ -129,6 +132,19 @@ async function refreshDraftLoopManuscript() {
     await manuscriptVersionsQuery.refetch()
   } finally { draftLoopRefreshes.value-- }
 }
+async function refreshLocalEditManuscript() {
+  const projectId = props.projectId, chapter = selectedChapter.value
+  localEditRefreshing.value = true
+  try {
+    await manuscriptQuery.refetch({ throwOnError: true })
+    if (projectId === props.projectId && chapter === selectedChapter.value) {
+      localEditRefreshVersion.value++
+      error.value = ''
+    }
+  } catch (failure) {
+    if (projectId === props.projectId && chapter === selectedChapter.value) error.value = (failure as Error).message
+  } finally { localEditRefreshing.value = false }
+}
 function lines(value: string) { return value.split('\n').map((item) => item.trim()).filter(Boolean) }
 function joined(value: string[] | undefined) { return value?.join('\n') ?? '' }
 function toolLabel(value: string) {
@@ -139,7 +155,7 @@ function toolLabel(value: string) {
   } as Record<string, string>)[value] ?? value
 }
 function updateNotes(event: Event) { if (manuscriptDraft.value) manuscriptDraft.value.continuityNotes = lines((event.target as HTMLTextAreaElement).value) }
-const busy = computed(() => draftLoopEditingLocked.value || qualityBusy.value || localEditBusy.value || openingBusy.value || generateManuscriptMutation.isPending.value
+const busy = computed(() => draftLoopEditingLocked.value || qualityBusy.value || localEditBusy.value || localEditRefreshing.value || openingBusy.value || generateManuscriptMutation.isPending.value
   || saveManuscriptMutation.isPending.value || createManuscriptRevisionMutation.isPending.value
   || publishManuscriptMutation.isPending.value)
 const fail = (reason: Error) => { error.value = reason.message }
@@ -213,7 +229,7 @@ const publishManuscriptMutation = useMutation({ mutationFn: () => {
           <button type="button" :class="{ active: mode === 'quality', done: qualityState === 'valid' }" @click="mode = 'quality'"><span>02</span>检查与润色<small>{{ qualityLabel }}</small></button>
           <button type="button" :class="{ done: currentManuscriptPublished }" @click="mode = 'manuscript'"><span>03</span>作者确认并发布<small>{{ currentManuscriptPublished ? '已发布' : '待发布' }}</small></button>
         </nav>
-        <div v-if="mode !== 'memory' && mode !== 'opening'" class="writing-actions">
+        <div v-if="mode !== 'memory' && mode !== 'opening' && mode !== 'history'" class="writing-actions">
           <label class="instruction-field"><span>本次调整要求</span><textarea v-model="instruction" rows="2" :maxlength="mode === 'quality' ? 2000 : undefined" placeholder="可选，例如：增强对话张力，减少解释" /></label>
           <GenerationModeControl v-if="mode === 'manuscript' && manuscriptQuery.data.value" v-model="manuscriptGenerationMode" revise-label="基于选定版本调整" regenerate-label="重新创作一版" :disabled="busy" />
           <label v-if="mode === 'manuscript' && manuscriptQuery.data.value && manuscriptGenerationMode === 'REVISE'" class="provider-field outline-base-field"><span>基准正文</span><select v-model="baseManuscriptVersionId"><option value="">最新保存版本（第 {{ manuscriptQuery.data.value.versionNumber }} 版）</option><option v-for="item in manuscriptVersionsQuery.data.value?.filter((version) => version.id !== manuscriptQuery.data.value?.id) ?? []" :key="item.id" :value="item.id">第 {{ item.versionNumber }} 版 · {{ item.status === 'AUTHOR_ACCEPTED' ? '已确认' : '草稿' }} · {{ item.title }}</option></select></label>
@@ -231,13 +247,14 @@ const publishManuscriptMutation = useMutation({ mutationFn: () => {
       <div class="writing-toolbar">
         <div class="planning-tabs" role="group" aria-label="写作视图" @keydown="navigateWorkspaceButtons">
           <button type="button" :aria-pressed="mode === 'manuscript'" :class="{ active: mode === 'manuscript' }" @click="mode = 'manuscript'"><FileText :size="16" />正文草稿</button>
+          <button type="button" :aria-pressed="mode === 'history'" :class="{ active: mode === 'history' }" @click="mode = 'history'"><GitCompareArrows :size="16" />版本对比</button>
           <button type="button" :aria-pressed="mode === 'quality'" :class="{ active: mode === 'quality' }" @click="mode = 'quality'"><FileSearch :size="16" />检查与润色</button>
           <button type="button" :aria-pressed="mode === 'opening'" :class="{ active: mode === 'opening' }" @click="mode = 'opening'"><FileSearch :size="16" />前三章连读<small v-if="openingBusy"> · 正在通读</small></button>
-          <button type="button" :aria-pressed="mode === 'review'" :class="{ active: mode === 'review' }" @click="mode = 'review'"><FileSearch :size="16" />发布后记忆</button>
+          <button type="button" :aria-pressed="mode === 'review'" :class="{ active: mode === 'review' }" @click="mode = 'review'"><FileSearch :size="16" />发布后记忆整理</button>
           <button type="button" :aria-pressed="mode === 'memory'" :class="{ active: mode === 'memory' }" @click="mode = 'memory'"><BrainCircuit :size="16" />长期记忆</button>
         </div>
-        <span>第 {{ selectedChapter }} 章</span>
       </div>
+      <ManuscriptHistoryPanel v-if="mode === 'history'" :key="`${projectId}-${selectedChapter}`" :project-id="projectId" :chapter-number="selectedChapter" :published-id="canonStatusQuery.data.value?.activeManuscriptVersionId" />
 
       <PublishedMemoryPanel :key="`${projectId}-${selectedChapter}-memory`" :project-id="projectId"
         :chapter="selectedChapter" :published="!!canonStatusQuery.data.value?.committed"
@@ -268,9 +285,10 @@ const publishManuscriptMutation = useMutation({ mutationFn: () => {
           <summary>局部编辑</summary>
           <p v-if="JSON.stringify(manuscriptDraft) !== JSON.stringify(manuscriptQuery.data.value.content)" class="form-error">请先保存正文，再选择局部编辑依据。</p>
           <ManuscriptLocalEditPanel :key="`${projectId}-${selectedChapter}`" :project-id="projectId"
+            :refresh-version="localEditRefreshVersion"
             :source="JSON.stringify(manuscriptDraft) === JSON.stringify(manuscriptQuery.data.value.content) ? manuscriptQuery.data.value : null"
             :external-busy="busy && !localEditBusy" @drafted="setManuscript" @busy-change="localEditBusy = $event"
-            @refresh-requested="manuscriptQuery.refetch()" />
+            @refresh-requested="refreshLocalEditManuscript" />
         </details>
       </template>
 

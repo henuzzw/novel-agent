@@ -13,6 +13,9 @@ import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.OutlineStatus;
+import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineWordBudget;
+import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineVersion;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
@@ -78,11 +81,13 @@ class ManuscriptLocalEditStoreTest {
         when(outline.getId()).thenReturn(outlineId);
         when(outline.getProjectId()).thenReturn(id);
         when(outline.getStatus()).thenReturn(OutlineStatus.PUBLISHED);
-        when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent("title", "premise", "structure", "pacing", 1000, 2000, List.of()));
+        var chapter = new ChapterPlan(1, "title", "Alice", "goal", "event", "reveal", "hook", 1000, 2000);
+        var arc = new OutlineArc(1, "arc", "goal", "conflict", "turn", "outcome", 1000, 2000, List.of(chapter));
+        when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent("title", "premise", "structure", "pacing", 1000, 2000, List.of(arc)));
         when(bible.getContent()).thenReturn(com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(List.of()));
         when(bible.getId()).thenReturn(bibleId);
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
-        when(contexts.context(id, 1)).thenReturn(new WritingContextService.Context(outline, bible, null, new com.novelagent.planning.domain.ChapterPlan(1, "title", "Alice", "goal", "event", "reveal", "hook", 1000, 2000)));
+        when(contexts.context(id, 1)).thenReturn(new WritingContextService.Context(outline, bible, arc, chapter));
         when(names.render(eq(id), any(String.class))).thenAnswer(call -> call.getArgument(1));
         when(names.render(eq(id), any(ManuscriptContent.class))).thenAnswer(call -> {
             ManuscriptContent value = call.getArgument(1);
@@ -99,6 +104,31 @@ class ManuscriptLocalEditStoreTest {
 
     private ManuscriptLocalEditRequest request() {
         return new ManuscriptLocalEditRequest(sourceId, 0L, "old", 1, 9, ModelProvider.DEEPSEEK, "clarify", true);
+    }
+
+    private WritingContextService.Context reloadedContext() {
+        var freshOutline = OutlineVersion.create(outline.getId(), id, 1, "TEST", null, bible.getId(),
+                new OutlineWordBudget(1500, 1000, 2000, 1, 1, 1500, 1000, 2000), outline.getContent());
+        freshOutline.publish();
+        var freshBible = StoryBibleVersion.create(bible.getId(), id, 1, "TEST", null, null, null, bible.getContent());
+        freshBible.publish();
+        return WritingContextService.prepared(WritingContextService.resolve(freshOutline, freshBible, 1,
+                com.novelagent.project.domain.CreativeStrategyPolicy.from(project)), project);
+    }
+
+    @Test
+    void separateReadsOfUnchangedEntitiesHaveSameFingerprintAndCanSave() {
+        // A model call separates two transactions: JPA reloads different entity instances.
+        when(contexts.context(id, 1)).thenAnswer(call -> reloadedContext());
+        source.withWritingBasis(ChapterWritingBasisService.capture(reloadedContext()));
+        var first = store.snapshot(id, 1, sourceId, 0);
+        var second = store.snapshot(id, 1, sourceId, 0);
+        assertThat(second.context()).isEqualTo(first.context());
+        assertThat(second.fingerprint()).isEqualTo(first.fingerprint());
+        var selection = ManuscriptLocalEditSelection.resolve(first.rendered().body(), "old", null, 1);
+        var result = store.save(first, selection, "新的", request());
+        assertThat(result.content().body()).isEqualTo("前\r\nAlice 新的\t后文");
+        assertThat(source.getStatus()).isEqualTo(ManuscriptStatus.AUTHOR_ACCEPTED);
     }
 
     @Test

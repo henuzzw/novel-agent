@@ -48,12 +48,16 @@ public class WritingGenerationGateway {
     /** Extract from an immutable published body without future planning or literary review. */
     public ChapterReviewContent publishedMemory(UUID projectId, ManuscriptContent manuscript,
             EntityCatalogContext catalog, ModelProvider provider) {
+        return publishedMemory(projectId, manuscript, catalog, provider, "");
+    }
+    public ChapterReviewContent publishedMemory(UUID projectId, ManuscriptContent manuscript,
+            EntityCatalogContext catalog, ModelProvider provider, String identityContext) {
         if (provider == ModelProvider.LOCAL_TEMPLATE) {
             return new ChapterReviewContent("本地模板不执行语义事实抽取；已发布正文可直接用于后续写作。",
                     java.util.List.of(), java.util.List.of());
         }
         String output = models.request(projectId, "CHAPTER_REVIEW", provider,
-                prompts.publishedMemory(projectId, manuscript, catalog), schemas.review(), "chapter_review", 5000);
+                prompts.publishedMemory(projectId, manuscript, catalog, identityContext), schemas.review(), "chapter_review", 5000);
         var result = parser.review(output);
         if (!result.issues().isEmpty()) throw new IllegalArgumentException("发布后记忆整理不能包含正文审稿或返工要求");
         return result;

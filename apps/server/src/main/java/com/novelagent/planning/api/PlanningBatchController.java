@@ -3,8 +3,6 @@ package com.novelagent.planning.api;
 import com.novelagent.planning.application.PlanningBatchRunner;
 import com.novelagent.planning.application.PlanningBatchService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -30,8 +28,6 @@ public class PlanningBatchController {
         this.batches = batches;
         this.runner = runner;
     }
-
-    public record VersionRequest(@NotNull @PositiveOrZero Long version) { }
 
     /**
      * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。

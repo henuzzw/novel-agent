@@ -37,7 +37,9 @@ public class ProjectCodexExecutor extends AbstractModelExecutor {
                 return "SIWC_CODEX_" + (main ? "PROJECT_THREAD" : request.policy().name());
             }
             @Override public ModelResult send(Consumer<String> progress) {
-                return prepared.run(system, settings, request.maxOutputTokens(), progress);
+                var schema = request.protocol().wireSchema();
+                return schema.isNull() ? prepared.run(system, settings, request.maxOutputTokens(), progress)
+                        : prepared.run(system, settings, request.maxOutputTokens(), schema, progress);
             }
             @Override public void accept(ModelResult result) { prepared.accept(); }
             @Override public void close() { prepared.close(); }

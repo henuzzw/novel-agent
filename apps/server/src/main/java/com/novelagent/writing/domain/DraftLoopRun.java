@@ -38,6 +38,8 @@ public class DraftLoopRun {
     @JdbcTypeCode(SqlTypes.JSON) @Column(columnDefinition = "jsonb") private List<String> bodyHashes;
     private String errorMessage;
     private String workerIdentity;
+    private UUID automationId;
+    private Integer automationAttempt;
     private Instant createdAt;
     private Instant updatedAt;
     @Version private long rowVersion;
@@ -71,6 +73,9 @@ public class DraftLoopRun {
     }
     public void assignWorker(String identity) { workerIdentity = identity; }
     public String getWorkerIdentity() { return workerIdentity; }
+    public void attachAutomation(UUID id, int attempt) { automationId = id; automationAttempt = attempt; }
+    public UUID getAutomationId() { return automationId; }
+    public Integer getAutomationAttempt() { return automationAttempt; }
 
     public void wrote(ManuscriptVersion manuscript, String renderedBody) {
         requireRunning();
@@ -121,6 +126,12 @@ public class DraftLoopRun {
         if (!active()) return;
         status = Status.FAILED; stopReason = StopReason.MODEL_ERROR;
         errorMessage = message == null ? "模型调用失败" : message.substring(0, Math.min(1000, message.length())); touch();
+    }
+
+    /** Explicit retry preserves the phase, accepted B report, round limit and draft version. */
+    public void retry() {
+        if (status != Status.FAILED) throw new IllegalStateException("仅失败的自动编辑任务可以重试");
+        status = Status.PENDING; stopReason = null; errorMessage = null; touch();
     }
 
     public boolean active() { return status == Status.PENDING || status == Status.RUNNING; }

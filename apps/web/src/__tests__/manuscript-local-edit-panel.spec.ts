@@ -75,6 +75,22 @@ it('returns unsupported template status without a diff or draft event', async ()
   expect(wrapper.find('ins').exists()).toBe(false)
   expect(wrapper.emitted('drafted')).toBeUndefined()
 })
+it('shows the actual conflict and unlocks an unchanged source only after a successful refresh', async () => {
+  const message = '局部编辑期间写作风格已变化，请重新选择'
+  vi.mocked(editManuscriptSelection).mockRejectedValueOnce(new ApiError(message, 409))
+  const wrapper = render()
+  await fill(wrapper)
+  await wrapper.get('form').trigger('submit')
+  await vi.waitFor(() => expect(wrapper.get('[role=alert]').text()).toBe(message))
+  await wrapper.get('.button.secondary').trigger('click')
+  expect(wrapper.get('textarea[maxlength="12000"]').attributes('disabled')).toBeDefined()
+  await wrapper.setProps({ source: { ...source }, refreshVersion: 1 })
+  expect(wrapper.find('[role=alert]').exists()).toBe(false)
+  expect(wrapper.get('textarea[maxlength="12000"]').attributes('disabled')).toBeUndefined()
+  await fill(wrapper)
+  await wrapper.get('form').trigger('submit')
+  await vi.waitFor(() => expect(wrapper.find('ins').exists()).toBe(true))
+})
 it('ignores a late result after switching source or project', async () => {
   let resolve!: (value: ManuscriptLocalEditResult) => void
   vi.mocked(editManuscriptSelection).mockReturnValue(new Promise(yes => { resolve = yes }))

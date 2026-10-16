@@ -15,6 +15,7 @@ public class AgentPromptCatalog {
     public static boolean sharesConversation(String workflow) { return SHARED_PLANNING.contains(workflow); }
     private final List<Definition> definitions = List.of(
             define("BOOK_TITLE", "自动书名", "导入"),
+            define("PROJECT_CHAT", "项目创作对话", "对话"),
             define("OUTLINE", "分层大纲", "规划"),
             define("SNOWFLAKE_PLANNING", "雪花渐进规划", "规划"),
             define("CHARACTER_DESIGN", "统一人物设计", "规划"),

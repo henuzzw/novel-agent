@@ -28,21 +28,25 @@ async function errorFrom(response: Response) {
   return new ApiError(message, response.status, problem?.code)
 }
 
+async function requestResponse(url: string, init?: RequestInit) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...init,
+    headers: requestHeaders(init),
+  })
+  if (!response.ok) throw await errorFrom(response)
+  return response
+}
+
 export async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const activity = beginGenerationRequest(url, init?.method)
   try {
-    let headers = requestHeaders(init)
+    let headers = init?.headers
     if (activity) {
       headers = new Headers(headers)
       headers.set('X-Generation-Request-Id', activity)
     }
-    const response = await fetch(url, {
-      cache: 'no-store',
-      ...init,
-      headers,
-    })
-
-    if (!response.ok) throw await errorFrom(response)
+    const response = await requestResponse(url, { ...init, headers })
     const body = response.status === 204 ? null : await response.json()
     completeGenerationResponse(activity, body)
     return body as T
@@ -53,11 +57,6 @@ export async function apiRequest<T>(url: string, init?: RequestInit): Promise<T>
 }
 
 export async function apiText(url: string, init?: RequestInit): Promise<string> {
-  const response = await fetch(url, {
-    cache: 'no-store',
-    ...init,
-    headers: requestHeaders(init),
-  })
-  if (!response.ok) throw await errorFrom(response)
+  const response = await requestResponse(url, init)
   return response.text()
 }

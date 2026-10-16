@@ -22,20 +22,28 @@ import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import java.util.function.Consumer;
 
 class FirstThreeChaptersModelAdapterTest {
     private final StructuredModelGateway gateway = mock(StructuredModelGateway.class);
     private final ModelContextProperties capacities = new ModelContextProperties();
     private final ObjectMapper mapper = new ObjectMapper();
     private final FirstThreeChaptersModelAdapter adapter = new FirstThreeChaptersModelAdapter(gateway, capacities, mapper);
+    private void respond(String output) {
+        when(gateway.request(any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), any()))
+                .thenAnswer(call -> {
+                    Consumer<String> process = call.getArgument(9);
+                    process.accept(output);
+                    return output;
+                });
+    }
     @Test void completeBodiesAndDependenciesAreSentInOneNewThreadWithBoundedOutput() throws Exception {
         var source = source();
-        when(gateway.request(any(), any(), any(), any(), any(), any(), any(), anyInt(), any()))
-                .thenReturn(mapper.writeValueAsString(unassessed()));
+        respond(mapper.writeValueAsString(unassessed()));
         adapter.check(source, ModelProvider.LOCAL_CODEX, "author instruction");
         var input = ArgumentCaptor.forClass(String.class);
         verify(gateway, times(1)).request(eq(PROJECT), eq("FIRST_THREE_CHAPTERS_REVIEW"), eq(ModelProvider.LOCAL_CODEX),
-                anyString(), input.capture(), any(), eq("opening_review_v1"), eq(6000), eq(CodexSessionPolicy.NEW_THREAD));
+                anyString(), input.capture(), any(), eq("opening_review_v1"), eq(6000), eq(CodexSessionPolicy.NEW_THREAD), any());
         var json = mapper.readTree(input.getValue());
         for (int n = 0; n < 3; n++) assertThat(json.path("completeChapters").get(n).path("body").asText()).isEqualTo(source.chapters().get(n).body());
         assertThat(input.getValue()).contains("complete outline", "complete bible", "style", "profiles", "future secret", "author instruction");
@@ -60,7 +68,19 @@ class FirstThreeChaptersModelAdapterTest {
         var bad = new FirstThreeChaptersContent("范围", unassessed().assessments(), java.util.List.of(
                 new FirstThreeChaptersContent.Issue("1", FirstThreeChaptersContent.Dimension.CHARACTER, "问题", "核对",
                         java.util.List.of(new FirstThreeChaptersContent.Evidence(1, "模型捏造的原文")))));
-        when(gateway.request(any(), any(), any(), any(), any(), any(), any(), anyInt(), any())).thenReturn(mapper.writeValueAsString(bad));
+        respond(mapper.writeValueAsString(bad));
         assertThatThrownBy(() -> adapter.check(source(), ModelProvider.DEEPSEEK, "")).hasMessageContaining("连续原文");
+    }
+    @Test void invalidEvidenceTypeFailsInsideTheRecordedCallbackWithSafeFieldDetails() throws Exception {
+        var output = mapper.valueToTree(unassessed());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) output.path("assessments").get(0))
+                .put("evidence", "private manuscript fragment");
+        respond(output.toString());
+        assertThatThrownBy(() -> adapter.check(source(), ModelProvider.LOCAL_CODEX, ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("三章报告输出校验失败", "assessments", "evidence")
+                .hasMessageNotContaining("private manuscript fragment")
+                .satisfies(error -> assertThat(com.novelagent.agent.application.ModelFailureDetails
+                        .from((RuntimeException) error).category()).isEqualTo("OUTPUT_VALIDATION"));
     }
 }

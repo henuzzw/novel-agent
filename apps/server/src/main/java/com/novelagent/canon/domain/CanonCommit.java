@@ -119,4 +119,10 @@ public class CanonCommit {
         }
         acceptedFacts = List.copyOf(combined);
     }
+
+    /** Replaces the derived index, not the published manuscript; the memory service records its history. */
+    public void replaceMemoryFacts(List<FactProposal> facts) {
+        if (!active) throw new IllegalStateException("这条正史已被替换");
+        acceptedFacts = List.copyOf(facts);
+    }
 }

@@ -60,9 +60,57 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 ## 4. 当前完成度
 
-最后更新：2026-10-11。
+最后更新：2026-10-16。
 
 ### 4.1 已完成
+
+- V064 记忆修订实测修复（2026-10-14）：实体出现记录按来源／编号／角色更新；story_fact唯一键改为保留历史版本且仅一条当前有效记录，避免整批重物化重复键。状态写入使用clock_timestamp区分同事务内的连续变化，记忆指令强调章末返回／归还。Neo4j投影将Numeric置信度转换为double。新增真实PostgreSQL版本唯一性与出现记录重物化验证；定向测试通过，21:21已重启加载V064。项目9f843969专项补救：22章记忆成功、234条引文可核对、发布正文哈希未变、22章完整导出；正文第3／15／19章仅另存未发布修订候选，逐章正文对前文记忆复核见 ../../docs/PROJECT_9f843969_MEMORY_RECOVERY.md。
+
+- V063 自动记忆与作者管理（2026-10-14）：CHAPTER_REVIEW只从已发布本章提取，附原写作计划的视角定位及实体ID目录，不将计划当事实。证据与引用校验后整批ACCEPTED/落库，不再以部分NEEDS_CONFIRMATION结束；失败整批回滚、FAILED保留有效候选供编辑，未知代词和跨项目ID不能强绑。物品/地点可描述命名，不要求名称逐字在引文中。作者PUT memory可编辑/新增/移除，保留行版本守卫与原文证据，V063历史表记录旧快照；更新退役旧事实/派生记录、提升索引水位并重建投影，不改正文。自动推进开启记忆时只在前文SUCCEEDED后继续，前文失败/待处理/缺失阻塞；新A请求前再次守卫，已有正文检查和表达修订仍可执行。旧章记忆修改后阻止默认沿用受影响旧后文继续生成。相关事实走PostgreSQL权威版本与章节过滤，不依赖Kafka/Neo4j延迟，历史请求不读新版accepted_facts快照。向量正文保留原发布版本，内容未变保留已有嵌入；存量不自动回填或重跑。17:47（UTC+8）已重启并应用V063，健康检查及新历史接口正常，后端49项及前端5项定向测试通过；详见 ../../docs/NOVEL_AGENT_PUBLISHED_MEMORY.md。
+
+- 本机小说 Fast 已关闭（2026-10-13）：两个独立 Codex runtime/home/config.toml 移除 service_tier=fast，并设置 features.fast_mode=false；原生配置读取及独立测试线程的新建/恢复均为无priority，0生成轮次。20:08（Asia/Singapore）确认第7至13章范围成功结束、全部任务/记忆/租约空闲后重启8081，健康UP、5173及模型配置代理200。当前保存模型gpt-6.1-sol/high、版本6，本次未改模型设置，桌面 Codex 不受影响；未停止或重跑任务、未改小说数据。详见 ../../docs/NOVEL_AGENT_MODEL_EXECUTION.md，下方10月12日启用记录为历史状态。
+
+- 项目Token统计（2026-10-13）：新增GET agent-runs/usage，先校验项目归属，以UTC截止时刻和只读REPEATABLE_READ快照复用现有汇总；返回全项目和按started_at滚动最近5小时的两期统计，不受最近100条限制。实际/估算分开累计，缺失实际用量显示覆盖缺口，失败/停止已记录用量计入；不代表账号额度。任务页每15秒刷新、支持手动刷新及错误状态。11项后端定向测试（含PostgreSQL临时表）、4项前端测试、类型与相关ESLint通过，无迁移/依赖/模型调用，需重启；详见 ../../docs/NOVEL_AGENT_TOKEN_USAGE.md。
+
+部署记录（2026-10-13 19:12，Asia/Singapore）：作者授权后核实全部任务和会话租约空闲并重启8081，项目Token统计已加载；健康UP、5173代理usage接口200且no-store。单尺寸实际页面核对累计/近5小时的实际及估算、未知调用数正常，无脚本错误；未调用模型、重跑任务或改写正文。
+
+部署记录（2026-10-13 13:46）：作者授权后，核实模型、章节推进、编辑循环、创作对话、记忆、雪花及HTTP/Codex租约全部空闲并重启8081，加载下述B/C结构化输出及失败节点续跑改动。健康UP、5173页面与API代理200；章节推进读取包含failureDetail字段，原失败任务保持FAILED。未调用真实模型、重跑任务或修改正文。
+
+- 自动编辑 B/C 原生结构化输出（2026-10-13）：公共ModelOutputProtocol由调用方显式选择，只有DraftLoopModel的B/C走JSON Schema，A、雪花、大纲、手动质量检查及三章通读仍走原纯文本协议。旧/新Codex传outputSchema；DeepSeek Responses传text.format.json_schema（不附未文档化strict），直接ChatGPT HTTP传同字段及strict=true。预算包含Schema，任务快照记录结构名和哈希；返回拒绝重复键、多余文本、缺失字段、错误类型/枚举/数量，再校验原文证据及C编号覆盖，不静默降级或自动付费修复。章节推进失败返回具体章/阶段/安全原因；显式重试在来源与草稿行版本不变时复用失败子任务，保留B报告、C阶段、轮数和父任务额度。86项后端定向测试、12项前端测试、类型及相关ESLint通过，无依赖/迁移，需重启后端加载。未调用真实供应商或重跑旧任务；详见 ../../docs/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
+
+- 已完成正文一键导出（2026-10-13）：新增 `GET /api/v1/projects/{projectId}/canon-commits/export`，写作工作台顶部下载Markdown，含书名、卷名、章号、正文标题和完整正文。只读取active发布提交绑定的AUTHOR_ACCEPTED稿，且对应canon_memory_job为SUCCEEDED；草稿、新版未发布稿、失效提交、未整理/待确认/失败/跳过记忆均排除，不要求另一次手动质量检查。REPEATABLE_READ只读快照，项目归属先校验，来源大纲按正文writing_basis查卷名并缓存，当前人物姓名统一渲染；无合格章明确报错，不下空书，不写正文/正史或调用模型。6项后端测试（含真实PostgreSQL临时表筛选）、3项前端测试和类型检查通过，无迁移，需重启加载。
+  已启用：核实后端原已停止且全部任务/租约空闲后，12:32启动新版8081与前端5173。健康UP、导出及代理200；单尺寸实际浏览器下载成功，真实项目导出第1至3章共8191字符、1个卷标题，页面无脚本错误。相关ESLint通过，未重跑生成、调用模型或改写正文。
+
+- 自动 B 多段证据修复（2026-10-12）：DraftCheck 每项 evidence 改为1至6段独立 quote，实际纯文本协议生成 `@issues/*/evidence/*/quote`，请求明确禁止将不相邻引文、标签或解释拼接。网关保存回调逐段核对当前正文，任一不匹配使整个报告失败，错误定位问题编号和证据索引，归类 OUTPUT_VALIDATION，不进入 C。C 接收同一证据列表，前端分别展示；历史单段保存格式仍可读取。手动质量报告、纯文本模型传输、数据库和小说正文不变，不拆分恢复旧失败响应。34项后端与8项前端定向测试、类型检查和相关ESLint通过；需重启加载。详见 ../../docs/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
+  已启用：23:00核实模型、范围、单章循环、创作对话、记忆、雪花及HTTP/Codex租约全部空闲后重启，23:01健康UP，5173页面、API代理及单章循环读取200。未调用真实模型、重跑旧任务或改写正文。
+
+- V062 章节推进（2026-10-12）：范围任务逐章同步复用DraftLoopService A/B/C，删除重复规划器与有限返工执行路径；父子绑定、attempt、取消、额度及来源门禁保护保存。AFTER_COMMIT通知及30秒对账原子认领下一章，回滚/重复通知不重复执行。独立autoPublish默认false、autoMemory默认true、检查1至10轮默认3；自动发布仅B_CLEAR或C全部REJECT，复用CanonPublicationService，不发布DEFER/未复检/异常稿。关闭记忆保存SKIPPED且可手动启动；开启时等有效发布的记忆队列处理结束再冻结下一章。迁移不自动授权旧任务、不重跑生成。详见 ../../docs/NOVEL_AGENT_CHAPTER_ADVANCE.md。
+  验证与启用：40项后端定向单元、2条隔离数据库发布链路、13项前端定向测试、类型检查、相关ESLint及单尺寸浏览器核验通过；模型/向量/图谱用替身，不改已有小说。21:24确认模型/范围/循环/对话/记忆/雪花及HTTP/Codex租约全空闲后重启，21:25 V062加载、健康UP、5173与章节推进读取200。未重跑旧任务或替已有项目开启自动发布。
+
+- 三章报告协议修复（2026-10-12）：旧 Schema 的 evidence/dimension 使用本地 $ref，但纯文本转换器未展开，错误生成单个 evidence 文字标题，DTO却要求证据数组。PlainTextOutputProtocol统一展开本地引用（拒绝外部/循环/失效引用）并检查数组上限，指令与解码共用展开后的协议；八维各一条明确写入请求。FirstThreeChaptersModelAdapter在网关记录回调内校验DTO和正文证据，失败不再记模型任务成功；只显示安全字段路径，分类OUTPUT_VALIDATION。不改纯文本传输、不恢复旧报告、不调用真实模型；需重启加载。
+  验证与启用：38项定向测试通过，覆盖实际Schema→标题→DTO→原文证据、重复维度拦截及FAILED/响应/用量记录。20:30核实全部任务和租约空闲后重启，健康UP、5173正常，三章预算60614 Token且fits=true，正文哈希未变化；未发真实模型轮次或保存报告。
+
+- 前三章输入减重（2026-10-12）：FirstThreeChaptersPersistence 复用 WritingMaterialSelection 的开篇投影，不发送 developmentNotes 九步原始底稿及第四章以后的详细大纲，保留完整三章、开篇计划、全书目标/承诺、人物设定、硬约束、档案和风格。来源指纹仍绑定完整规划，不降低预算阈值或截断正文；模型输入明确未覆盖范围和未来规划边界。32 项定向测试通过，不发起真实检查、不改正文或数据库规划；需后端重启加载。
+  已启用：20:13 核实全部任务和租约空闲后重启，健康与5173代理正常；实际三章来源的保守预算从149638降到60417 Token，fits=true，三个正文哈希均未变化。仅核对预算，未调用模型或宣称文学检查通过。
+
+- 本机小说 Fast 已启用（2026-10-12）：独立 Codex runtime/home 配置 service_tier=fast 与 features.fast_mode=true；19:59 全部任务及租约空闲后重启，健康和前端代理通过。原生新建/复用线程均返回 priority，模型仍为 gpt-6.1-sol/xhigh，验证零生成轮次。配置在 Git 忽略的 tmp 下，清空后须重设；不影响 DeepSeek/直接 HTTP，不是项目级数据库开关，不承诺供应商实际提速。详见 ../../docs/NOVEL_AGENT_MODEL_EXECUTION.md。
+
+- 自动编辑 C 纯文本协议修复（2026-10-12）：DraftLoopModel 将可空正文定义统一为共享标题协议支持的 object/null，避免 anyOf 被当作单个字符串而只生成 @content；REVISED 明确要求 title/body/summary/continuityNotes，NO_CHANGE/NEEDS_CONTEXT 使用 null。DTO 映射失败显示字段路径及安全的领域原因，不泄露 Jackson 消息中的正文，归类 OUTPUT_VALIDATION。32项定向测试通过，覆盖实际 C Schema→纯文本标题→DTO→编号覆盖及原有循环/保存门禁；无迁移、不改现有草稿、不恢复失败响应或自动重跑。需重启后端加载。
+
+- 发布后记忆整理默认接受（2026-10-12）：任务/状态/写作标签将章节审稿统一改名，不改内部CHAPTER_REVIEW标识。PublishedMemoryPolicy不再使用0.95置信度、中文关键词和主谓宾/摘要逐字包含门槛；六类有效条目默认ACCEPTED。按既有实体解析顺序检查源/当前目录，具名新实体可创建，代词/多重匹配/无效ID/类型或身份变化仍PENDING。共享代词判断加入第一/第二人称。原文证据、锁、有效发布检查及物化门禁保留，不新增模型请求/迁移或回填旧任务。页面已接受项只读、歧义项预选接受并一次保存，初始预选不触发脏稿提醒。10项后端与21项前端定向测试、类型检查通过，后台需重启加载；详见 ../../docs/NOVEL_AGENT_PUBLISHED_MEMORY.md。
+  已启用：18:39按作者授权核实模型/自动写作/编辑循环/创作对话/记忆队列及HTTP/Codex租约全部空闲后重启8081，18:40健康UP、5173与API代理200。未重跑任务、回填历史记忆或改写正文。
+
+- 正文草稿版本对比（2026-10-12）：前端章节写作新增history视图，复用现有manuscripts摘要及按ID读取接口；支持任意两版、实际基准、左右/合并、字词高亮、差异导航、折叠及路由恢复。读取后核对项目/章节/ID，不写正文或正史、不调用模型、不新增接口/表，无需后端重启。普通保存仍更新当前草稿，不承诺每次保存产生不可变历史。详见 ../../docs/NOVEL_AGENT_MANUSCRIPT_COMPARE.md。
+
+- 正文局部编辑保存误报修复（2026-10-12）：局部编辑原来将WritingContext.Context.toString中的OutlineVersion/StoryBibleVersion对象身份混入模型资料和指纹，跨事务重新加载相同实体也会409。改为稳定的卷章文字、来源ID/行版本、相邻章与创作边界；仍检查源稿行版本、写作依据、正史、人物、风格、规划及姓名转换，只创建新草稿。新增真实实体独立读取的回归测试，旧代码可复现失败；修复陈旧测试中的空arc。前端409显示服务端具体原因，成功重新读取后即使正文未变也能解锁，读取失败不解锁。无迁移或原文修改，需重启生效。
+  已验证启用：19项后端、10项前端定向测试、类型检查及相关ESLint通过；17:18检查无运行任务/有效租约（含创作对话）后重启8081，健康UP、5173与正文读取200。真实项目原第1版AUTHOR_ACCEPTED保留，不重跑失败请求、调用真实模型或改写已发布正文。
+
+- V061 项目创作对话（2026-10-12）：新增chat模块、PROJECT_CHAT独立会话和配对提示词，活动目录19工作流20模板。应用层纯文本READ/SEARCH/PROPOSE/REPLY循环复用模型网关与记忆检索；完整读取、项目授权与来源版本守卫后只保存修改候选，作者确认才应用。人物多字段与大纲多章节同组原子应用/撤销；雪花单步骤新版本清除依赖后缀，第7步投影只读。正文/正史/确认资料只读，不自动发布。新增project_chat_turn和project_chat_change，页面持久状态、停止、引用、前后差异、确认/拒绝/撤销及section=chat。详见 ../../docs/NOVEL_AGENT_PROJECT_CHAT.md。
+  验证与启用：本轮19项后端定向测试通过，包含3项隔离数据库链路；前端8项与单浏览器流程、类型检查及相关ESLint通过。16:59按既有授权核实无运行任务和有效租约后重启8081，V061已加载、健康UP、5173与项目对话只读接口200。未调用真实模型、重跑生成或改写已有正文。
+
+- 质量检查误判正文依据过期修复（2026-10-12）：正文生成的Context包含CreativeBoundaryGuide，QualityReviewStore原来却把同一上下文的preparationContext置空，导致未改动项目也无法通过ManuscriptBasis比较。检查入口改为复用WritingContextService.prepared，使用与正文一致的项目边界，不删除版本门禁、不回填或覆盖正文依据。过期提示改为当前“规划资料/大纲/创作策略/创作边界”，不再提已退休圣经/创作准备。32项定向测试通过，覆盖生成后直接检查、作者确认/正史发布后检查、真实策略/边界/规划版本变动拦截及质量/正文/自动循环；未跑全量或真实模型。无迁移或项目数据修改，需重启后端生效。
+  真实项目只读核验：9f843969-00bf-46d7-a181-247d1bc387a4第1章第1版AUTHOR_ACCEPTED，正文保存依据与修复后路径完全相等，旧路径不等；当前大纲与规划资料仍为对应发布版本。此前因CHAPTER_REVIEW运行未部署，结束后按作者授权无运行任务再重启，不中断或重跑任务。
+  已启用：2026-10-12 16:59重启后健康UP，正文仍为原第1版AUTHOR_ACCEPTED，未保存新正文或检查报告；真实模型检查留给作者手动触发。
 
 - 作品书名输入补齐（2026-10-11）：ModelPromptAssembler 在公共请求层读取当前用户项目的已保存书名，作为明确标注的故事数据直接放入实际请求；雪花各步、人物、大纲、正文及检查等入口统一生效，两条Codex资料去重仍保留短书名内联。BOOK_TITLE本身不传旧书名，automaticTitle.pending为true时不把占位名称当作品名；每轮重新读取，不依赖历史会话记忆。书名仅辅助定位与读者期待，不覆盖事实/授权/风格，不默认成为章节标题。纯文本输出、数据库提示词配置与旧规划不变，无迁移或额外模型调用；需后端重启加载。
   验证与启用：19项定向测试通过，覆盖书名读取、特殊字符、两条Codex去重、入口及Spring注入；未跑全量或真实模型。忙碌检查发现运行任务后先不重启，作者随后明确要求直接重启；23:00重启8081，健康UP、5173和接口代理200。未自动重跑生成，不修改旧底稿或已确认正文。
@@ -247,6 +295,12 @@ infrastructure  Repository、外部模型、数据库和消息适配
 
 写作内部：`WritingService` 为无事务兼容门面，仅有三个用例服务依赖。查询/作者修改的 `@Transactional` 声明位于专用服务的公开方法；模型生成入口不声明长事务。审稿打回仍在模型调用结束后由 `writingTransactionTemplate` 原子保存候选与审稿状态。质量修订使用 ManuscriptService 准备候选，由既有 QualityReviewStore 复核并保存，禁止回调门面形成循环。
 
+人物档案：`CharacterProfileService` 通过 application 层 `CharacterProfileStore` 端口访问存储，不直接依赖 JDBC 或基础设施。`JdbcCharacterProfileStore` 负责项目/有效人物范围 SQL、命名与别名投影、档案映射、幂等补空及条件版本更新；端口不依赖 Spring。权限、有效人物检查顺序、版本冲突解释、人物引用精确解析、资料不确定时的全量回退与知识边界留在应用服务。list 补空与 update 仍由原有写事务包裹，promptContext 保留只读事务；适配器不另开事务，也不反向依赖服务。
+
+类型化正史：`TypedCanonMaterializer` 保存通用 story_fact 并按规范化类型选择 application 端口 `CanonFactProjector`。infrastructure 下 Event/State/Relationship/Knowledge/ForeshadowFactProjector 分别负责各自表的写入、主体需求及历史退役；每个策略显式声明旧/新类型别名，重复注册启动即失败。未知类型只保存通用事实，未知状态字段不猜测，关系自环仍省略。退役按策略实例调用一次，不因别名重复执行。策略不另开事务或调用协调器，异常向上传播，由现有正史/记忆用例回滚通用事实及全部投影；批次成功后才同步规划伏笔。新增投影策略无需修改中央类型 switch，不引入新的通用 CRUD 或装饰器层。
+
+正史存储分层：通用事实经 `CanonFactStore` / `JdbcCanonFactStore` 写入与退役，`TypedCanonMaterializer` 不再直接依赖 JDBC。`EntityResolutionService` 仅控制明确 ID、标准名、确认别名的匹配顺序、歧义/代词拒绝及出现记录的业务含义；候选查询、实体幂等创建和出现记录 upsert 由 `EntityResolutionStore` / `JdbcEntityResolutionStore` 承担。两个应用服务不依赖基础设施类；存储端口不依赖 Spring，不新增事务。已删除无生产调用的 hasCommittedChapter、旧人物补全 fillMissingFrom 及私有 fill；有效重复提交门禁、蓝图历史反序列化与性别年龄约束保留。
+
 ## 6. 核心领域链路
 
 ### 6.1 从创意到大纲
@@ -333,6 +387,7 @@ NovelMemoryService.recall(stage, projectId, chapterNumber, canonVersion, query, 
 - Neo4j 无命中时的少量近期事实回退。
 - Neo4j 异常时的 pgvector-only 降级。
 - `MemoryBudgetAllocator` 按阶段与章节远近分配前章摘要、正文、精简合同和图谱事实额度，并确保合成后的 Prompt 记忆不超过有效预算。正文阶段 n-1 最近章节总额度不超过有效预算 65% 和 5400 Token，n-2 不超过 18% 和 1500 Token；有事实候选时预留最多 800 Token，剩余留给语义检索及其他事实。合同与审阅阶段沿用较短前文。
+- 文本预算集中在包内 `MemoryTextBudget`：沿用 ASCII 连续段每四字符约一 Token、非 ASCII 每码点一 Token 的估算，前缀按码点线性裁剪并为省略号预留额度，正文尾部按完整段落反向累计，不反复创建和扫描增长的子串。`MemoryBudgetAllocator.estimateTokens` 保留公共兼容入口；来源指纹用 StringBuilder 按原顺序拼接，哈希格式不变。单 Token 裁剪只保留省略号，避免局部超预算；补充字符不截断 UTF-16 代理对。最终完整 Prompt 仍须重新估算，定位证据片段仍整段保留或省略。
 
 受控工具链：
 
@@ -426,6 +481,8 @@ src/main/resources/db/migration
 
 | 版本 | 内容 |
 | --- | --- |
+| V061 | 项目创作对话、来源引用、修改候选与确认/撤销记录 |
+| V062 | 章节推进A/B/C父子任务、等待发布、检查轮次与自动发布/记忆独立开关 |
 | V001 | 项目与创作意图 |
 | V002 | 故事方向 |
 | V003 | Codex 会话 |
@@ -514,6 +571,7 @@ src/main/resources/db/migration
 
 | Controller | 主要能力 |
 | --- | --- |
+| `ProjectChatController` | 项目创作对话、停止、资料分页预览、候选确认/拒绝/撤销 |
 | `ProjectController` | 项目创建、列表、详情、创作意图 |
 | `GlobalModelSettingsController` | 当前用户全局模型设置、乐观版本更新、ChatGPT 运行时模型与强度目录 |
 | `ChatGptConnectionController` | 管理口令保护的 ChatGPT OAuth 登录/回调/取消/断开与显式入口切换 |
@@ -528,7 +586,7 @@ src/main/resources/db/migration
 | `OutlineController` | 大纲生成、编辑、发布 |
 | `PlanningCheckpointController` | 私有片段查询、执行、取消、重试及来源复核后复用 |
 | `PlanningBatchController` | 从第一章的批次、一次一块、显式取消恢复、拼装既有大纲草稿；不自动发布 |
-| `WritingController` | 合同、独立合同审阅、正文、正文审稿的生成与确认及审稿打回重写 |
+| `WritingController` | 正文、正文审稿的生成与确认及审稿打回重写；历史合同读取与退役写入口 |
 | `CanonCommitController` | 正史提交、状态查询与同章正史替换 |
 | `ProjectionStatusController` | Kafka、pgvector、Neo4j 投影状态 |
 | `MemoryController` | 长期记忆召回预览 |
@@ -538,15 +596,15 @@ src/main/resources/db/migration
 
 - 自动任务接口为 `/api/v1/projects/{projectId}/automation-runs`；创建必须携带 UUID `Idempotency-Key`，继续和取消分别使用 `/{id}/actions/resume`、`/{id}/actions/cancel`。
 - `AutomationRunStore` 在短事务中锁定任务；`AutomationService` 在独立线程调用现有写作用例，禁止在模型调用期间持有任务事务。每次执行检查 attempt，旧执行者不能更新恢复后的任务。
-- 自动任务只调度生成，不确认正文或审稿，不提交正史。每次继续重新判断来源版本；大纲变更需要取消旧任务后重建。
-- 超过 20 分钟未更新的运行可显式恢复；取消在当前生成阶段完成后生效。已发生但未提交正史的导入章节等待人工登记。
+- 自动任务逐章复用A/B/C，默认由作者发布。仅作者在本次任务明确开启autoPublish时，满足门禁的稿件通过现有发布服务提交正史；单章循环仍不发布。大纲变更须取消旧任务后重建。
+- 超过20分钟未更新的运行可显式恢复；取消即时持久化并中断当前子循环，迟到结果不保存。已发生但未提交正史的导入章节等待人工登记。发布通知在提交后执行，等待autoMemory队列结束再冻结下一章，关闭时不排队。
 
 - 路径统一以 `/api/v1` 开头。
 - 项目资源必须验证当前用户所有权。
 - 编辑使用 JPA `rowVersion` 或请求中的期望版本防止静默覆盖。
 - 生成新候选应创建新版本；发布状态的内容不可原地编辑。
 - 非法状态转换抛出明确业务错误，由 `ApiExceptionHandler` 转为统一响应。
-- 合同及合同审阅写入接口统一返回 410，不调用模型、不保存产物。
+- 合同及合同审阅的五条写入路由统一检查项目归属后返回 410，不调用模型、不保存产物。Controller 只区分 POST/PUT，门面与合同服务各用一个拒绝入口；不再绑定旧请求体或解析 If-Match，删除两个旧更新请求 DTO。历史 GET、响应 DTO 和 ETag 保留；RetiredContractControllerTest 覆盖权限、空/非法旧参数和历史读取。
 - 新增高风险写接口时设计幂等键，不能只依赖按钮防重复点击。
 
 ## 11. 配置
@@ -593,6 +651,7 @@ app.memory.*
 
 ### 12.3 领域边界
 
+- 内容更新包装统一使用 `platform.api.ContentUpdateRequest<T>`：大纲、正文、审稿保留各自的具体 content 类型和 `{content: ...}` JSON；是否触发 Bean Validation 仍由接口的 `@Valid` 决定，大纲必填、审稿批准可省略 body 的行为不变。规划批次/片段共用 `planning.api.VersionRequest`，保留必填非负行版本校验。不把状态、来源字段或授权范围不同的响应/修订请求强行合并。
 - API DTO 不直接承担领域状态机。
 - 模型输出 DTO 必须经过转换和领域校验后才能持久化。
 - JSONB 适合不可变版本快照和供应商输出，不适合永久替代所有可查询领域表。
@@ -679,6 +738,10 @@ app.memory.*
 每个阶段完成后再扩展下一阶段，避免同时铺开大量只有接口没有闭环的模块。
 
 ## 15. 已知技术债
+
+- 退休模板清理：移除 AgentPromptDefaults 内无活动调用的合同生成、合同审阅、独立人物补全分支和专用前章常量，以及 story_bible / import_reverse_bible_adapt / import_reverse_bible_continue 三份旧默认资源。活动目录的 20 份阶段模板、3 份会话角色资源及其内容不变，默认发布号不变；退休 key 不再返回默认指令。历史配置/修订记录、合同 410 兼容接口、StoryBibleContent / Schema 和雪花第7步资料投影仍保留。提示词数据库回归改用现行雪花与导入大纲流程验证会话轮转及用户隔离。
+
+- 无调用遗留清理：旧项目模型设置的 CodexModelChoice.from/asSetting、创作准备的 CharacterNameService.initializeFromBlueprints、StoryBibleContent.withCharacterBlueprints、ChatGptTransportService.codexOAuth、未调用的开篇/修订提示词辅助方法及 DraftEditorialPrompts 别名已移除。CREATION_PREPARATION_WORLD 的默认指令分支本就被前置拒绝规则拦截，连同专用常量清除；活动资源、默认发布号、历史模型设置 JSON、有效兼容 HTTP 接口和蓝图序列化不变。Spring 回调、配置绑定 setter、持久化访问器不能仅凭静态引用少就删除。
 
 - 导入与雪花职责：ImportedStoryBlueprintService 只协调来源、雪花运行与创作意图收尾；SQL 状态认领/成功/失败写入 ImportedPlanningStore，来源读取与快照复核集中到 ImportedPlanningSources，继续与确认复用同一判断并保留各自业务门禁。SnowflakePlanningService 负责阶段顺序、保存及恢复；SnowflakeStageGenerator 负责单步 Prompt 和生成，使用注入的 ObjectMapper 返回文本与可选第7步投影，不写运行状态。不在模型调用外包长事务；状态记录失败以 suppressed 保留，不覆盖最初生成错误。九步顺序、请求参数、提示词文本、纯文本协议和数据库表不变。
 

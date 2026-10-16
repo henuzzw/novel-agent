@@ -14,6 +14,22 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class CodexProjectGatewayTest {
+    @Test void reportSchemaReachesOAuthCodexTurnWithoutChangingMaterialScopeOrThreadPolicy() throws Exception {
+        var codex = mock(OAuthCodexClient.class); var store = mock(CodexConversationStore.class);
+        var project = UUID.randomUUID(); var lease = new CodexConversationStore.Lease(project, "QUALITY_REVIEW", UUID.randomUUID(), null, Set.of(), 0);
+        when(codex.authorize()).thenReturn("account"); when(store.claim(project, "QUALITY_REVIEW", "account", true)).thenReturn(lease);
+        when(codex.startThread(eq(project), anyString(), any())).thenReturn("new-review-thread");
+        var schema = new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[],\"properties\":{}}");
+        var settings = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "test", "high", 1L);
+        when(codex.runStructuredTurn(eq("new-review-thread"), eq(project), anyString(), eq(schema), eq(settings), any()))
+                .thenReturn(new CodexAppServerClient.TurnResult("turn", "{}"));
+        var gateway = new CodexProjectGateway(codex, store, new ModelContextProperties());
+        try (var request = gateway.prepare(project, "QUALITY_REVIEW", true, "input")) {
+            assertThat(request.run("rules", settings, 1000, schema, ignored -> {}).output()).isEqualTo("{}"); request.accept();
+        }
+        verify(codex).runStructuredTurn(eq("new-review-thread"), eq(project), eq("input"), eq(schema), eq(settings), any());
+        verify(store).complete(eq(lease), anySet(), anyLong());
+    }
     @Test void sameThreadUpdatesRoleCompactsAndSendsDeltaWithoutHistory() {
         var codex = mock(OAuthCodexClient.class); var store = mock(CodexConversationStore.class);
         var project = UUID.randomUUID(); String source = "准确原文".repeat(400);

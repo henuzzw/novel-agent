@@ -67,18 +67,18 @@ class AgentPromptRepositoryDatabaseTest {
         assertThat(service.history("OUTLINE").getFirst().sessionSystemPrompt()).isNull();
         assertThat(service.resolve("OUTLINE", "默认原文").sessionSystemPrompt()).isEqualTo(reset.defaultSessionSystemPrompt());
         assertThat(service.resolve("OUTLINE", "默认原文").revision()).isNotEqualTo(editedRevision)
-                .isEqualTo(service.resolve("STORY_BIBLE", "默认圣经").revision());
+                .isEqualTo(service.resolve("SNOWFLAKE_PLANNING", "默认雪花规划").revision());
     }
 
     @Test void usersAndImportModesAreIsolatedAndFirstInsertCannotOverwrite() {
         var one = UUID.randomUUID();
         var two = UUID.randomUUID();
-        assertThat(transaction.<Boolean>execute(status -> repository.save(one, "IMPORT_REVERSE_BIBLE_ADAPT", "改编规则", "", 0, "SAVE"))).isTrue();
-        assertThat(transaction.<Boolean>execute(status -> repository.save(two, "IMPORT_REVERSE_BIBLE_ADAPT", "另一用户规则", "", 0, "SAVE"))).isTrue();
-        assertThat(transaction.<Boolean>execute(status -> repository.save(one, "IMPORT_REVERSE_BIBLE_ADAPT", "重复插入", "", 0, "SAVE"))).isFalse();
-        assertThat(repository.find(one, "IMPORT_REVERSE_BIBLE_CONTINUE")).isEmpty();
+        assertThat(transaction.<Boolean>execute(status -> repository.save(one, "IMPORT_REVERSE_OUTLINE_ADAPT", "改编规则", "", 0, "SAVE"))).isTrue();
+        assertThat(transaction.<Boolean>execute(status -> repository.save(two, "IMPORT_REVERSE_OUTLINE_ADAPT", "另一用户规则", "", 0, "SAVE"))).isTrue();
+        assertThat(transaction.<Boolean>execute(status -> repository.save(one, "IMPORT_REVERSE_OUTLINE_ADAPT", "重复插入", "", 0, "SAVE"))).isFalse();
+        assertThat(repository.find(one, "IMPORT_REVERSE_OUTLINE_CONTINUE")).isEmpty();
         assertThat(repository.findAll(two)).singleElement().satisfies(value -> assertThat(value.systemPrompt()).isEqualTo("另一用户规则"));
-        assertThat(repository.history(one, "IMPORT_REVERSE_BIBLE_ADAPT")).hasSize(1);
+        assertThat(repository.history(one, "IMPORT_REVERSE_OUTLINE_ADAPT")).hasSize(1);
     }
 
     @Test void historyFailureRollsBackTheCurrentConfiguration() {

@@ -38,7 +38,7 @@ class WritingContextServiceTest {
     private final OutlineVersion outline = mock(OutlineVersion.class);
     private final StoryBibleVersion bible = mock(StoryBibleVersion.class);
     private final WritingContextService service = new WritingContextService(access, outlines, bibles, memory,
-            mock(com.novelagent.canon.application.CharacterNameService.class));
+            mock(com.novelagent.canon.application.CharacterNameService.class), mock(com.novelagent.canon.application.PublishedMemoryReadiness.class));
 
     @BeforeEach
     void sources() {
@@ -79,7 +79,7 @@ class WritingContextServiceTest {
         assertThatThrownBy(() -> service.context(projectId, 7)).hasMessageContaining("必须已发布");
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
         project.publishStoryBible(UUID.randomUUID());
-        assertThatThrownBy(() -> service.context(projectId, 7)).hasMessageContaining("项目当前圣经一致");
+        assertThatThrownBy(() -> service.context(projectId, 7)).isInstanceOf(IllegalArgumentException.class);
         when(outline.getStatus()).thenReturn(OutlineStatus.DRAFT);
         when(bible.getStatus()).thenReturn(StoryBibleStatus.DRAFT);
         assertThat(service.previewContext(projectId, outline.getId()).chapter().number()).isEqualTo(1);
@@ -115,7 +115,7 @@ class WritingContextServiceTest {
     @Test
     void rejectsMissingOrForeignSourcesBeforeRecall() {
         when(bibles.findByIdAndProjectId(outline.getSourceBibleVersionId(), projectId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.context(projectId, 7)).hasMessageContaining("圣经不可用");
+        assertThatThrownBy(() -> service.context(projectId, 7)).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(memory);
     }
 

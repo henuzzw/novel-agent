@@ -25,9 +25,9 @@ class VectorProjectionConsumer {
                 canon_version = EXCLUDED.canon_version,
                 content = EXCLUDED.content,
                 summary = EXCLUDED.summary,
-                embedding = EXCLUDED.embedding,
-                embedding_model = EXCLUDED.embedding_model,
-                chunked_content_hash = NULL,
+                embedding = CASE WHEN semantic_document.content = EXCLUDED.content THEN semantic_document.embedding ELSE NULL END,
+                embedding_model = CASE WHEN semantic_document.content = EXCLUDED.content THEN semantic_document.embedding_model ELSE NULL END,
+                chunked_content_hash = CASE WHEN semantic_document.content = EXCLUDED.content THEN semantic_document.chunked_content_hash ELSE NULL END,
                 updated_at = EXCLUDED.updated_at
             """;
 
@@ -86,7 +86,7 @@ class VectorProjectionConsumer {
                 event.projectId(),
                 "MANUSCRIPT",
                 manuscript.getId(),
-                event.canonVersion(),
+                commit.getCanonVersion(),
                 content,
                 manuscript.getContent().summary(),
                 Timestamp.from(Instant.now()));

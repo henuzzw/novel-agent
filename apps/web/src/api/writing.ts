@@ -1,4 +1,4 @@
-import { apiRequest } from '@/api/http'
+import { apiRequest, apiText } from '@/api/http'
 import type { GenerationMode, ModelProvider } from '@/api/planning'
 
 export interface ChapterContractContent {
@@ -48,7 +48,7 @@ export interface ManuscriptVersionSummary {
   id: string
   versionNumber: number
   status: 'DRAFT' | 'AUTHOR_ACCEPTED'
-  sourceContractVersionId: string
+  sourceContractVersionId: string | null
   baseManuscriptVersionId: string | null
   title: string
   bodyLength: number
@@ -244,6 +244,9 @@ export const updateCharacterProfile = (projectId: string, value: CharacterProfil
 export const manuscriptExportUrl = (projectId: string, chapter: number, manuscriptId: string) =>
   `${root(projectId, chapter)}/manuscripts/${manuscriptId}/export`
 
+export const getPublishedManuscriptExport = (projectId: string) =>
+  apiText(`/api/v1/projects/${projectId}/canon-commits/export`)
+
 export const listCanonEntities = (projectId: string) =>
   apiRequest<StoryEntity[]>(`/api/v1/projects/${projectId}/canon/entities`)
 export const getEntityState = (projectId: string, entityId: string) =>
@@ -326,7 +329,7 @@ export const getMemoryPreview = (projectId: string, chapter: number, query: stri
 
 export interface PublishedMemory {
   commitId: string | null; manuscriptVersionId: string | null
-  status: 'NOT_PUBLISHED' | 'LEGACY' | 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'NEEDS_CONFIRMATION' | 'FAILED' | 'SUPERSEDED'
+  status: 'NOT_PUBLISHED' | 'LEGACY' | 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'NEEDS_CONFIRMATION' | 'FAILED' | 'SUPERSEDED' | 'SKIPPED'
   candidates: FactProposal[]; error: string | null; version: number
 }
 export const publishManuscript = (projectId: string, manuscript: ManuscriptVersion,
@@ -345,3 +348,12 @@ export const confirmPublishedMemory = (projectId: string, chapter: number, value
   apiRequest<PublishedMemory>(`${root(projectId, chapter)}/canon-commits/${value.commitId}/memory/actions/confirm`, {
     method: 'POST', body: JSON.stringify({ version: value.version, candidates }),
   })
+export const savePublishedMemory = (projectId: string, chapter: number, value: PublishedMemory, candidates: FactProposal[]) =>
+  apiRequest<PublishedMemory>(`${root(projectId, chapter)}/canon-commits/${value.commitId}/memory`, {
+    method: 'PUT', body: JSON.stringify({ version: value.version, candidates }),
+  })
+export interface PublishedMemoryHistory {
+  id: string; version: number; action: string; candidates: FactProposal[]; createdAt: string
+}
+export const getPublishedMemoryHistory = (projectId: string, chapter: number, value: PublishedMemory) =>
+  apiRequest<PublishedMemoryHistory[]>(`${root(projectId, chapter)}/canon-commits/${value.commitId}/memory/history`)

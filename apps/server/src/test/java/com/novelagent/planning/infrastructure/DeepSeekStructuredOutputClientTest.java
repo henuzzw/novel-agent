@@ -17,6 +17,21 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 class DeepSeekStructuredOutputClientTest {
+    @Test void responsesRequestActuallyCarriesJsonSchemaNotJustInstructions() throws Exception {
+        var builder = RestClient.builder().baseUrl("https://example.invalid");
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new DeepSeekStructuredOutputClient("test-key", builder.build(), mock(GlobalModelSettingsService.class));
+        var schema = new ObjectMapper().readTree("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[],\"properties\":{}}");
+        server.expect(requestTo("https://example.invalid/responses"))
+                .andExpect(jsonPath("$.text.format.type").value("json_schema"))
+                .andExpect(jsonPath("$.text.format.name").value("draft_loop_b"))
+                .andExpect(jsonPath("$.text.format.schema.additionalProperties").value(false))
+                .andExpect(jsonPath("$.text.format.strict").doesNotExist())
+                .andRespond(withSuccess("{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"{}\"}]}]}", MediaType.APPLICATION_JSON));
+        assertThat(client.request("draft_loop_b", "rules", "input", schema, 20,
+                new com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings(ModelProvider.DEEPSEEK, "test", "none", 1L)).output()).isEqualTo("{}");
+        server.verify();
+    }
     @Test void stopInterruptsRealHttpWaitWithoutWaitingForTheProviderResponse() throws Exception {
         var http = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
         var entered = new java.util.concurrent.CountDownLatch(1);

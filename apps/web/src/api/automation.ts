@@ -3,7 +3,7 @@ import { apiRequest } from '@/api/http'
 
 export interface AutomationStep {
   chapterNumber: number
-  stage: 'CONTRACT' | 'CONTRACT_REVIEW' | 'MANUSCRIPT' | 'QUALITY_REVIEW' | 'QUALITY_REVISION' | 'REVIEW'
+  stage: 'CONTRACT' | 'CONTRACT_REVIEW' | 'MANUSCRIPT' | 'QUALITY_REVIEW' | 'QUALITY_REVISION' | 'REVIEW' | 'DRAFT_A' | 'DRAFT_B' | 'DRAFT_C'
   status: 'RUNNING' | 'SUCCEEDED' | 'FAILED'
   artifactId: string | null
   startedAt: string
@@ -24,11 +24,17 @@ export interface AutomationRun {
   maxGenerationSteps: number
   usedGenerationSteps: number
   usedAutoRevisionRounds: number
+  maxLoopRounds?: number
+  currentLoopId?: string | null
+  waitingForPublication?: boolean
+  autoPublish?: boolean
+  autoMemory?: boolean
   status: 'PENDING' | 'RUNNING' | 'WAITING_FOR_USER' | 'FAILED' | 'CANCELLED' | 'SUCCEEDED'
   cancelRequested: boolean
   attempt: number
   waitingReason: string | null
   errorCode: string | null
+  failureDetail?: string | null
   steps: AutomationStep[]
   createdAt: string
   updatedAt: string
@@ -42,6 +48,9 @@ export interface CreateAutomationInput {
   qualityReviewEnabled?: boolean
   maxAutoRevisionRounds?: number
   maxGenerationSteps?: number
+  maxLoopRounds?: number
+  autoPublish?: boolean
+  autoMemory?: boolean
 }
 
 export interface AutomationChapterTarget {

@@ -36,14 +36,17 @@ public class WritingContextService {
     private final StoryBibleVersionRepository bibles;
     private final NovelMemoryService memory;
     private final CharacterNameService names;
+    private final com.novelagent.canon.application.PublishedMemoryReadiness memoryReadiness;
 
     public WritingContextService(ProjectAccessService access, OutlineVersionRepository outlines,
-            StoryBibleVersionRepository bibles, NovelMemoryService memory, CharacterNameService names) {
+            StoryBibleVersionRepository bibles, NovelMemoryService memory, CharacterNameService names,
+            com.novelagent.canon.application.PublishedMemoryReadiness memoryReadiness) {
         this.access = access;
         this.outlines = outlines;
         this.bibles = bibles;
         this.memory = memory;
         this.names = names;
+        this.memoryReadiness = memoryReadiness;
     }
 
     /**
@@ -79,6 +82,10 @@ public class WritingContextService {
     public NovelProject requireOwnedProject(UUID projectId) {
         return access.requireOwnedProject(projectId);
     }
+    public void requireMemoryReady(UUID projectId, int chapter) {
+        access.requireOwnedProject(projectId);
+        memoryReadiness.requireReady(projectId, chapter);
+    }
 
     /**
      * 读取指定已保存大纲的第一章试写依据，可使用草稿大纲；不因此放行正式正文创作。
@@ -96,7 +103,8 @@ public class WritingContextService {
         return prepared(resolve(outline, bible, 1, CreativeStrategyPolicy.from(project)), project);
     }
 
-    private Context prepared(Context context, NovelProject project) {
+    /** Writing and later checking must include the same project boundaries in their source fingerprint. */
+    static Context prepared(Context context, NovelProject project) {
         String boundaries = com.novelagent.project.application.CreativeBoundaryGuide.render(
                 com.novelagent.project.domain.CreativeBoundaries.from(project));
         return new Context(context.outline(), context.bible(), context.arc(), context.chapter(),

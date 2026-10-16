@@ -8,7 +8,7 @@ import type { ManuscriptVersion } from '@/api/writing'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 
-const props = withDefaults(defineProps<{ projectId: string; source: ManuscriptVersion | null; externalBusy?: boolean }>(), { externalBusy: false })
+const props = withDefaults(defineProps<{ projectId: string; source: ManuscriptVersion | null; externalBusy?: boolean; refreshVersion?: number }>(), { externalBusy: false, refreshVersion: 0 })
 const emit = defineEmits<{ drafted: [value: ManuscriptVersion]; refreshRequested: []; 'busy-change': [value: boolean] }>()
 const { provider } = useGlobalModelSettings()
 const selection = ref('')
@@ -19,7 +19,7 @@ const error = ref('')
 const stale = ref(false)
 const result = ref<ManuscriptLocalEditResult | null>(null)
 const session = ref(0)
-watch(() => [props.projectId, props.source?.id, props.source?.version, props.source?.content.body], () => {
+watch(() => [props.projectId, props.source?.id, props.source?.version, props.source?.content.body, props.refreshVersion], () => {
   const draft = result.value?.manuscript
   const adoptedResult = draft && draft.projectId === props.projectId && props.source?.projectId === props.projectId
     && props.source.id === draft.id && props.source.version === draft.version && props.source.content.body === draft.content.body
@@ -51,7 +51,7 @@ const mutation = useMutation({
   onError: (failure: Error, variables) => {
     if (variables.session !== session.value || variables.projectId !== props.projectId) return
     stale.value = failure instanceof ApiError && failure.status === 409
-    error.value = stale.value ? '源稿或写作依据已变化，请重新读取原稿。'
+    error.value = stale.value ? failure.message || '源稿或写作依据已变化，请重新读取原稿。'
       : failure instanceof ApiError && failure.status === 403 ? '无权修改此项目正文。' : failure.message
   },
 })

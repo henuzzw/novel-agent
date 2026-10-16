@@ -1,4 +1,16 @@
-# web
+# Novel Agent Web
+
+Vue 3 + TypeScript frontend for the novel planning and writing workspace.
+
+## Code organization
+
+- `src/api/`: typed backend requests. `http.ts` shares headers, cache policy and error handling between JSON and text requests; JSON generation requests also update local activity state.
+- `src/composables/`: shared Vue behavior. `useGlobalModelSettings` shares computed settings and pending reads across consumers, and protects successful saves from older read responses.
+- `src/lib/`: reusable logic. `generation-activity.ts` merges local requests and server runs by stage in one pass, preserving request save failures until a later model run starts.
+- `src/components/` and `src/views/`: workspace panels and route views.
+- `src/__tests__/` and `e2e/`: unit and browser regression tests.
+
+From this directory, run `npm run test:unit` for the lightweight unit suite and `npm run type-check` for TypeScript validation. Use `npm run test:unit:full` for all unit tests, or select affected files with `npx vitest run --config vitest.full.config.ts src/__tests__/<name>.spec.ts`.
 
 ## Prompt Settings
 
@@ -13,11 +25,11 @@ Backend restart/Flyway V049 is required. See `../../NOVEL_AGENT_PROMPT_MANAGEMEN
 
 The workspace stores navigation in the URL, not in project data:
 
-- `section`: main navigation (`writing`, `outline`, `materials`, `experience`, `relations`, `imports`, `runs`, `settings`).
-- `planning`: planning view (`directions`, `bible`, `outline`, `style`, `preparation`).
-- `writing`: chapter view (`contract`, `contractReview`, `manuscript`, `quality`, `opening`, `review`, `memory`).
+- `section`: main navigation (`writing`, `outline`, `materials`, `experience`, `chat`, `imports`, `runs`, `settings`).
+- `planning`: planning view (`outline`, `style`).
+- `writing`: chapter view (`manuscript`, `history`, `quality`, `opening`, `review`, `memory`).
 - `chapter`: a positive chapter number.
-- `materials`: materials view (`profiles`, `entities`, `timeline`, `foreshadows`, `style`).
+- `materials`: materials view (`profiles`, `entities`, `timeline`, `foreshadows`, `relations`, `style`).
 
 Example: `/projects/<projectId>?section=writing&chapter=2&writing=manuscript`.
 Refresh and browser history restore the selected views. Invalid query values fall back safely.
@@ -32,9 +44,7 @@ Run the interaction regression tests with an installed Google Chrome:
 npm run test:e2e:ux
 ```
 
-The suite mocks backend/model requests, verifies navigation and edit protection, and captures desktop/mobile screenshots. It does not call a model or write project data.
-
-This template should help get you started developing with Vue 3 in Vite.
+The suite mocks backend/model requests and verifies navigation and edit protection. Screenshots and traces are retained on failure. It does not call a model or write project data.
 
 ## Recommended IDE Setup
 

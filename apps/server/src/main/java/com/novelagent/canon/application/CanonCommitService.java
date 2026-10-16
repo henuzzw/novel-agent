@@ -152,18 +152,6 @@ public class CanonCommitService {
     }
 
     /**
-     * 判断指定章节是否存在 active 正史提交，不把确认正文或失效历史提交计为当前正史。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
-     */
-    @Transactional(readOnly = true)
-    public boolean hasCommittedChapter(UUID projectId, int chapterNumber) {
-        access.requireOwnedProject(projectId);
-        return commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber);
-    }
-
-    /**
      * 返回指定章节当前 active 正史提交；尚未提交时返回 null，查询本身不推进版本。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。

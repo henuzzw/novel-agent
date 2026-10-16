@@ -1,6 +1,5 @@
 package com.novelagent.planning.infrastructure;
 
-import com.fasterxml.jackson.databind.node.NullNode;
 import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
@@ -26,7 +25,7 @@ public class DeepSeekExecutor extends AbstractModelExecutor {
             @Override public String input() { return request.user(); }
             @Override public String policy() { return "STATELESS"; }
             @Override public ModelResult send(Consumer<String> progress) {
-                return client.request(request.schemaName(), request.system(), request.user(), NullNode.getInstance(),
+                return client.request(request.schemaName(), request.system(), request.user(), request.protocol().wireSchema(),
                         request.maxOutputTokens(), settings);
             }
         };

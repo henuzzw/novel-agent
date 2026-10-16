@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/vue-query'
 import { Activity, AlertCircle, CheckCircle2, Clock3, Coins, RefreshCw, Square } from 'lucide-vue-next'
 import { computed } from 'vue'
 
-import { getAgentRunSummary, listAgentRuns } from '@/api/agentRuns'
+import { getAgentTokenUsage, listAgentRuns } from '@/api/agentRuns'
+import AgentTokenUsagePanel from '@/components/AgentTokenUsagePanel.vue'
 import AgentRunPrompt from '@/components/AgentRunPrompt.vue'
 import AgentRunSnapshot from '@/components/AgentRunSnapshot.vue'
 import AgentRunOutput from '@/components/AgentRunOutput.vue'
@@ -13,10 +14,11 @@ import type { AutomationChapterTarget } from '@/api/automation'
 const props = defineProps<{ projectId: string }>()
 const emit = defineEmits<{ 'open-chapter': [target: AutomationChapterTarget] }>()
 const runsQuery = useQuery({ queryKey: computed(() => ['agent-runs', props.projectId]), queryFn: () => listAgentRuns(props.projectId), refetchInterval: 5000 })
-const summaryQuery = useQuery({ queryKey: computed(() => ['agent-run-summary', props.projectId]), queryFn: () => getAgentRunSummary(props.projectId) })
+const usageQuery = useQuery({ queryKey: computed(() => ['agent-run-summary', props.projectId, 'usage']), queryFn: () => getAgentTokenUsage(props.projectId), refetchInterval: 15000 })
+const summary = computed(() => usageQuery.data.value?.projectTotal)
 const stageNames: Record<string, string> = {
   OUTLINE: '分层大纲',
-  CHAPTER_CONTRACT: '章节合同', CHAPTER_CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', CHAPTER_REVIEW: '章节审稿',
+  CHAPTER_CONTRACT: '章节合同', CHAPTER_CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', CHAPTER_REVIEW: '发布后记忆整理',
   QUALITY_REVIEW: '正文质量检查', STYLE_ANALYSIS: '写作风格分析',
   STYLE_PREVIEW: '第一章风格试写', STYLE_RECOMMENDATION: '规划资料风格推荐',
   STYLE_PREVIEW_REVIEW: '试写编辑检查', STYLE_PREVIEW_REVISION: '试写建议修订',
@@ -27,7 +29,7 @@ const stageNames: Record<string, string> = {
 const providerNames: Record<string, string> = { LOCAL_CODEX: 'ChatGPT', DEEPSEEK: 'DeepSeek', LOCAL_TEMPLATE: '本地模板' }
 function tokens(value: number) { return new Intl.NumberFormat('zh-CN').format(value) }
 function time(value: string) { return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)) }
-function refresh() { runsQuery.refetch(); summaryQuery.refetch() }
+function refresh() { runsQuery.refetch(); usageQuery.refetch() }
 </script>
 
 <template>
@@ -37,12 +39,15 @@ function refresh() { runsQuery.refetch(); summaryQuery.refetch() }
       <button class="icon-button" type="button" title="刷新" aria-label="刷新任务" @click="refresh"><RefreshCw :size="17" /></button>
     </div>
     <p class="run-notice">供应商用量与估算分开记录；费用按配置单价估算，不代表供应商账单。</p>
+    <AgentTokenUsagePanel v-if="usageQuery.data.value" :usage="usageQuery.data.value" />
+    <p v-if="usageQuery.isPending.value" role="status">正在读取 Token 统计…</p>
+    <p v-if="usageQuery.isError.value" class="form-error" role="alert">Token 统计读取失败：{{ usageQuery.error.value?.message }}</p>
     <AutomationPanel :project-id="projectId" @open-chapter="emit('open-chapter', $event)" />
-    <div v-if="summaryQuery.data.value" class="run-summary">
-      <span><Activity :size="18" /><strong>{{ summaryQuery.data.value.calls }}</strong><small>模型任务</small></span>
-      <span><Clock3 :size="18" /><strong>{{ tokens(summaryQuery.data.value.inputTokens + summaryQuery.data.value.outputTokens) }}</strong><small>估算 Token</small></span>
-      <span><Coins :size="18" /><strong>¥{{ Number(summaryQuery.data.value.estimatedCost).toFixed(4) }}</strong><small>估算费用</small></span>
-      <span><AlertCircle :size="18" /><strong>{{ summaryQuery.data.value.failures }}</strong><small>失败任务</small></span>
+    <div v-if="summary" class="run-summary">
+      <span><Activity :size="18" /><strong>{{ summary.calls }}</strong><small>模型任务</small></span>
+      <span><Clock3 :size="18" /><strong>{{ tokens(summary.inputTokens + summary.outputTokens) }}</strong><small>估算 Token</small></span>
+      <span><Coins :size="18" /><strong>¥{{ Number(summary.estimatedCost).toFixed(4) }}</strong><small>估算费用</small></span>
+      <span><AlertCircle :size="18" /><strong>{{ summary.failures }}</strong><small>失败任务</small></span>
     </div>
     <div v-if="runsQuery.isPending.value" class="editor-empty">正在读取任务记录…</div>
     <div v-else-if="runsQuery.isError.value" class="status-panel error-panel">任务记录加载失败：{{ runsQuery.error.value?.message }}</div>

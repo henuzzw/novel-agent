@@ -30,12 +30,6 @@ public record StoryBibleContent(
         }
     }
 
-    public StoryBibleContent withCharacterBlueprints(List<CharacterBlueprint> characters) {
-        return new StoryBibleContent(logline, theme, worldSetting, worldRules, protagonist, protagonistArc,
-                supportingCharacters, relationshipDynamics, centralConflict, stakes, narrativeStyle,
-                endingDirection, hardConstraints, openQuestions, characters, readerExperiencePlans, developmentNotes);
-    }
-
     /** Keep the original free prose available to outlines, without interpreting literary structure. */
     public StoryBibleContent withDevelopmentNotes(String notes) {
         return new StoryBibleContent(logline, theme, worldSetting, worldRules, protagonist, protagonistArc,

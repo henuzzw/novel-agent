@@ -15,6 +15,8 @@ import org.springframework.data.jpa.repository.Query;
  * <p>保存章节范围自动任务并按项目、幂等键查找。findLocked 用悲观锁认领任务，需由调用方在有效事务中使用。</p>
  */
 public interface AutomationRunRepository extends JpaRepository<AutomationRun, UUID> {
+    List<AutomationRun> findTop50ByWaitingForPublicationTrueAndStatusOrderByUpdatedAtAsc(
+            com.novelagent.agent.domain.AutomationStatus status);
     /**
      * 按项目返回最近 50 个自动任务，按创建时间倒序；未完成任务的业务排他性由服务另行检查。
      *

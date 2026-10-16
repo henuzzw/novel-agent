@@ -31,4 +31,12 @@ public class CanonPublicationController {
             @PathVariable UUID commitId, @RequestBody PublishedMemoryService.Confirmation request) {
         return memory.confirm(projectId, chapterNumber, commitId, request);
     }
+    @PutMapping("/{commitId}/memory")
+    public PublishedMemoryService.View saveMemory(@PathVariable UUID projectId, @PathVariable int chapterNumber,
+            @PathVariable UUID commitId, @RequestBody PublishedMemoryService.Confirmation request) {
+        return memory.save(projectId, chapterNumber, commitId, request);
+    }
+    @GetMapping("/{commitId}/memory/history")
+    public java.util.List<PublishedMemoryService.History> memoryHistory(@PathVariable UUID projectId, @PathVariable int chapterNumber,
+            @PathVariable UUID commitId) { return memory.history(projectId, chapterNumber, commitId); }
 }

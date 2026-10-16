@@ -73,7 +73,7 @@ class AgentRunQueryRepositoryTest {
         when(jdbc.queryForObject(anyString(), AgentRunQueryRepositoryTest.<AgentRunSummary>rowMapper(), eq(projectId)))
                 .thenAnswer(call -> {
                     String sql = call.getArgument(0);
-                    assertThat(sql).contains("sum(actual_input_tokens)", "sum(estimated_input_tokens)",
+                    assertThat(sql).contains("sum(actual_input_tokens)", "coalesce(estimated_input_tokens, input_tokens)",
                             "count(DISTINCT token_source)", "WHERE project_id = ?");
                     RowMapper<AgentRunSummary> mapper = call.getArgument(1);
                     return mapper.mapRow(row, 0);

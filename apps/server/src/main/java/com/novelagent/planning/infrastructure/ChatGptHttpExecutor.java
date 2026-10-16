@@ -23,14 +23,20 @@ public class ChatGptHttpExecutor extends AbstractModelExecutor {
     @Override public Entry entry() { return Entry.CHATGPT_HTTP; }
     @Override protected EffectiveSettings effectiveSettings() { return gateway.effectiveSettings(); }
     @Override protected PreparedCall prepare(Request request, EffectiveSettings settings) {
-        var prepared = gateway.prepare(request.projectId(), request.sessionKey(), request.system(), request.user(),
-                request.policy(), request.revision(), request.maxOutputTokens());
+        var schema = request.protocol().wireSchema();
+        var prepared = schema.isNull()
+                ? gateway.prepare(request.projectId(), request.sessionKey(), request.system(), request.user(),
+                    request.policy(), request.revision(), request.maxOutputTokens())
+                : gateway.prepare(request.projectId(), request.sessionKey(), request.system(), request.user(),
+                    request.policy(), request.revision(), request.maxOutputTokens(), schema);
         return new PreparedCall() {
             @Override public String system() { return request.system(); }
             @Override public String input() { return prepared.wireInput(); }
             @Override public String policy() { return "SIWC_HTTP_" + request.policy().name(); }
             @Override public ContextBudget contextBudget() { return prepared.budget(); }
-            @Override public ModelResult send(Consumer<String> progress) { return prepared.run(settings, progress); }
+            @Override public ModelResult send(Consumer<String> progress) {
+                return schema.isNull() ? prepared.run(settings, progress) : prepared.run(settings, progress, request.schemaName(), schema);
+            }
             @Override public void accept(ModelResult result) { prepared.accept((ChatGptResponsesClient.Result) result); }
             @Override public void close() { prepared.close(); }
         };

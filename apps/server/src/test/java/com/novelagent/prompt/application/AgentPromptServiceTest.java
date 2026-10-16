@@ -20,10 +20,12 @@ class AgentPromptServiceTest {
     private final AgentPromptRepository repository = mock(AgentPromptRepository.class);
     private final AgentPromptService service = new AgentPromptService(catalog, repository, new CurrentActorProvider(user));
 
-    @Test void catalogCoversAll22WorkflowsAnd24RealDefaultTemplates() {
-        assertThat(catalog.all()).hasSize(23);
-        assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::workflow).distinct()).hasSize(21);
-        assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::key)).doesNotHaveDuplicates();
+    @Test void catalogListsActiveWorkflowsWithoutRetiredStages() {
+        assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::key))
+                .doesNotHaveDuplicates()
+                .contains("OUTLINE", "SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "PROJECT_CHAT", "MANUSCRIPT")
+                .doesNotContain("STORY_BIBLE", "IMPORT_REVERSE_BIBLE_ADAPT", "IMPORT_REVERSE_BIBLE_CONTINUE",
+                        "CHAPTER_CONTRACT", "CHAPTER_CONTRACT_REVIEW", "CHARACTER_BLUEPRINT_COMPLETION");
         catalog.all().forEach(value -> assertThat(value.defaultSystemPrompt()).isNotBlank());
         assertThatThrownBy(() -> catalog.require("NOT_AN_AGENT")).isInstanceOf(IllegalArgumentException.class);
     }
@@ -67,12 +69,12 @@ class AgentPromptServiceTest {
     }
 
     @Test void importModesUseIndependentSettingsAndUnknownVariantsAreNotGuessed() {
-        when(repository.findAll(user)).thenReturn(List.of(config("IMPORT_REVERSE_BIBLE_CONTINUE", "续写专用", "", 4)));
-        String adapt = AgentPromptDefaults.system("IMPORT_REVERSE_BIBLE_ADAPT");
-        assertThat(service.resolve("IMPORT_REVERSE_BIBLE", adapt).systemPrompt()).isEqualTo(adapt);
-        assertThat(service.resolve("IMPORT_REVERSE_BIBLE", AgentPromptDefaults.system("IMPORT_REVERSE_BIBLE_CONTINUE")).systemPrompt()).startsWith("续写专用");
-        assertThat(service.resolve("IMPORT_REVERSE_BIBLE", "无法确定模式")).isEqualTo(new AgentPromptService.Resolved("无法确定模式", null));
-        verify(repository, never()).find(user, "IMPORT_REVERSE_BIBLE");
+        when(repository.findAll(user)).thenReturn(List.of(config("IMPORT_REVERSE_OUTLINE_CONTINUE", "续写专用", "", 4)));
+        String adapt = AgentPromptDefaults.system("IMPORT_REVERSE_OUTLINE_ADAPT");
+        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", adapt).systemPrompt()).isEqualTo(adapt);
+        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", AgentPromptDefaults.system("IMPORT_REVERSE_OUTLINE_CONTINUE")).systemPrompt()).startsWith("续写专用");
+        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", "无法确定模式")).isEqualTo(new AgentPromptService.Resolved("无法确定模式", null));
+        verify(repository, never()).find(user, "IMPORT_REVERSE_OUTLINE");
     }
 
     @Test void restoredDefaultsStillHaveANewRevisionForSessionRotation() {
@@ -80,7 +82,7 @@ class AgentPromptServiceTest {
         var result = service.resolve("OUTLINE", "原有动态系统文本");
         assertThat(result.systemPrompt()).startsWith("原有动态系统文本").contains("版本 5 · 默认");
         assertThat(result.systemPrompt()).doesNotContain("全局阶段执行规则");
-        assertThat(result.revision()).isEqualTo(service.resolve("STORY_BIBLE", "另一阶段").revision());
+        assertThat(result.revision()).isEqualTo(service.resolve("SNOWFLAKE_PLANNING", "另一阶段").revision());
         when(repository.findAll(user)).thenReturn(List.of(config("OUTLINE", null, "", 6)));
         assertThat(service.resolve("OUTLINE", "原有动态系统文本").revision()).isNotEqualTo(result.revision());
     }
@@ -144,7 +146,7 @@ class AgentPromptServiceTest {
     @Test void unrelatedWritingChangesDoNotRotateSharedPlanningConversation() {
         String revision = service.resolve("OUTLINE", "大纲").revision();
         when(repository.findAll(user)).thenReturn(List.of(config("MANUSCRIPT", "新正文指令", "", 4)));
-        assertThat(service.resolve("STORY_BIBLE", "圣经").revision()).isEqualTo(revision);
+        assertThat(service.resolve("SNOWFLAKE_PLANNING", "雪花规划").revision()).isEqualTo(revision);
     }
 
     @Test void snowflakeDefaultPairIsResolvedWithoutChangingOtherPlanningRoles() {

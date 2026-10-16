@@ -73,6 +73,7 @@ class QualityReviewStoreTest {
         when(contracts.findByIdAndProjectId(contractId, projectId)).thenReturn(Optional.of(contract));
         when(contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1)).thenReturn(Optional.of(contract));
         when(outline.getId()).thenReturn(outlineId);
+        when(outline.getProjectId()).thenReturn(projectId);
         when(outline.getStatus()).thenReturn(OutlineStatus.PUBLISHED);
         when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent(
                 "小说", "前提", "结构", "节奏", 1000, 2000, List.of(new com.novelagent.planning.domain.OutlineArc(
@@ -88,6 +89,48 @@ class QualityReviewStoreTest {
         when(names.render(any(), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> call.getArgument(1));
         when(profiles.promptContext(projectId)).thenReturn("固定人物档案");
         when(styles.promptContext(projectId)).thenReturn("轻快口语");
+    }
+
+    @Test
+    void generatedBasisCanBeCheckedBeforeAndAfterAcceptanceAndCanonPublication() {
+        var basis = generatedBasis();
+        when(manuscript.getWritingBasis()).thenReturn(basis);
+        assertThat(store.snapshot(projectId, 1).writingBasis()).isEqualTo(basis);
+        when(manuscript.getStatus()).thenReturn(com.novelagent.writing.domain.ManuscriptStatus.AUTHOR_ACCEPTED);
+        project.commitCanon(0);
+        assertThat(store.snapshot(projectId, 1).writingBasis()).isEqualTo(basis);
+        org.mockito.Mockito.verifyNoInteractions(contracts);
+    }
+
+    @Test
+    void actualStrategyBoundaryAndPlanningVersionChangesStillRejectStoredBasis() {
+        var basis = generatedBasis();
+        when(manuscript.getWritingBasis()).thenReturn(basis);
+        CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING).applyTo(project);
+        assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
+        basis = generatedBasis();
+        when(manuscript.getWritingBasis()).thenReturn(basis);
+        assertThat(store.snapshot(projectId, 1)).isNotNull();
+        com.novelagent.project.domain.CreativeBoundaries.defaults().choose(
+                com.novelagent.project.domain.CreativeBoundaries.WorldMode.ALTERNATE,
+                com.novelagent.project.domain.CreativeBoundaries.AdaptationScope.RESTRUCTURE, false).applyTo(project);
+        assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
+        basis = generatedBasis();
+        when(manuscript.getWritingBasis()).thenReturn(basis);
+        assertThat(store.snapshot(projectId, 1)).isNotNull();
+        when(bible.getRowVersion()).thenReturn(1L);
+        assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
+        basis = generatedBasis();
+        when(manuscript.getWritingBasis()).thenReturn(basis);
+        when(outline.getRowVersion()).thenReturn(1L);
+        assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private com.novelagent.writing.domain.ManuscriptBasis generatedBasis() {
+        var contexts = new WritingContextService(new ProjectAccessService(projects, new CurrentActorProvider(owner)),
+                outlines, bibles, mock(com.novelagent.memory.application.NovelMemoryService.class), names,
+                mock(com.novelagent.canon.application.PublishedMemoryReadiness.class));
+        return ChapterWritingBasisService.capture(contexts.context(projectId, 1));
     }
 
     @Test

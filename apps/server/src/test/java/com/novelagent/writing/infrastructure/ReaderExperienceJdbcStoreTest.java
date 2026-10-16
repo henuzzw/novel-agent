@@ -8,12 +8,15 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
+import com.novelagent.canon.api.UpdateCharacterProfileRequest;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.canon.infrastructure.JdbcCharacterProfileStore;
 import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
@@ -84,7 +87,7 @@ class ReaderExperienceJdbcStoreTest {
         var names = new CharacterNameService(new ProjectAccessService(projects, actor), mock(StoryBibleVersionRepository.class), jdbc, mapper);
         store = new ReaderExperienceJdbcStore(jdbc, mapper, names);
         service = new ReaderExperienceService(new ProjectAccessService(projects, actor), actor, store, mapper);
-        profiles = new CharacterProfileService(new ProjectAccessService(projects, actor), jdbc);
+        profiles = new CharacterProfileService(new ProjectAccessService(projects, actor), new JdbcCharacterProfileStore(jdbc));
     }
 
     @BeforeEach void fixture() throws Exception {
@@ -168,6 +171,43 @@ class ReaderExperienceJdbcStoreTest {
         assertThat(scoped).contains("林安", "轻声").doesNotContain("远方人物", "大声");
         assertThat(profiles.promptContext(project, null, List.of(unrelated))).contains("远方人物").doesNotContain("林安");
         assertThat(profiles.promptContext(project)).contains("林安", "远方人物");
+    }
+
+    @Test void characterProfileWritesPreserveVersionGuardsRollbackAndProjectScope() {
+        var changes = new UpdateCharacterProfileRequest(
+                "  ", null, "  作者设定  ", null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        assertThatThrownBy(() -> transaction.execute(status -> profiles.update(project, character, 2, changes)))
+                .isInstanceOf(ResourceVersionConflictException.class);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM character_profile WHERE character_id = ?", Integer.class, character))
+                .isZero();
+
+        var listed = transaction.execute(status -> profiles.list(project));
+        assertThat(listed).hasSize(1);
+        var listedAgain = transaction.execute(status -> profiles.list(project));
+        assertThat(listedAgain).hasSize(1);
+        var saved = transaction.execute(status -> profiles.update(project, character, 0, changes));
+        assertThat(saved.identity()).isEqualTo("作者设定");
+        assertThat(saved.gender()).isNull();
+        assertThat(saved.version()).isEqualTo(1);
+        assertThatThrownBy(() -> transaction.execute(status -> profiles.update(project, character, 0, changes)))
+                .isInstanceOfSatisfying(ResourceVersionConflictException.class, error -> {
+                    assertThat(error.getExpectedVersion()).isZero();
+                    assertThat(error.getActualVersion()).isEqualTo(1);
+                });
+
+        var adapter = new JdbcCharacterProfileStore(jdbc);
+        UUID otherProject = UUID.randomUUID();
+        assertThat(adapter.find(otherProject, character)).isEmpty();
+        assertThat(adapter.profiles(otherProject, List.of(character))).isEmpty();
+        assertThat(adapter.references(otherProject)).isEmpty();
+        assertThat(adapter.update(otherProject, character, 1, changes)).isZero();
+        assertThat(adapter.find(project, character).orElseThrow().version()).isEqualTo(1);
+
+        jdbc.update("UPDATE story_entity SET canon_version_to = 1 WHERE id = ?", character);
+        assertThatThrownBy(() -> transaction.execute(status -> profiles.update(project, character, 1, changes)))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("人物不存在");
+        assertThat(adapter.profiles(project)).isEmpty();
+        assertThat(adapter.references(project)).isEmpty();
     }
 
     private ReaderExperienceEvent event(ReaderExperiencePlan plan, UUID source, long version) {

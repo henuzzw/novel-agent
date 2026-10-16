@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import { useRoute } from 'vue-router'
-import { Activity, BookOpen, GitBranch, ListTree, PenLine, Settings, Upload } from 'lucide-vue-next'
+import { Activity, BookOpen, GitBranch, ListTree, MessageSquare, PenLine, Settings, Upload } from 'lucide-vue-next'
 import { getProject } from '@/api/projects'
 import type { AutomationChapterTarget } from '@/api/automation'
 import { navigateWorkspaceButtons } from '@/lib/workspace-keyboard'
@@ -17,6 +17,8 @@ import WritingStylePanel from '@/components/WritingStylePanel.vue'
 import ProjectSettingsPanel from '@/components/ProjectSettingsPanel.vue'
 import ReaderExperiencePanel from '@/components/ReaderExperiencePanel.vue'
 import BookScanPanel from '@/components/BookScanPanel.vue'
+import ProjectChatPanel from '@/components/ProjectChatPanel.vue'
+import PublishedManuscriptExportButton from '@/components/PublishedManuscriptExportButton.vue'
 
 const props = defineProps<{ projectId: string }>()
 const route = useRoute()
@@ -40,6 +42,7 @@ const navigation = [
   { value: 'outline', label: '大纲', icon: ListTree },
   { value: 'materials', label: '资料', icon: BookOpen },
   { value: 'experience', label: '伏笔和承诺', icon: GitBranch },
+  { value: 'chat', label: '创作对话', icon: MessageSquare },
   { value: 'runs', label: '任务', icon: Activity },
   { value: 'settings', label: '设置', icon: Settings },
 ] as const
@@ -59,6 +62,9 @@ const navigation = [
       <strong>项目加载失败</strong><span>{{ projectQuery.error.value?.message }}</span>
     </section>
     <section v-else class="workspace-content">
+      <Teleport to="#project-topbar-actions">
+        <PublishedManuscriptExportButton :key="projectId" :project-id="projectId" :project-name="projectQuery.data.value?.name" />
+      </Teleport>
       <header class="workspace-header">
         <div><span class="eyebrow">正史 v{{ projectQuery.data.value?.currentCanonVersion }}</span><h1>{{ projectQuery.data.value?.name }}</h1></div>
         <span class="save-status">{{ generationBusy ? '生成请求中' : '已保存' }}</span>
@@ -72,6 +78,7 @@ const navigation = [
       <WorkImportPanel v-else-if="activeSection === 'imports'" :key="projectId" :project-id="projectId"
         :auto-analyze="route.query.analyze === '1'" @planning-confirmed="activeSection = 'outline'" />
       <AgentRunPanel v-else-if="activeSection === 'runs'" :key="projectId" :project-id="projectId" @open-chapter="openAutomationChapter" />
+      <ProjectChatPanel v-else-if="activeSection === 'chat'" :key="projectId" :project-id="projectId" />
       <ProjectSettingsPanel v-else-if="activeSection === 'settings'" :key="projectId" :project-id="projectId" />
       <div v-else>
         <div class="planning-tabs" role="group" @keydown="navigateWorkspaceButtons" aria-label="大纲与写作">

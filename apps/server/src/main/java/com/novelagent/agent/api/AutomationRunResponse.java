@@ -17,7 +17,9 @@ public record AutomationRunResponse(UUID id, UUID projectId, UUID outlineId, int
         int lastChapter, int currentChapter, ModelProvider provider, AutomationStatus status,
         boolean cancelRequested, int attempt, String waitingReason, String errorCode,
         List<AutomationStep> steps, Instant createdAt, Instant updatedAt, boolean qualityReviewEnabled,
-        int maxAutoRevisionRounds, int maxGenerationSteps, int usedGenerationSteps, int usedAutoRevisionRounds) {
+        int maxAutoRevisionRounds, int maxGenerationSteps, int usedGenerationSteps, int usedAutoRevisionRounds,
+        int maxLoopRounds, UUID currentLoopId, boolean waitingForPublication, boolean autoPublish, boolean autoMemory,
+        String failureDetail) {
     /**
      * 将领域版本映射为自动任务的范围、执行阶段、等待原因与额度。仅转换字段，不查询数据库、不修改状态；传入已渲染内容的重载只影响返回展示，不重写源版本。
      *
@@ -29,6 +31,8 @@ public record AutomationRunResponse(UUID id, UUID projectId, UUID outlineId, int
                 run.getFirstChapter(), run.getLastChapter(), run.getCurrentChapter(), run.getProvider(),
                 run.getStatus(), run.isCancelRequested(), run.getAttempt(), run.getWaitingReason(),
                 run.getErrorCode(), run.getSteps(), run.getCreatedAt(), run.getUpdatedAt(), run.isQualityReviewEnabled(),
-                run.getMaxAutoRevisionRounds(), run.getMaxGenerationSteps(), run.getUsedGenerationSteps(), run.getUsedAutoRevisionRounds());
+                run.getMaxAutoRevisionRounds(), run.getMaxGenerationSteps(), run.getUsedGenerationSteps(), run.getUsedAutoRevisionRounds(),
+                run.getMaxLoopRounds(), run.getCurrentLoopId(), run.isWaitingForPublication(), run.isAutoPublish(), run.isAutoMemory(),
+                run.getStatus() == AutomationStatus.FAILED ? run.getWaitingReason() : null);
     }
 }

@@ -4,8 +4,12 @@ import type { ManuscriptContent } from './writing'
 
 export interface DraftIssue {
   id: string; category: 'STYLE' | 'FLUENCY' | 'LOGIC' | 'SCENE'
-  description: string; evidence: string; existingBasis: string; gap: string
+  description: string; evidence: { quote: string }[] | string; existingBasis: string; gap: string
   candidateDesign: string; impact: string; suggestion: string
+}
+
+export function draftIssueQuotes(issue: DraftIssue): string[] {
+  return typeof issue.evidence === 'string' ? [issue.evidence] : issue.evidence.map(e => e.quote)
 }
 export interface DraftJudgment {
   action: 'REVISED' | 'NO_CHANGE' | 'NEEDS_CONTEXT'

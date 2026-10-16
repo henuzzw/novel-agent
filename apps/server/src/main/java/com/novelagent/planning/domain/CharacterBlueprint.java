@@ -68,25 +68,10 @@ public record CharacterBlueprint(
         return values.stream().map(value -> required(value, "列表项", 1000)).toList();
     }
 
-    public CharacterBlueprint fillMissingFrom(CharacterBlueprint proposed) {
-        return new CharacterBlueprint(name, role, identity, fill(appearance, proposed.appearance),
-                fill(background, proposed.background), fill(externalPersonality, proposed.externalPersonality),
-                fill(internalPersonality, proposed.internalPersonality), coreDesire, fill(fear, proposed.fear),
-                fill(flaw, proposed.flaw), fill(values, proposed.values), fill(speechStyle, proposed.speechStyle),
-                fill(behaviorHabits, proposed.behaviorHabits), fill(abilitiesAndLimits, proposed.abilitiesAndLimits),
-                fill(behaviorBoundaries, proposed.behaviorBoundaries), fill(secret, proposed.secret),
-                fill(characterArc, proposed.characterArc), fill(openingState, proposed.openingState),
-                initialRelationships.isEmpty() ? proposed.initialRelationships : initialRelationships,
-                initialPossessions.isEmpty() ? proposed.initialPossessions : initialPossessions,
-                knowledgeBoundaries.isEmpty() ? proposed.knowledgeBoundaries : knowledgeBoundaries,
-                fill(gender, proposed.gender), fill(ageDescription, proposed.ageDescription));
-    }
-
     private static String boundedOptional(String value, String field, int limit) {
         String result = value == null ? "" : value.trim();
         if (result.length() > limit) throw new IllegalArgumentException("人物底稿" + field + "不能超过 " + limit + " 字符");
         return result;
     }
 
-    private static String fill(String current, String proposed) { return current.isBlank() ? proposed : current; }
 }

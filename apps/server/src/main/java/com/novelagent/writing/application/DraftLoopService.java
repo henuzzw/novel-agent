@@ -33,7 +33,10 @@ public class DraftLoopService {
             throw new IllegalArgumentException("自动编辑请选择真实模型，轮次上限1至10");
         }
         var run = store.existing(projectId, key, chapter, provider, writeFirst, maxRounds)
-                .orElseGet(() -> store.create(projectId, key, chapter, provider, writeFirst, maxRounds, contexts.freeze(projectId, chapter, provider)));
+                .orElseGet(() -> {
+                    if (writeFirst) contexts.requireReadyForWriting(projectId, chapter);
+                    return store.create(projectId, key, chapter, provider, writeFirst, maxRounds, contexts.freeze(projectId, chapter, provider));
+                });
         if (store.claim(projectId, run.getId())) {
             try { executor.execute(() -> execute(projectId, run.getId())); }
             catch (RuntimeException failure) { store.fail(projectId, run.getId(), "后台执行器不可用，请稍后重试"); }
@@ -49,18 +52,58 @@ public class DraftLoopService {
     }
 
     void execute(UUID projectId, UUID id) {
+        execute(projectId, id, new Progress() { });
+    }
+
+    public interface Progress {
+        default boolean before(DraftLoopRun run) { return true; }
+        default void after(DraftLoopRun run) { }
+    }
+
+    /** Execute the owned child on the caller's worker, avoiding nested executor queues and a second implementation of A/B/C. */
+    public DraftLoopRun runForAutomation(com.novelagent.agent.domain.AutomationRun parent, boolean writeFirst, Progress progress) {
+        UUID projectId = parent.getProjectId();
+        int chapter = parent.getCurrentChapter();
+        var retry = store.retryForAutomation(parent);
+        if (retry.isPresent()) {
+            var run = retry.get();
+            if (run.getStatus() == DraftLoopRun.Status.RUNNING) execute(projectId, run.getId(), progress);
+            return store.get(projectId, run.getId());
+        }
+        if (writeFirst) contexts.requireReadyForWriting(projectId, chapter);
+        var frozen = contexts.freeze(projectId, chapter, parent.getProvider());
+        if (parent.getInstruction() != null && !parent.getInstruction().isBlank()) {
+            var basis = frozen.basis();
+            frozen = new DraftLoopContext.Source(new DraftLoopRun.Basis(basis.fingerprint(),
+                    basis.prompt() + "\n【作者授权的本次章节推进要求；不覆盖已确认事实及硬约束】\n" + parent.getInstruction(),
+                    basis.writingBasis()), frozen.context(), frozen.latest());
+        }
+        UUID key = UUID.nameUUIDFromBytes((parent.getId() + ":" + parent.getAttempt() + ":" + chapter)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var run = store.createForAutomation(projectId, key, chapter, parent.getProvider(), writeFirst,
+                parent.getMaxLoopRounds(), frozen, parent.getId(), parent.getAttempt());
+        if (store.claim(projectId, run.getId())) execute(projectId, run.getId(), progress);
+        return store.get(projectId, run.getId());
+    }
+
+    private void execute(UUID projectId, UUID id, Progress progress) {
         try (var ignored = controls.background(id, () -> !store.get(projectId, id).active())) {
             while (store.ready(projectId, id)) {
                 var run = store.get(projectId, id);
+                if (!progress.before(run)) { store.cancel(projectId, id); break; }
                 log.info("Draft loop stage projectId={} runId={} phase={} round={}", projectId, id, run.getPhase(), run.getRounds().size());
                 switch (run.getPhase()) {
-                    case A -> model.write(run, output -> store.wrote(projectId, id, output));
+                    case A -> {
+                        contexts.requireReadyForWriting(projectId, run.getChapterNumber());
+                        model.write(run, output -> store.wrote(projectId, id, output));
+                    }
                     case B -> {
                         var draft = store.body(run);
                         model.check(run, draft, report -> store.checked(projectId, id, draft, report));
                     }
                     case C -> model.judge(run, store.body(run), run.getRounds().getLast().check(), output -> store.judged(projectId, id, output));
                 }
+                progress.after(store.get(projectId, id));
             }
         } catch (GenerationStoppedException failure) {
             store.cancel(projectId, id);

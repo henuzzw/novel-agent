@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.novelagent.agent.api.AgentRunController;
 import com.novelagent.agent.api.AgentRunPromptResponse;
 import com.novelagent.agent.api.AgentRunSummary;
+import com.novelagent.agent.api.AgentTokenUsage;
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.api.ProjectionStatus;
@@ -63,6 +64,25 @@ class ReadQueryControllerTest {
                 .andExpect(jsonPath("$.kafkaPublished").value(true)).andExpect(jsonPath("$.pgvectorProjected").value(false))
                 .andExpect(jsonPath("$.neo4jProjected").value(true));
         when(service.status(id)).thenThrow(new ProjectNotFoundException(id));
+        mvc.perform(get(path)).andExpect(status().isNotFound());
+    }
+
+    @Test void tokenUsageReturnsBothPeriodsWithoutCachingAndKeepsOwnerErrors() throws Exception {
+        UUID id = UUID.randomUUID();
+        var service = mock(AgentRunQueryService.class);
+        var now = java.time.OffsetDateTime.parse("2026-10-13T08:00:00Z");
+        var total = new AgentRunSummary(120, 2, 1000, 50, BigDecimal.ZERO, "CNY", "MIXED");
+        var recent = new AgentRunSummary(10, 1, 100, 5, BigDecimal.ZERO, "CNY", "ESTIMATED");
+        when(service.usage(id)).thenReturn(new AgentTokenUsage(now, now.minusHours(5), total, recent));
+        var mvc = MockMvcBuilders.standaloneSetup(new AgentRunController(service))
+                .setControllerAdvice(new ApiExceptionHandler()).build();
+        String path = "/api/v1/projects/" + id + "/agent-runs/usage";
+        mvc.perform(get(path)).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.projectTotal.calls").value(120))
+                .andExpect(jsonPath("$.lastFiveHours.calls").value(10))
+                .andExpect(jsonPath("$.projectTotal.actualCalls").value(0))
+                .andExpect(jsonPath("$.recentFrom").exists()).andExpect(jsonPath("$.asOf").exists());
+        when(service.usage(id)).thenThrow(new ProjectNotFoundException(id));
         mvc.perform(get(path)).andExpect(status().isNotFound());
     }
 

@@ -119,6 +119,17 @@ class FirstThreeChaptersPersistenceTest {
         assertThatThrownBy(() -> store.latest(PROJECT, "hash")).isInstanceOf(ProjectNotFoundException.class);
         verifyNoInteractions(manuscripts, reports);
     }
+    @Test void openingSnapshotExcludesRawNotesWithoutLosingBodiesOrFullSourceFingerprint() {
+        var original = bible.getContent().withDevelopmentNotes("九步底稿".repeat(10000));
+        when(bible.getContent()).thenReturn(original);
+        var source = store.snapshot(PROJECT, List.of());
+        assertThat(source.bibleContext()).doesNotContain("九步底稿").contains("logline", "world", "ending");
+        assertThat(source.chapters()).extracting(chapter -> chapter.body()).containsExactly("body 1", "body 2", "body 3");
+        when(bible.getContent()).thenReturn(original.withDevelopmentNotes("作者更新了底稿"));
+        var updated = store.snapshot(PROJECT, List.of());
+        assertThat(updated.bibleContext()).isEqualTo(source.bibleContext());
+        assertThat(updated.fingerprint()).isNotEqualTo(source.fingerprint());
+    }
     @Test void selectsSameProjectSameChapterHistoryWithOutlinePlan() {
         var current = texts.getFirst();
         var old = ManuscriptVersion.create(UUID.randomUUID(), PROJECT, current.getSourceContractVersionId(), 1, 1, "TEST", "",

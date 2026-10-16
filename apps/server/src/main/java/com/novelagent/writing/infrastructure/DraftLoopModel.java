@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.planning.application.ModelProviderException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.prompt.application.AgentPromptDefaults;
@@ -37,6 +37,8 @@ public class DraftLoopModel {
     public void check(DraftLoopRun run, ManuscriptContent draft, Consumer<DraftCheck> save) {
         call(run, "QUALITY_REVIEW", "独立检查当前完整草稿，不读取上一轮意见，不作数值评分。"
                 + "existingBasis 仅列已有依据；gap、candidateDesign、impact 如无补丁填空字符串。"
+                + "每条意见的evidence是1至6段独立引文，每段quote只写当前正文中的连续逐字原文。"
+                + "对比不相邻内容时分成不同记录，不能拼接成一段；不得在quote中添加‘正文引文一’等标签、解释或省略号。"
                 + "只读取本章全文与实际提供的前文，不能宣称读过未提供章节。", draft, null, checkSchema(),
                 8000, DraftCheck.class, output -> { output.requireEvidenceIn(draft.body()); save.accept(output); });
     }
@@ -58,9 +60,14 @@ public class DraftLoopModel {
         if (draft != null) data.set("currentDraft", mapper.valueToTree(draft));
         if (report != null) data.set("suggestionsNotFacts", mapper.valueToTree(report));
         // Project boundaries already live in the frozen basis; do not append current mutable choices.
-        gateway.requestWithBoundaries(run.getProjectId(), stage, run.getProvider(), AgentPromptDefaults.system(stage), data.toString(),
-                schema, "draft_loop_" + run.getPhase().name().toLowerCase(java.util.Locale.ROOT), limit,
-                CodexSessionPolicy.NEW_THREAD, output -> save.accept(parse(output, type)), "");
+        String name = "draft_loop_" + run.getPhase().name().toLowerCase(java.util.Locale.ROOT);
+        if (run.getPhase() == DraftLoopRun.Phase.A) {
+            gateway.requestWithBoundaries(run.getProjectId(), stage, run.getProvider(), AgentPromptDefaults.system(stage), data.toString(),
+                    schema, name, limit, CodexSessionPolicy.NEW_THREAD, output -> save.accept(parse(output, type)), "");
+        } else {
+            gateway.requestJsonWithBoundaries(run.getProjectId(), stage, run.getProvider(), AgentPromptDefaults.system(stage), data.toString(),
+                    schema, name, limit, CodexSessionPolicy.NEW_THREAD, output -> save.accept(parse(output, type)), "");
+        }
     }
 
     private <T> T parse(String output, Class<T> type) {
@@ -69,7 +76,15 @@ public class DraftLoopModel {
             if (result == null) throw new IllegalArgumentException("自动编辑模型返回空结果");
             return result;
         } catch (JsonProcessingException failure) {
-            throw new ModelProviderException("自动编辑输出协议错误：" + type.getSimpleName(), failure);
+            String field = failure instanceof JsonMappingException mapping
+                    ? mapping.getPath().stream().map(reference -> reference.getFieldName() != null
+                            ? reference.getFieldName() : "[" + reference.getIndex() + "]")
+                            .collect(java.util.stream.Collectors.joining(".")) : "";
+            String detail = failure.getCause() instanceof IllegalArgumentException invalid
+                    ? invalid.getMessage() : "字段格式或类型不符合返回协议";
+            // Jackson's full message may contain manuscript text; expose field paths and domain errors only.
+            throw new IllegalArgumentException("自动编辑输出协议错误：" + type.getSimpleName()
+                    + (field.isEmpty() ? "" : " · " + field) + "：" + detail, failure);
         }
     }
 
@@ -86,7 +101,10 @@ public class DraftLoopModel {
     JsonNode checkSchema() {
         var root = object(); var fields = root.putObject("properties"); text(fields, "summary");
         var issue = object(); var item = issue.putObject("properties");
-        for (var key : new String[] { "id", "description", "evidence", "existingBasis", "gap", "candidateDesign", "impact", "suggestion" }) text(item, key);
+        for (var key : new String[] { "id", "description", "existingBasis", "gap", "candidateDesign", "impact", "suggestion" }) text(item, key);
+        var evidence = object(); var quote = evidence.putObject("properties"); text(quote, "quote"); required(evidence, quote);
+        item.putObject("evidence").put("type", "array").put("minItems", 1)
+                .put("maxItems", DraftCheck.MAX_EVIDENCE_QUOTES).set("items", evidence);
         enumeration(item, "category", "STYLE", "FLUENCY", "LOGIC", "SCENE"); required(issue, item);
         fields.putObject("issues").put("type", "array").put("maxItems", 20).set("items", issue);
         required(root, fields); return root;
@@ -98,8 +116,10 @@ public class DraftLoopModel {
         var decision = object(); var item = decision.putObject("properties");
         text(item, "issueId"); enumeration(item, "verdict", "ACCEPT", "REJECT", "DEFER"); text(item, "reason"); required(decision, item);
         fields.putObject("decisions").put("type", "array").put("maxItems", 20).set("items", decision);
-        var alternatives = fields.putObject("content").putArray("anyOf");
-        alternatives.add(schemas.manuscript().path("properties").path("content")); alternatives.addObject().put("type", "null");
+        // NO_CHANGE and NEEDS_CONTEXT return null; a revised manuscript remains one complete text block.
+        ObjectNode content = schemas.manuscript().path("properties").path("content").deepCopy();
+        content.putArray("type").add("object").add("null");
+        fields.set("content", content);
         fields.putObject("changeSummary").put("type", "array").putObject("items").put("type", "string");
         required(root, fields); return root;
     }

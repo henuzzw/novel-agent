@@ -18,6 +18,7 @@ import com.novelagent.writing.application.FirstThreeChaptersStore;
 import com.novelagent.writing.application.QualityReviewStore;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
 import com.novelagent.writing.application.WritingStyleService;
+import com.novelagent.writing.application.WritingMaterialSelection;
 import com.novelagent.writing.api.QualityReviewResponse;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.FirstThreeChaptersBudget;
@@ -160,9 +161,14 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
         dependencies.add(Arrays.asList(project.getCurrentOutlineVersionId(), outline == null ? 0 : outline.getRowVersion(),
                 bible == null ? null : bible.getId(), bible == null ? 0 : bible.getRowVersion(), project.getCurrentCanonVersion(),
                 outlineText, bibleText, style, profile, strategy, project.getSetting("writingStyle")));
+        // Full versions remain fingerprinted; only the model-facing projection is narrowed.
+        String openingOutline = outline == null ? "" : json(names.render(projectId,
+                WritingMaterialSelection.forOpening(outline.getContent()), OutlineContent.class));
+        String openingMaterials = bible == null ? "" : json(names.render(projectId,
+                WritingMaterialSelection.forOpening(bible.getContent()), StoryBibleContent.class));
         return new FirstThreeChaptersSource(projectId, project.getCurrentOutlineVersionId(), outline == null ? 0 : outline.getRowVersion(),
                 bible == null ? null : bible.getId(), bible == null ? 0 : bible.getRowVersion(), project.getCurrentCanonVersion(),
-                strategy, outlineText, bibleText, style, profile, List.copyOf(chapters), List.copyOf(reasons), hash(json(dependencies)));
+                strategy, openingOutline, openingMaterials, style, profile, List.copyOf(chapters), List.copyOf(reasons), hash(json(dependencies)));
     }
 
     /**

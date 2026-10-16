@@ -125,7 +125,6 @@ class CanonCommitServiceTest {
         when(commits.findByReviewVersionId(reviewId)).thenReturn(Optional.empty());
         when(commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, 1)).thenReturn(true);
 
-        assertThat(service.hasCommittedChapter(projectId, 1)).isTrue();
         assertThatThrownBy(() -> service.commit(projectId, 1, new CommitCanonRequest(reviewId, 0)))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("已提交正史");
         verify(outbox, never()).save(any());

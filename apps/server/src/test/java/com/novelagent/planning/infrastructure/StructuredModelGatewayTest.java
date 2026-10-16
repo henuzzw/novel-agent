@@ -23,6 +23,44 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 class StructuredModelGatewayTest {
+    private JsonNode nativeSchema() throws Exception {
+        return mapper.readTree("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"text\"],\"properties\":{\"text\":{\"type\":\"string\"}}}");
+    }
+    @Test void nativeReportsSendSchemaToLegacyAndDeepSeekAndRecordItWhileOtherCallsStayPlain() throws Exception {
+        var contract = nativeSchema();
+        when(codex.startThread(eq(project), anyString(), eq(settings))).thenReturn("json-thread");
+        when(codex.runStructuredTurn(eq("json-thread"), eq(project), anyString(), eq(contract), eq(settings), any()))
+                .thenReturn(new CodexAppServerClient.TurnResult("turn", "{\"text\":\"报告\"}"));
+        when(deepSeek.request(eq("draft_loop_c"), anyString(), anyString(), eq(contract), eq(4000), eq(deepSettings)))
+                .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("{\"text\":\"报告\"}", null));
+        for (var provider : java.util.List.of(ModelProvider.LOCAL_CODEX, ModelProvider.DEEPSEEK)) {
+            assertThat(gateway.requestJsonWithBoundaries(project, "DRAFT_JUDGE_REVISION", provider,
+                    AgentPromptDefaults.system("DRAFT_JUDGE_REVISION"), "user", contract, "draft_loop_c", 4000,
+                    CodexSessionPolicy.NEW_THREAD, null, "")).isEqualTo("{\"text\":\"报告\"}");
+        }
+        var snapshots = ArgumentCaptor.forClass(RequestSnapshot.class);
+        var systems = ArgumentCaptor.forClass(String.class);
+        var inputs = ArgumentCaptor.forClass(String.class);
+        verify(runs, times(2)).record(eq(project), eq("DRAFT_JUDGE_REVISION"), any(), systems.capture(), inputs.capture(), snapshots.capture(), any(), any());
+        assertThat(snapshots.getAllValues()).allSatisfy(value -> {
+            assertThat(value.schemaName()).isEqualTo("draft_loop_c"); assertThat(value.schemaHash()).isNotBlank();
+        });
+        assertThat(systems.getAllValues()).allSatisfy(value -> assertThat(value).doesNotContain("不输出JSON", "不使用JSON"));
+        assertThat(inputs.getAllValues()).allSatisfy(value -> assertThat(value).doesNotContain("【纯文本返回】", "## @"));
+        verify(codex).runStructuredTurn(eq("json-thread"), eq(project), anyString(), eq(contract), eq(settings), any());
+    }
+    @Test void nativeInvalidJsonNeverSavesOrAcknowledgesSuccessfulMaterialDelivery() throws Exception {
+        var contract = nativeSchema();
+        when(codex.startThread(eq(project), anyString(), eq(settings))).thenReturn("json-thread");
+        when(codex.runStructuredTurn(anyString(), eq(project), anyString(), eq(contract), eq(settings), any()))
+                .thenReturn(new CodexAppServerClient.TurnResult("turn", "{\"text\":5}"));
+        Consumer<String> save = mock(Consumer.class);
+        assertThatThrownBy(() -> gateway.requestJsonWithBoundaries(project, "QUALITY_REVIEW", ModelProvider.LOCAL_CODEX,
+                "system", "user", contract, "draft_loop_b", 4000, CodexSessionPolicy.NEW_THREAD, save, ""))
+                .hasMessageContaining("$.text");
+        verifyNoInteractions(save);
+        verify(codex).closeMaterialScope("json-thread");
+    }
     private final ObjectMapper mapper = new ObjectMapper();
     private final JsonNode schema = mapper.createObjectNode().put("type", "object")
             .set("properties", mapper.createObjectNode().set("text", mapper.createObjectNode().put("type", "string")));

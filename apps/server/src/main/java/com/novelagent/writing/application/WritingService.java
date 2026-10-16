@@ -8,8 +8,6 @@ import com.novelagent.writing.api.GenerateWritingRequest;
 import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.ManuscriptVersionSummaryResponse;
 import com.novelagent.writing.api.ReturnReviewRequest;
-import com.novelagent.writing.domain.ChapterContractContent;
-import com.novelagent.writing.domain.ChapterContractReviewContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import java.util.List;
@@ -46,7 +44,7 @@ public class WritingService {
     }
 
     /**
-     * 列出本章历史合同版本摘要，供作者显式选择生成基准。
+     * 列出本章历史合同版本摘要，不作为新正文生成基准。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -68,18 +66,7 @@ public class WritingService {
     }
 
     /**
-     * 根据当前发布规划及记忆生成或有限调整合同草稿，模型返回后核对主要来源；不自动审阅或确认。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    public ChapterContractResponse generateContract(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
-        return contracts.generateContract(projectId, chapterNumber, request);
-    }
-
-    /**
-     * 读取本章最新合同审阅报告；是否可用于批准合同还需核对来源版本和状态。
+     * 读取本章历史合同审阅报告，不再执行合同批准流程。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -89,52 +76,8 @@ public class WritingService {
         return contracts.latestContractReview(projectId, chapterNumber);
     }
 
-    /**
-     * 独立审阅当前大纲下的合同草稿，保存与合同 ID 及行版本绑定的报告，不直接批准合同。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    public ChapterContractReviewResponse generateContractReview(UUID projectId, int chapterNumber,
-            GenerateWritingRequest request) {
-        return contracts.generateContractReview(projectId, chapterNumber, request);
-    }
-
-    /**
-     * 保存作者对审阅问题的处理并确认报告；来源合同或最新报告变化时拒绝使用旧结果。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param id 当前方法所操作记录的稳定 ID。
-     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
-     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
-     */
-    public ChapterContractReviewResponse approveContractReview(UUID projectId, UUID id, long expected,
-            ChapterContractReviewContent content) {
-        return contracts.approveContractReview(projectId, id, expected, content);
-    }
-
-    /**
-     * 按合同当前状态和行版本保存作者编辑；修改后的合同不能沿用不匹配的旧审阅批准。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param id 当前方法所操作记录的稳定 ID。
-     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
-     * @param content 待保存或生成的内容，仍须满足来源与状态约束。
-     */
-    public ChapterContractResponse updateContract(UUID projectId, UUID id, long expected, ChapterContractContent content) {
-        return contracts.updateContract(projectId, id, expected, content);
-    }
-
-    /**
-     * 核对最新合同、最新已确认审阅及来源行版本后确认合同，为正式正文提供依据。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param id 当前方法所操作记录的稳定 ID。
-     * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
-     */
-    public ChapterContractResponse approveContract(UUID projectId, UUID id, long expected) {
-        return contracts.approveContract(projectId, id, expected);
+    public void rejectRetiredContractWrite(UUID projectId) {
+        contracts.rejectRetiredWrite(projectId);
     }
 
     /**

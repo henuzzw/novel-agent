@@ -41,6 +41,11 @@ public class AutomationRun {
     @Column(name = "created_at", nullable = false) private Instant createdAt;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt;
     @Version @Column(name = "row_version", nullable = false) private long rowVersion;
+    @Column(name = "max_loop_rounds", nullable = false) private int maxLoopRounds = 3;
+    @Column(name = "current_loop_id") private UUID currentLoopId;
+    @Column(name = "waiting_for_publication", nullable = false) private boolean waitingForPublication;
+    @Column(name = "auto_publish", nullable = false) private boolean autoPublish;
+    @Column(name = "auto_memory", nullable = false) private boolean autoMemory = true;
 
     protected AutomationRun() { }
 
@@ -106,6 +111,7 @@ public class AutomationRun {
         attempt++;
         waitingReason = null;
         errorCode = null;
+        waitingForPublication = false;
         updatedAt = now;
     }
 
@@ -124,6 +130,7 @@ public class AutomationRun {
 
     public boolean checkpoint() {
         if (cancelRequested) {
+            interruptStep(Instant.now());
             status = AutomationStatus.CANCELLED;
             updatedAt = Instant.now();
             return false;
@@ -165,6 +172,7 @@ public class AutomationRun {
         if (!checkpoint()) return;
         status = AutomationStatus.WAITING_FOR_USER;
         waitingReason = reason;
+        waitingForPublication = false;
         updatedAt = Instant.now();
     }
 
@@ -173,10 +181,15 @@ public class AutomationRun {
         if (!checkpoint()) return;
         if (currentChapter == lastChapter) status = AutomationStatus.SUCCEEDED;
         else currentChapter++;
+        currentLoopId = null;
         updatedAt = Instant.now();
     }
 
     public void fail(String code) {
+        fail(code, null);
+    }
+
+    public void fail(String code, String detail) {
         requireRunning();
         if (!steps.isEmpty() && steps.getLast().status().equals("RUNNING")) {
             AutomationStep step = steps.getLast();
@@ -184,6 +197,7 @@ public class AutomationRun {
                     null, step.startedAt(), Instant.now(), code));
         }
         errorCode = code;
+        waitingReason = detail;
         status = cancelRequested ? AutomationStatus.CANCELLED : AutomationStatus.FAILED;
         updatedAt = Instant.now();
     }
@@ -199,6 +213,49 @@ public class AutomationRun {
     private void requireRunning() {
         if (status != AutomationStatus.RUNNING) throw new IllegalStateException("任务未运行");
     }
+
+    /** Only newly configured range tasks use the shared editorial loop; legacy flags are no longer execution switches. */
+    public void configureLoop(int rounds) {
+        if (rounds < 1 || rounds > 10 || provider == null || provider == ModelProvider.LOCAL_TEMPLATE) {
+            throw new IllegalArgumentException("章节推进请选择真实模型，A/B/C轮次上限为1至10");
+        }
+        maxLoopRounds = rounds;
+    }
+
+    public void bindLoop(UUID loopId, int expectedAttempt, int chapter) {
+        requireRunning();
+        if (cancelRequested || attempt != expectedAttempt || currentChapter != chapter) {
+            throw new IllegalStateException("章节推进任务已变化或取消");
+        }
+        currentLoopId = loopId;
+        updatedAt = Instant.now();
+    }
+
+    public boolean ownsLoop(UUID loopId, int expectedAttempt, int chapter) {
+        return status == AutomationStatus.RUNNING && !cancelRequested && attempt == expectedAttempt
+                && currentChapter == chapter && java.util.Objects.equals(currentLoopId, loopId);
+    }
+
+    public void waitForPublication(String reason) {
+        waitForUser(reason);
+        if (status == AutomationStatus.WAITING_FOR_USER) waitingForPublication = true;
+    }
+
+    public void waitForMemory() {
+        if (status != AutomationStatus.WAITING_FOR_USER || !waitingForPublication || cancelRequested) return;
+        String reason = "本章已发布，等待记忆整理全部落库成功后继续；前文失败或待处理记忆会暂停推进";
+        if (!reason.equals(waitingReason)) {
+            waitingReason = reason;
+            updatedAt = Instant.now();
+        }
+    }
+
+    public int getMaxLoopRounds() { return maxLoopRounds; }
+    public UUID getCurrentLoopId() { return currentLoopId; }
+    public boolean isWaitingForPublication() { return waitingForPublication; }
+    public void configurePublication(boolean publish, boolean memory) { autoPublish = publish; autoMemory = memory; }
+    public boolean isAutoPublish() { return autoPublish; }
+    public boolean isAutoMemory() { return autoMemory; }
 
     public UUID getId() { return id; }
     public UUID getProjectId() { return projectId; }

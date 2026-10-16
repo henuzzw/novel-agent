@@ -3,7 +3,7 @@ import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import GlobalModelSettingsPanel from '@/components/GlobalModelSettingsPanel.vue'
 import GlobalModelBadge from '@/components/GlobalModelBadge.vue'
-import { getChatGptModels, updateGlobalModelSettings, type GlobalModelSettings } from '@/api/modelSettings'
+import { getChatGptModels, getGlobalModelSettings, updateGlobalModelSettings, type GlobalModelSettings } from '@/api/modelSettings'
 import { useGlobalModelSettings } from '@/composables/useGlobalModelSettings'
 vi.mock('@/api/modelSettings', () => ({ getChatGptModels: vi.fn(), updateGlobalModelSettings: vi.fn(), getGlobalModelSettings: vi.fn() }))
 const initial: GlobalModelSettings = { provider: 'LOCAL_CODEX', codexModel: 'gpt-6.1-sol', codexEffort: 'high', deepSeekModel: 'deepseek-flash', version: 0 }
@@ -24,6 +24,41 @@ function render() {
   return wrapper
 }
 describe('global model settings', () => {
+  it('shares concurrent reads and keeps a save made while a read is pending', async () => {
+    let resolve!: (value: GlobalModelSettings) => void
+    vi.mocked(getGlobalModelSettings).mockReturnValueOnce(new Promise(done => { resolve = done }))
+    const first = useGlobalModelSettings()
+    const second = useGlobalModelSettings()
+    const firstLoad = first.load()
+    const secondLoad = second.load()
+    expect(getGlobalModelSettings).toHaveBeenCalledTimes(1)
+    expect(second.loading.value).toBe(true)
+    const saved = { ...initial, provider: 'DEEPSEEK' as const, version: 1 }
+    second.apply(saved)
+    resolve(initial)
+    await Promise.all([firstLoad, secondLoad])
+    expect(first.settings.value).toEqual(saved)
+    expect(first.loading.value).toBe(false)
+
+    vi.mocked(getGlobalModelSettings).mockResolvedValueOnce({ ...saved, version: 2 })
+    await first.load()
+    expect(second.settings.value?.version).toBe(2)
+    expect(getGlobalModelSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('allows retrying a failed read and clears stale errors after saving', async () => {
+    const store = useGlobalModelSettings()
+    vi.mocked(getGlobalModelSettings).mockRejectedValueOnce(new Error('读取失败'))
+    await store.load()
+    expect(store.loadError.value).toBe('读取失败')
+    expect(store.loading.value).toBe(false)
+    store.apply({ ...initial, version: 1 })
+    expect(store.loadError.value).toBe('')
+    vi.mocked(getGlobalModelSettings).mockResolvedValueOnce({ ...initial, version: 2 })
+    await store.load()
+    expect(store.settings.value?.version).toBe(2)
+  })
+
   it('changes only after saving and updates every consumer', async () => {
     const wrapper = render()
     const badge = mount(GlobalModelBadge)

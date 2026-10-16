@@ -76,7 +76,7 @@ class WritingServiceManuscriptVersionTest {
     private final CharacterNameService names = mock(CharacterNameService.class);
     private final TransactionTemplate transactions = mock(TransactionTemplate.class);
     private final WritingContextService contexts = new WritingContextService(new ProjectAccessService(projects, actor),
-            outlines, bibles, memory, names);
+            outlines, bibles, memory, names, mock(com.novelagent.canon.application.PublishedMemoryReadiness.class));
     private final ManuscriptService manuscriptService = new ManuscriptService(contexts, manuscripts,
             workflow, budgetPlanner, names, mock(WritingStyleService.class));
     private final WritingService service = new WritingService(mock(ChapterContractService.class), manuscriptService,

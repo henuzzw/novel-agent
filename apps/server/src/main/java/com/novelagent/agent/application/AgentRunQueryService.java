@@ -2,6 +2,7 @@ package com.novelagent.agent.application;
 
 import com.novelagent.agent.api.AgentRunResponse;
 import com.novelagent.agent.api.AgentRunSummary;
+import com.novelagent.agent.api.AgentTokenUsage;
 import com.novelagent.agent.api.AgentRunPromptResponse;
 import com.novelagent.agent.api.AgentRunOutputResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +57,13 @@ public class AgentRunQueryService {
     public AgentRunSummary summary(UUID projectId) {
         access.requireOwnedProject(projectId);
         return runs.summary(projectId);
+    }
+
+    /** Include failed/cancelled calls with recorded usage; missing vendor usage stays distinguishable. */
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public AgentTokenUsage usage(UUID projectId) {
+        access.requireOwnedProject(projectId);
+        return runs.usage(projectId, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
     }
 
     /**

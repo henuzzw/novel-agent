@@ -35,7 +35,7 @@ public final class ChapterWritingBasisService {
         ManuscriptBasis current = capture(context);
         if (manuscript.getWritingBasis() != null) {
             if (!current.equals(manuscript.getWritingBasis())) {
-                throw new IllegalArgumentException("正文的圣经、大纲、策略或创作准备已更新，请先调整正文");
+                throw new IllegalArgumentException("正文关联的规划资料、大纲、创作策略或创作边界已变化，请先调整正文");
             }
         } else {
             var legacy = legacyContracts.findByIdAndProjectId(manuscript.getSourceContractVersionId(), manuscript.getProjectId())

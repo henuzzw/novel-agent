@@ -23,6 +23,28 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class ChatGptResponsesClientTest {
+    @Test void actualHttpPayloadCarriesStrictJsonSchemaAndKeepsStreaming() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var captured = new java.util.concurrent.atomic.AtomicReference<JsonNode>();
+        server.createContext("/responses", exchange -> {
+            captured.set(json.readTree(exchange.getRequestBody()));
+            byte[] bytes = completed("report").getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "text/event-stream"); exchange.sendResponseHeaders(200, bytes.length);
+            try (var body = exchange.getResponseBody()) { body.write(bytes); }
+        });
+        server.start();
+        try {
+            var schema = json.readTree("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[],\"properties\":{}}");
+            var client = client(URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/responses"), 2);
+            client.request("rules", json.createArrayNode(), settings, ChatGptResponsesClient.accountBinding(credentials), ignored -> {},
+                    () -> {}, "draft_loop_b", schema);
+            assertThat(captured.get().at("/text/format/type").asText()).isEqualTo("json_schema");
+            assertThat(captured.get().at("/text/format/name").asText()).isEqualTo("draft_loop_b");
+            assertThat(captured.get().at("/text/format/strict").asBoolean()).isTrue();
+            assertThat(captured.get().at("/text/format/schema")).isEqualTo(schema);
+            assertThat(captured.get().path("stream").asBoolean()).isTrue();
+        } finally { server.stop(0); }
+    }
     private final ObjectMapper json = new ObjectMapper();
     private final ChatGptOAuthService auth = mock(ChatGptOAuthService.class);
     private final ChatGptHttp http = new ChatGptHttp(json, "");

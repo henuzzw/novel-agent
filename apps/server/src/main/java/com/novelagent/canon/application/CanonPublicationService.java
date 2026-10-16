@@ -29,14 +29,16 @@ public class CanonPublicationService {
     private final CanonPublicationEvents events;
     private final EntityManager entities;
     private final JdbcTemplate jdbc;
+    private final com.novelagent.agent.infrastructure.AutomationRunRepository automations;
 
     public CanonPublicationService(ProjectAccessService access, NovelProjectRepository projects,
             ManuscriptVersionRepository manuscripts, CanonCommitRepository commits,
             TypedCanonMaterializer materializer, CanonPublicationEvents events, EntityManager entities,
-            JdbcTemplate jdbc) {
+            JdbcTemplate jdbc, com.novelagent.agent.infrastructure.AutomationRunRepository automations) {
         this.access = access; this.projects = projects; this.manuscripts = manuscripts;
         this.commits = commits; this.materializer = materializer; this.events = events;
         this.entities = entities; this.jdbc = jdbc;
+        this.automations = automations;
     }
 
     @Transactional
@@ -77,8 +79,14 @@ public class CanonPublicationService {
         var commit = commits.saveAndFlush(new CanonCommit(commitId, projectId, chapter, manuscript.getId(), null,
                 canonVersion, List.of()));
         ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
-        jdbc.update("INSERT INTO canon_memory_job(commit_id, project_id, provider) VALUES (?, ?, ?)",
-                commitId, projectId, provider.name());
+        boolean organize = request.organizeMemory() != null ? request.organizeMemory()
+                : automations.findTop50ByProjectIdOrderByCreatedAtDesc(projectId).stream()
+                        .filter(run -> run.getCurrentChapter() == chapter && !run.isCancelRequested()
+                                && (run.getStatus() == com.novelagent.agent.domain.AutomationStatus.RUNNING
+                                    || run.isWaitingForPublication()))
+                        .findFirst().map(com.novelagent.agent.domain.AutomationRun::isAutoMemory).orElse(true);
+        jdbc.update("INSERT INTO canon_memory_job(commit_id, project_id, provider, status) VALUES (?, ?, ?, ?)",
+                commitId, projectId, provider.name(), organize ? "PENDING" : "SKIPPED");
         events.emit(commit);
         projects.saveAndFlush(project);
         return CanonCommitResponse.from(commit);

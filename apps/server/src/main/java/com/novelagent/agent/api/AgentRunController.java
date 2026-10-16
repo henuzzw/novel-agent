@@ -43,6 +43,12 @@ public class AgentRunController {
         return service.summary(projectId);
     }
 
+    /** Current project's lifetime and rolling five-hour usage, without the task-list limit. */
+    @GetMapping("/usage")
+    public ResponseEntity<AgentTokenUsage> usage(@PathVariable UUID projectId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.usage(projectId));
+    }
+
     /**
      * 读取指定模型任务保存的系统与用户提示词；项目内任务不存在时返回 404。
      *

@@ -27,6 +27,7 @@ onMounted(load)
         <button class="icon-button" type="button" title="任务中心" aria-label="任务中心" :disabled="!route?.params.projectId" @click="openTasks">
           <Activity :size="18" aria-hidden="true" />
         </button>
+        <div id="project-topbar-actions" class="project-topbar-actions" />
         <div class="avatar" title="当前为本地开发用户">作</div>
       </div>
     </header>
@@ -44,5 +45,7 @@ onMounted(load)
 .global-model-button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #38464d; cursor: pointer; min-width: 0; padding: 6px; font-size: 13px; }
 .global-model-button span { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .global-model-button svg { flex-shrink: 0; }
+.project-topbar-actions { display: contents; }
 @media (max-width: 640px) { .global-model-button span { max-width: 130px; } }
+@media (max-width: 480px) { .global-model-button span { display: none; } }
 </style>

@@ -1,6 +1,5 @@
 package com.novelagent.planning.infrastructure;
 
-import com.fasterxml.jackson.databind.node.NullNode;
 import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.AgentRunRecorder.ContextBudget;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
@@ -30,10 +29,11 @@ public abstract class AbstractModelExecutor {
         var selected = effectiveSettings();
         var settings = new EffectiveSettings(request.provider(), selected.model(), selected.effort(), selected.version());
         try (var call = prepare(request, settings)) {
+            var schema = request.protocol().wireSchema();
             var actualBudget = budget.requireCapacity(request.provider(), call.system(), call.input(),
-                    NullNode.getInstance(), request.maxOutputTokens());
-            var snapshot = RequestSnapshot.capture(settings, call.system(), call.input(), NullNode.getInstance(),
-                    "PLAIN_TEXT", request.maxOutputTokens(), call.policy())
+                    schema, request.maxOutputTokens());
+            var snapshot = RequestSnapshot.capture(settings, call.system(), call.input(), schema,
+                    request.protocol().snapshotName(request.schemaName()), request.maxOutputTokens(), call.policy())
                     .withContextBudget(call.contextBudget() == null ? actualBudget : call.contextBudget());
             var decoded = new java.util.concurrent.atomic.AtomicReference<String>();
             runs.record(request.projectId(), request.workflow(), request.provider(), call.system(), call.input(), snapshot,
@@ -49,7 +49,7 @@ public abstract class AbstractModelExecutor {
     }
 
     public record Request(UUID projectId, String workflow, ModelProvider provider, String system, String user,
-            String schemaName, PlainTextOutputProtocol protocol, int maxOutputTokens,
+            String schemaName, ModelOutputProtocol protocol, int maxOutputTokens,
             CodexSessionPolicy policy, String revision, boolean sharedPlanning) {
         public String sessionKey() { return sharedPlanning ? PlanningConversationPolicy.KEY : workflow; }
     }

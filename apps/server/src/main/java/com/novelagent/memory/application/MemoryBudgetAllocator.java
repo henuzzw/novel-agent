@@ -1,10 +1,13 @@
 package com.novelagent.memory.application;
 
+import static com.novelagent.memory.application.MemoryTextBudget.trimParagraphTail;
+import static com.novelagent.memory.application.MemoryTextBudget.trimToTokens;
+
 import com.novelagent.agent.application.AgentStage;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -31,9 +34,7 @@ public class MemoryBudgetAllocator {
         int budgetTokens = plan.effectiveMemoryTokens();
         int maxSemanticMemories = plan.maxSemanticMemories();
         int maxGraphFacts = plan.maxGraphFacts();
-        String boundaryFingerprint = inputFingerprint != null ? inputFingerprint : NovelMemoryContext.fingerprint(semanticCandidates.stream()
-                .map(candidate -> candidate.retrievalKey() + "\n"
-                        + candidate.summary() + "\n" + candidate.content()).reduce("", (a, b) -> a + "\n" + b));
+        String boundaryFingerprint = inputFingerprint != null ? inputFingerprint : boundaryFingerprint(semanticCandidates);
         List<String> trimmedSources = new ArrayList<>(previousTrims);
         List<NovelMemoryContext.SemanticMemory> future = new ArrayList<>();
         for (var candidate : semanticCandidates.stream().filter(NovelMemoryContext.SemanticMemory::futurePlan).toList()) {
@@ -189,31 +190,18 @@ public class MemoryBudgetAllocator {
                 List.copyOf(toolsUsed));
     }
 
-    public static int estimateTokens(String value) {
-        if (value == null || value.isBlank()) return 0;
-        int tokens = 0;
-        int asciiRun = 0;
-        for (int offset = 0; offset < value.length();) {
-            int codePoint = value.codePointAt(offset);
-            offset += Character.charCount(codePoint);
-            if (codePoint <= 0x7f) asciiRun++;
-            else { tokens += 1 + (asciiRun + 3) / 4; asciiRun = 0; }
+    private static String boundaryFingerprint(List<NovelMemoryContext.SemanticMemory> candidates) {
+        StringBuilder sources = new StringBuilder();
+        for (var candidate : candidates) {
+            sources.append('\n').append(candidate.retrievalKey())
+                    .append('\n').append(candidate.summary())
+                    .append('\n').append(candidate.content());
         }
-        return tokens + (asciiRun + 3) / 4;
+        return NovelMemoryContext.fingerprint(sources.toString());
     }
 
-    static String trimToTokens(String value, int maxTokens) {
-        String normalized = nullToEmpty(value).strip();
-        if (maxTokens <= 0 || normalized.isEmpty()) return "";
-        if (estimateTokens(normalized) <= maxTokens) return normalized;
-        int low = 0;
-        int high = normalized.length();
-        while (low < high) {
-            int middle = (low + high + 1) >>> 1;
-            if (estimateTokens(normalized.substring(0, middle)) <= Math.max(1, maxTokens - 1)) low = middle;
-            else high = middle - 1;
-        }
-        return normalized.substring(0, low).stripTrailing() + "…";
+    public static int estimateTokens(String value) {
+        return MemoryTextBudget.estimateTokens(value);
     }
 
     private static String trimSummary(String value, int maxTokens) {
@@ -224,23 +212,6 @@ public class MemoryBudgetAllocator {
         String provenance = normalized.substring(0, newline);
         return provenance + "\n" + trimToTokens(normalized.substring(newline + 1),
                 Math.max(0, maxTokens - estimateTokens(provenance) - 1));
-    }
-
-    static String trimParagraphTail(String value, int maxTokens) {
-        String normalized = nullToEmpty(value).strip();
-        if (maxTokens <= 0 || normalized.isEmpty()) return "";
-        if (estimateTokens(normalized) <= maxTokens) return normalized;
-        List<Integer> starts = new ArrayList<>();
-        starts.add(0);
-        var separators = java.util.regex.Pattern.compile("\\R[\\t ]*(?:\\R[\\t ]*)*").matcher(normalized);
-        while (separators.find()) starts.add(separators.end());
-        String tail = "";
-        for (int i = starts.size() - 1; i >= 0; i--) {
-            String candidate = normalized.substring(starts.get(i));
-            if (estimateTokens(candidate) > maxTokens) break;
-            tail = candidate;
-        }
-        return tail;
     }
 
     private static String nullToEmpty(String value) {

@@ -49,10 +49,13 @@ public class DeepSeekStructuredOutputClient {
     public ResponseResult request(String schemaName, String instructions, String input, JsonNode schema,
             int maxOutputTokens, EffectiveSettings frozenSettings) {
         if (apiKey == null || apiKey.isBlank()) throw new IllegalArgumentException("尚未配置 DeepSeek API Key");
-        Map<String, Object> request = Map.of(
+        Map<String, Object> request = new java.util.LinkedHashMap<>(Map.of(
                 "model", frozenSettings.model(), "instructions", instructions, "input", input,
                 "reasoning", Map.of("effort", "none"),
-                "max_output_tokens", maxOutputTokens, "stream", false);
+                "max_output_tokens", maxOutputTokens, "stream", false));
+        if (schema != null && !schema.isNull()) {
+            request.put("text", Map.of("format", Map.of("type", "json_schema", "name", schemaName, "schema", schema)));
+        }
         JsonNode response;
         try {
             response = restClient.post().uri("/responses")

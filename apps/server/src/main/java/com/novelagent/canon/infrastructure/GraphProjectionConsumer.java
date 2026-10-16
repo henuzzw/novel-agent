@@ -53,6 +53,11 @@ class GraphProjectionConsumer {
                 event.projectId(), commit.getChapterNumber())) {
             retireGraphVersion(event.projectId(), retired.getCanonVersion());
         }
+        // Memory revisions keep the published commit; remove its old derived nodes before rebuilding.
+        var sourceVersions = jdbc.queryForList("SELECT DISTINCT canon_version_from FROM story_fact WHERE source_commit_id=?",
+                Long.class, commit.getId());
+        retireGraphVersion(event.projectId(), commit.getCanonVersion());
+        for (Long version : sourceVersions) if (version != commit.getCanonVersion()) retireGraphVersion(event.projectId(), version);
         for (FactProposal fact : commit.getAcceptedFacts()) upsertFact(event, fact);
         projectTypedCanon(event);
         updateWatermark(event);
@@ -100,7 +105,7 @@ class GraphProjectionConsumer {
         projectRows("""
                 SELECT id, title, summary, story_time_text, narrative_chapter, importance,
                        canon_version_from, evidence_ref
-                  FROM story_event WHERE source_commit_id = ?
+                  FROM story_event WHERE source_commit_id = ? AND canon_version_to IS NULL
                 """, commitId, """
                 MERGE (item:StoryEvent {projectId: $projectId, eventId: $id})
                 SET item.title = $title, item.summary = $summary, item.storyTime = $storyTimeText,
@@ -112,7 +117,7 @@ class GraphProjectionConsumer {
                        s.before_value::text, s.after_value::text, s.story_time_text,
                        s.narrative_chapter, s.canon_version_from, s.evidence_ref
                   FROM entity_state_change s JOIN story_entity e ON e.id = s.entity_id
-                 WHERE s.source_commit_id = ?
+                 WHERE s.source_commit_id = ? AND s.canon_version_to IS NULL
                 """, commitId, """
                 MERGE (entity:StoryEntity {projectId: $projectId, entityId: $entityId})
                 SET entity.name = $canonicalName, entity.entityType = $entityType
@@ -129,7 +134,7 @@ class GraphProjectionConsumer {
                   FROM story_relationship r
                   JOIN story_entity source ON source.id = r.source_entity_id
                   JOIN story_entity target ON target.id = r.target_entity_id
-                 WHERE r.source_commit_id = ?
+                 WHERE r.source_commit_id = ? AND r.canon_version_to IS NULL
                 """, commitId, """
                 MERGE (source:StoryEntity {projectId: $projectId, entityId: $sourceEntityId})
                 SET source.name = $sourceName
@@ -147,7 +152,7 @@ class GraphProjectionConsumer {
                   FROM character_knowledge k
                   JOIN story_entity entity ON entity.id = k.character_id
                   JOIN story_fact fact ON fact.id = k.fact_id
-                 WHERE k.source_commit_id = ?
+                 WHERE k.source_commit_id = ? AND k.canon_version_to IS NULL AND fact.canon_version_to IS NULL
                 """, commitId, """
                 MERGE (character:StoryEntity {projectId: $projectId, entityId: $characterId})
                 SET character.name = $canonicalName, character.entityType = 'CHARACTER'
@@ -162,7 +167,7 @@ class GraphProjectionConsumer {
         projectRows("""
                 SELECT id, title, target_effect, current_status, planned_resolve_chapter,
                        canon_version_from, evidence_ref
-                  FROM foreshadow WHERE source_commit_id = ?
+                  FROM foreshadow WHERE source_commit_id = ? AND canon_version_to IS NULL
                 """, commitId, """
                 MERGE (item:Foreshadow {projectId: $projectId, foreshadowId: $id})
                 SET item.title = $title, item.targetEffect = $targetEffect, item.status = $currentStatus,
@@ -191,7 +196,8 @@ class GraphProjectionConsumer {
                         "canonVersion", event.canonVersion())).run();
     }
 
-    private Object neo4jValue(Object value) {
+    Object neo4jValue(Object value) {
+        if (value instanceof java.math.BigDecimal decimal) return decimal.doubleValue();
         return value instanceof UUID uuid ? uuid.toString() : value;
     }
 

@@ -2,6 +2,7 @@ package com.novelagent.writing.application;
 
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.StoryBibleContent;
 import java.util.List;
 
@@ -33,5 +34,21 @@ public final class WritingMaterialSelection {
     public static OutlineArc forChapter(OutlineArc arc, ChapterPlan chapter) {
         return new OutlineArc(arc.ordinal(), arc.title(), arc.objective(), arc.mainConflict(), "", "",
                 arc.suggestedMinWords(), arc.suggestedMaxWords(), List.of(chapter));
+    }
+
+    /** Opening reviews retain global promises and full character designs, not the redundant nine-step prose. */
+    public static StoryBibleContent forOpening(StoryBibleContent source) {
+        return source == null ? null : source.withDevelopmentNotes(null);
+    }
+
+    public static OutlineContent forOpening(OutlineContent source) {
+        if (source == null) return null;
+        var arcs = source.arcs().stream().map(arc -> new OutlineArc(arc.ordinal(), arc.title(),
+                arc.objective(), arc.mainConflict(), arc.turningPoint(), arc.outcome(),
+                arc.suggestedMinWords(), arc.suggestedMaxWords(), arc.chapters().stream()
+                        .filter(chapter -> chapter.number() >= 1 && chapter.number() <= 3).toList()))
+                .filter(arc -> !arc.chapters().isEmpty()).toList();
+        return new OutlineContent(source.title(), source.premise(), source.structureSummary(), source.pacingStrategy(),
+                source.suggestedMinWords(), source.suggestedMaxWords(), arcs, source.readerExperiencePlans());
     }
 }

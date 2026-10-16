@@ -29,3 +29,13 @@ reference-projects/novel-agent/
 /*.pdf
 /*女生*.md
 ~$*
+
+# Local scratch, captured HTTP responses and proxy configuration.
+# docs/temp.json holds third-party session credentials and must never be committed.
+docs/temp.json
+docs/temp.yml
+
+# Large diagram and cover binaries are kept locally only.
+docs/Novel Agent 架构全景图.png
+docs/novel-agent-architecture-preview.png
+docs/青春课堂里的秘密心意.png

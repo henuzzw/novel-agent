@@ -14,8 +14,9 @@ const firstChapter = ref(1)
 const lastChapter = ref(3)
 const { provider: provider } = useGlobalModelSettings()
 const instruction = ref('')
-const qualityReviewEnabled = ref(true)
-const maxAutoRevisionRounds = ref(0)
+const maxLoopRounds = ref(3)
+const autoPublish = ref(false)
+const autoMemory = ref(true)
 const maxGenerationSteps = ref(100)
 const busy = ref(false)
 const error = ref('')
@@ -23,7 +24,7 @@ let creationKey = createUuid()
 const runs = useQuery({
   queryKey: computed(() => ['automation-runs', props.projectId]),
   queryFn: () => listAutomationRuns(props.projectId),
-  refetchInterval: (query) => query.state.data?.some(run => run.status === 'RUNNING' || run.status === 'PENDING') ? 2000 : false,
+  refetchInterval: (query) => query.state.data?.some(run => ['RUNNING', 'PENDING'].includes(run.status) || run.waitingForPublication) ? 3000 : false,
 })
 const active = computed(() => runs.data.value?.some(run => !['SUCCEEDED', 'CANCELLED'].includes(run.status)))
 watch(() => runs.data.value, (items) => {
@@ -31,24 +32,24 @@ watch(() => runs.data.value, (items) => {
   if (!run) return
   firstChapter.value = run.firstChapter
   lastChapter.value = run.lastChapter
-  qualityReviewEnabled.value = run.qualityReviewEnabled
-  maxAutoRevisionRounds.value = run.maxAutoRevisionRounds ?? 0
+  maxLoopRounds.value = run.maxLoopRounds ?? 3
+  autoPublish.value = run.autoPublish ?? false
+  autoMemory.value = run.autoMemory ?? true
   maxGenerationSteps.value = run.maxGenerationSteps ?? 100
 }, { immediate: true })
 const validRange = computed(() => Number.isInteger(firstChapter.value) && Number.isInteger(lastChapter.value)
   && firstChapter.value >= 1 && lastChapter.value >= firstChapter.value && lastChapter.value - firstChapter.value < 20
+  && provider.value !== 'LOCAL_TEMPLATE' && Number.isInteger(maxLoopRounds.value) && maxLoopRounds.value >= 1 && maxLoopRounds.value <= 10
   && Number.isInteger(maxGenerationSteps.value) && maxGenerationSteps.value >= 1 && maxGenerationSteps.value <= 500)
 const statusNames = {
   PENDING: '待开始', RUNNING: '运行中', WAITING_FOR_USER: '等待确认', FAILED: '失败', CANCELLED: '已取消', SUCCEEDED: '已完成',
 }
-const stageNames = { CONTRACT: '章节合同', CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', QUALITY_REVIEW: '正文质量检查', QUALITY_REVISION: '语句润色', REVIEW: '正文审稿' }
+const stageNames = { CONTRACT: '章节合同', CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文生成', QUALITY_REVIEW: '正文质量检查', QUALITY_REVISION: '语句润色', REVIEW: '正文审稿', DRAFT_A: 'A 正文创作', DRAFT_B: 'B 独立检查', DRAFT_C: 'C 裁决与修订' }
 const stepNames = { RUNNING: '运行中', SUCCEEDED: '完成', FAILED: '失败' }
-watch([firstChapter, lastChapter, provider, instruction, qualityReviewEnabled, maxAutoRevisionRounds, maxGenerationSteps, () => props.projectId], () => { creationKey = createUuid() })
-watch([qualityReviewEnabled, provider], () => {
-  if (!active.value && (!qualityReviewEnabled.value || provider.value === 'LOCAL_TEMPLATE')) maxAutoRevisionRounds.value = 0
-})
+watch([firstChapter, lastChapter, provider, instruction, maxLoopRounds, autoPublish, autoMemory, maxGenerationSteps, () => props.projectId], () => { creationKey = createUuid() })
 
 function canResume(run: AutomationRun) {
+  if (run.waitingForPublication) return false
   return ['WAITING_FOR_USER', 'FAILED', 'PENDING'].includes(run.status)
     || (run.status === 'RUNNING' && !run.cancelRequested && Date.now() - Date.parse(run.updatedAt) >= 20 * 60 * 1000)
 }
@@ -77,8 +78,9 @@ function create() {
     await createAutomationRun(props.projectId, {
       firstChapter: firstChapter.value, lastChapter: lastChapter.value, provider: provider.value,
       instruction: instruction.value.trim() || undefined,
-      qualityReviewEnabled: qualityReviewEnabled.value,
-      maxAutoRevisionRounds: maxAutoRevisionRounds.value,
+      maxLoopRounds: maxLoopRounds.value,
+      autoPublish: autoPublish.value,
+      autoMemory: autoMemory.value,
       maxGenerationSteps: maxGenerationSteps.value,
     }, creationKey)
     creationKey = createUuid()
@@ -88,14 +90,15 @@ function create() {
 
 <template>
   <section class="automation-panel" aria-label="自动创作任务">
-    <h3>章节推进（作者确认并发布后继续）</h3>
+    <h3>章节推进</h3>
     <form class="automation-form" @submit.prevent="create">
       <label>起始章<input v-model.number="firstChapter" type="number" min="1" max="100000" required :disabled="busy || active" /></label>
       <label>结束章<input v-model.number="lastChapter" type="number" :min="firstChapter" :max="Math.min(firstChapter + 19, 100000)" required :disabled="busy || active" /></label>
       <GlobalModelBadge />
       <label class="automation-instruction">创作要求<input v-model="instruction" maxlength="2000" :disabled="busy || active" /></label>
-      <label class="automation-quality"><input v-model="qualityReviewEnabled" type="checkbox" :disabled="busy || active" />正文质量检查</label>
-      <label>自动语句润色<select v-model.number="maxAutoRevisionRounds" :disabled="busy || active || !qualityReviewEnabled || provider === 'LOCAL_TEMPLATE'"><option :value="0">关闭</option><option :value="1">每章最多 1 轮</option><option :value="2">每章最多 2 轮</option><option :value="3">每章最多 3 轮</option></select></label>
+      <label>每章检查轮次上限<input v-model.number="maxLoopRounds" type="number" min="1" max="10" required :disabled="busy || active" /></label>
+      <label class="automation-quality"><input v-model="autoPublish" type="checkbox" :disabled="busy || active" />自动发布</label>
+      <label class="automation-quality"><input v-model="autoMemory" type="checkbox" :disabled="busy || active" />自动整理记忆</label>
       <label>生成次数上限<input v-model.number="maxGenerationSteps" type="number" min="1" max="500" required :disabled="busy || active" /></label>
       <button class="icon-button" type="submit" title="开始自动创作" aria-label="开始自动创作" :disabled="busy || active || !validRange || runs.isPending.value || runs.isError.value"><Play :size="18" /></button>
     </form>
@@ -105,18 +108,18 @@ function create() {
     <div v-for="run in runs.data.value" :key="run.id" class="automation-row">
       <div class="automation-heading">
         <strong>第 {{ run.firstChapter }} 至 {{ run.lastChapter }} 章</strong>
-        <span>{{ run.cancelRequested && run.status === 'RUNNING' ? '正在取消' : statusNames[run.status] }} · 当前第 {{ run.currentChapter }} 章</span>
-        <span v-if="run.qualityReviewEnabled">含质量检查</span>
+        <span>{{ run.waitingForPublication ? '等待章节推进' : run.cancelRequested && run.status === 'RUNNING' ? '正在取消' : statusNames[run.status] }} · 当前第 {{ run.currentChapter }} 章</span>
         <span>生成额度已用 {{ run.usedGenerationSteps ?? run.steps.length }} / {{ run.maxGenerationSteps ?? 100 }} 次</span>
-        <span v-if="run.maxAutoRevisionRounds > 0">本章润色 {{ run.usedAutoRevisionRounds }} / {{ run.maxAutoRevisionRounds }} 轮</span>
+        <span>A/B/C · 每章最多 {{ run.maxLoopRounds ?? 3 }} 轮检查</span>
+        <span>{{ run.autoPublish ? '自动发布' : '作者发布' }} · {{ run.autoMemory === false ? '记忆手动整理' : '记忆自动整理' }}</span>
         <div class="automation-actions">
           <button v-if="['WAITING_FOR_USER', 'FAILED'].includes(run.status)" class="icon-button" type="button" title="处理当前章节" aria-label="处理当前章节" @click="emit('open-chapter', automationChapterTarget(run))"><FileSearch :size="18" /></button>
           <button v-if="canResume(run)" class="icon-button" type="button" :disabled="busy" :title="run.status === 'FAILED' || run.status === 'RUNNING' ? '重试任务' : '继续任务'" :aria-label="run.status === 'FAILED' || run.status === 'RUNNING' ? '重试任务' : '继续任务'" @click="act(() => resumeAutomationRun(projectId, run.id))"><component :is="run.status === 'FAILED' || run.status === 'RUNNING' ? RotateCcw : ChevronRight" :size="18" /></button>
           <button v-if="!['SUCCEEDED', 'CANCELLED'].includes(run.status)" class="icon-button" type="button" title="取消任务" aria-label="取消任务" :disabled="busy || !canCancel(run)" @click="act(() => cancelAutomationRun(projectId, run.id))"><Square :size="16" /></button>
         </div>
       </div>
-      <p v-if="run.waitingReason">{{ run.waitingReason }}</p>
-      <p v-if="run.errorCode" role="alert">失败原因：{{ run.errorCode }}</p>
+      <p v-if="run.waitingReason && run.status !== 'FAILED'">{{ run.waitingReason }}</p>
+      <p v-if="run.errorCode" role="alert">失败原因：{{ run.failureDetail || run.errorCode }}</p>
       <ol v-if="run.steps.length" class="automation-steps">
         <li v-for="(step, index) in run.steps" :key="index">第 {{ step.chapterNumber }} 章 · {{ stageNames[step.stage] }} · {{ stepNames[step.status] }}</li>
       </ol>

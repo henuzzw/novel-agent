@@ -3,7 +3,7 @@ import { createUuid } from '@/lib/uuid'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Play, Square, LoaderCircle } from 'lucide-vue-next'
-import { draftChange, draftLoopActive, draftStopLabels, listDraftLoops, startDraftLoop, stopDraftLoop } from '@/api/draftLoops'
+import { draftChange, draftIssueQuotes, draftLoopActive, draftStopLabels, listDraftLoops, startDraftLoop, stopDraftLoop } from '@/api/draftLoops'
 import type { ModelProvider } from '@/api/planning'
 import type { ManuscriptVersion } from '@/api/writing'
 
@@ -68,7 +68,7 @@ const labels: Record<string, string> = { ACCEPT: '接受并修订', REJECT: '拒
       <p>{{ round.check.summary }}</p>
       <article v-for="issue in round.check.issues" :key="issue.id" class="draft-loop-issue">
         <strong>{{ issue.id }} · {{ labels[issue.category] }} · {{ issue.description }}</strong>
-        <blockquote>{{ issue.evidence }}</blockquote>
+        <blockquote v-for="(quote, index) in draftIssueQuotes(issue)" :key="index">{{ quote }}</blockquote>
         <p v-if="issue.existingBasis"><b>已有依据：</b>{{ issue.existingBasis }}</p>
         <p>{{ issue.suggestion }}</p>
         <p v-if="issue.gap"><b>资料缺口：</b>{{ issue.gap }}</p>

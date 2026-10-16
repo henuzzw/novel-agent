@@ -1,10 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, apiRequest } from '@/api/http'
+import { ApiError, apiRequest, apiText } from '@/api/http'
+import { generationRequests } from '@/lib/generation-activity'
 import { updateCreativeIntent, type ProjectSummary } from '@/api/projects'
 
 describe('apiRequest', () => {
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => { vi.unstubAllGlobals(); generationRequests.value = [] })
+
+  it('preserves generation tracking headers alongside JSON and caller headers', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ status: 'SUCCEEDED' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const callerHeaders = new Headers({ 'Idempotency-Key': 'request-1' })
+    await apiRequest('/api/v1/projects/p/outlines/actions/generate', {
+      method: 'POST', headers: callerHeaders, body: '{}',
+    })
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    const headers = new Headers(init.headers)
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('Idempotency-Key')).toBe('request-1')
+    expect(headers.get('X-Generation-Request-Id')).toBe(generationRequests.value[0]?.id)
+    expect(generationRequests.value[0]?.status).toBe('SUCCEEDED')
+    expect(callerHeaders.has('X-Generation-Request-Id')).toBe(false)
+  })
+
+  it('returns text with the same cache and error handling as JSON requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({ ok: true, text: async () => '# 正文' })
+      .mockResolvedValueOnce({ ok: false, status: 502, json: async () => { throw new Error('not JSON') } })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(apiText('/api/export')).resolves.toBe('# 正文')
+    expect(fetchMock.mock.calls[0]![1]).toMatchObject({ cache: 'no-store' })
+    await expect(apiText('/api/export')).rejects.toMatchObject({ status: 502, message: '请求失败（HTTP 502）' })
+  })
 
   it('returns null for an empty 204 response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 204 }))

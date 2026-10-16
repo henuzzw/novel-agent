@@ -27,9 +27,22 @@ class AgentRunQueryServiceTest {
         doThrow(new ProjectNotFoundException(id)).when(access).requireOwnedProject(id);
         assertThatThrownBy(() -> service.list(id)).isInstanceOf(ProjectNotFoundException.class);
         assertThatThrownBy(() -> service.summary(id)).isInstanceOf(ProjectNotFoundException.class);
+        assertThatThrownBy(() -> service.usage(id)).isInstanceOf(ProjectNotFoundException.class);
         assertThatThrownBy(() -> service.prompt(id, UUID.randomUUID())).isInstanceOf(ProjectNotFoundException.class);
         assertThatThrownBy(() -> service.requestSnapshot(id, UUID.randomUUID())).isInstanceOf(ProjectNotFoundException.class);
         verifyNoInteractions(runs);
+    }
+
+    @Test void usageUsesOneUtcCutoffAndChecksOwnershipFirst() {
+        UUID id = UUID.randomUUID();
+        var before = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        service.usage(id);
+        var cutoff = org.mockito.ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
+        var order = org.mockito.Mockito.inOrder(access, runs);
+        order.verify(access).requireOwnedProject(id);
+        order.verify(runs).usage(org.mockito.ArgumentMatchers.eq(id), cutoff.capture());
+        assertThat(cutoff.getValue()).isBetween(before, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
+        assertThat(cutoff.getValue().getOffset()).isEqualTo(java.time.ZoneOffset.UTC);
     }
 
     @Test void preservesEmptyResultsAndEstimatedSummary() {

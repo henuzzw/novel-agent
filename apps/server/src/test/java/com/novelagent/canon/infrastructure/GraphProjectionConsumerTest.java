@@ -38,6 +38,15 @@ class GraphProjectionConsumerTest {
         consumer = new GraphProjectionConsumer(new ObjectMapper(), commits, jdbc, neo4j, checkpoints);
     }
 
+    @Test void convertsPostgresNumericConfidenceToSupportedNeo4jValue() {
+        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(new java.math.BigDecimal("0.98")))
+                .isEqualTo(0.98d);
+        UUID id=UUID.randomUUID();
+        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(id)).isEqualTo(id.toString());
+        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(7L)).isEqualTo(7L);
+        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(null)).isNull();
+    }
+
     @Test
     void projectsEachAcceptedFactAndMarksCheckpoint() throws Exception {
         UUID eventId = UUID.randomUUID();
@@ -51,7 +60,7 @@ class GraphProjectionConsumerTest {
 
         consumer.project(message(eventId, commitId));
 
-        verify(neo4j, times(3)).query(anyString());
+        verify(neo4j, times(6)).query(anyString());
         verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.NEO4J);
     }
 
@@ -98,7 +107,7 @@ class GraphProjectionConsumerTest {
 
         consumer.project(message(eventId, commitId));
 
-        verify(neo4j, times(4)).query(anyString());
+        verify(neo4j, times(7)).query(anyString());
         verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.NEO4J);
     }
 

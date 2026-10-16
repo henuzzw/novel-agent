@@ -15,6 +15,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -26,8 +27,13 @@ public class PublishedMemoryService {
     public record View(UUID commitId, UUID manuscriptVersionId, String status, List<FactProposal> candidates,
             String error, long version) { }
     public record Confirmation(long version, List<FactProposal> candidates) { }
+    public record History(UUID id, long version, String action, List<FactProposal> candidates, Instant createdAt) { }
     record Source(UUID commitId, UUID projectId, ModelProvider provider, ManuscriptContent manuscript,
-            EntityCatalogContext catalog) { }
+            EntityCatalogContext catalog, String identityContext) {
+        Source(UUID commitId, UUID projectId, ModelProvider provider, ManuscriptContent manuscript, EntityCatalogContext catalog) {
+            this(commitId, projectId, provider, manuscript, catalog, "");
+        }
+    }
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final ProjectAccessService access;
@@ -78,7 +84,7 @@ public class PublishedMemoryService {
                     WHERE j.status='PENDING' AND c.active AND NOT EXISTS (
                       SELECT 1 FROM canon_memory_job older JOIN canon_commit oc ON oc.id=older.commit_id
                       WHERE older.project_id=j.project_id AND oc.active AND oc.canon_version<c.canon_version
-                        AND older.status IN ('PENDING','RUNNING'))
+                        AND older.status NOT IN ('SUCCEEDED','SKIPPED'))
                     ORDER BY j.created_at LIMIT 1 FOR UPDATE OF j SKIP LOCKED
                     """, (rs, row) -> rs.getObject(1, UUID.class));
             if (ids.isEmpty()) return null;
@@ -90,14 +96,18 @@ public class PublishedMemoryService {
             jdbc.update("UPDATE canon_memory_job SET status='RUNNING', source_body=?, error_message=NULL, "
                     + "row_version=row_version+1, updated_at=now() WHERE commit_id=?", rendered.body(), commit.getId());
             return new Source(commit.getId(), commit.getProjectId(), ModelProvider.valueOf(provider), rendered,
-                    catalog.forPublishedMemory(commit.getProjectId()));
+                    catalog.forPublishedMemory(commit.getProjectId()), manuscript.getWritingBasis() == null ? ""
+                        : names.render(commit.getProjectId(), manuscript.getWritingBasis().plan().pov() + "\n"
+                            + String.join("\n", manuscript.getWritingBasis().plan().requiredBeats())));
         });
     }
 
     void process(Source source) {
+        var extracted = new java.util.concurrent.atomic.AtomicReference<List<FactProposal>>();
         try {
-            var result = gateway.publishedMemory(source.projectId(), source.manuscript(), source.catalog(), source.provider());
+            var result = gateway.publishedMemory(source.projectId(), source.manuscript(), source.catalog(), source.provider(), source.identityContext());
             PublishedMemoryPolicy.validate(result.factProposals(), source.manuscript().body());
+            extracted.set(result.factProposals().stream().map(f -> PublishedMemoryPolicy.decide(f, FactDecision.PENDING)).toList());
             transactions.executeWithoutResult(tx -> {
                 lockProject(source.projectId());
                 var commit = commits.findById(source.commitId()).orElseThrow();
@@ -109,22 +119,35 @@ public class PublishedMemoryService {
                 String state = jdbc.queryForObject("SELECT status FROM canon_memory_job WHERE commit_id=? FOR UPDATE", String.class, source.commitId());
                 if (!"RUNNING".equals(state)) return;
                 var currentCatalog = catalog.forPublishedMemory(source.projectId());
-                var candidates = result.factProposals().stream().map(f -> PublishedMemoryPolicy.decide(f,
-                        PublishedMemoryPolicy.unambiguous(f, source.catalog()) && PublishedMemoryPolicy.unambiguous(f, currentCatalog)
-                                ? FactDecision.ACCEPTED : FactDecision.PENDING)).toList();
-                var accepted = candidates.stream().filter(f -> f.decision() == FactDecision.ACCEPTED).toList();
-                if (!accepted.isEmpty()) {
-                    materializer.materialize(source.projectId(), commit.getChapterNumber(), commit.getId(), commit.getCanonVersion(), accepted);
-                    commit.addMemoryFacts(accepted);
-                    commits.saveAndFlush(commit);
-                    events.emit(commit); // A fresh event lets projections observe the newly added index entries.
+                var candidates = result.factProposals().stream().map(f -> {
+                    if (!PublishedMemoryPolicy.autoAcceptable(f, source.catalog(), currentCatalog))
+                        throw new IllegalArgumentException("记忆实体引用无效，整批未落库：" + f.id());
+                    return PublishedMemoryPolicy.decide(f, FactDecision.ACCEPTED);
+                }).toList();
+                var view = lockedView(commit.getId());
+                long indexVersion = commit.getCanonVersion();
+                if (!commit.getAcceptedFacts().isEmpty()) {
+                    recordHistory(source.projectId(), commit.getId(), view, "REGENERATE");
+                    var project = access.requireOwnedProject(source.projectId());
+                    indexVersion = project.commitCanon(project.getCurrentCanonVersion());
+                    materializer.retire(commit.getId(), indexVersion);
                 }
-                finish(commit.getId(), candidates.stream().anyMatch(f -> f.decision() == FactDecision.PENDING)
-                        ? "NEEDS_CONFIRMATION" : "SUCCEEDED", candidates);
+                materializer.materialize(source.projectId(), commit.getChapterNumber(), commit.getId(), indexVersion, candidates);
+                commit.replaceMemoryFacts(candidates);
+                commits.saveAndFlush(commit);
+                events.emit(commit, indexVersion);
+                finish(commit.getId(), "SUCCEEDED", candidates);
             });
         } catch (Exception failure) {
-            jdbc.update("UPDATE canon_memory_job SET status='FAILED', error_message='记忆整理未完成，可查看生成记录并手动重试', "
-                    + "row_version=row_version+1, updated_at=now() WHERE commit_id=? AND status='RUNNING'", source.commitId());
+            String reason = failure instanceof IllegalArgumentException
+                    ? "记忆输出或实体引用校验失败，整批未落库；可重新整理或编辑记忆后保存"
+                    : "记忆整理或落库失败；自动推进已暂停，可重试";
+            if (failure instanceof IllegalArgumentException && failure.getMessage() != null
+                    && failure.getMessage().startsWith("记忆实体引用无效，整批未落库：")) reason = failure.getMessage();
+            String candidates = extracted.get() == null ? null : write(extracted.get());
+            jdbc.update("UPDATE canon_memory_job SET status='FAILED', error_message=?, "
+                    + "candidates=CASE WHEN CAST(? AS text) IS NULL THEN candidates ELSE CAST(? AS jsonb) END, "
+                    + "row_version=row_version+1, updated_at=now() WHERE commit_id=? AND status='RUNNING'", reason, candidates, candidates, source.commitId());
         }
     }
 
@@ -133,7 +156,7 @@ public class PublishedMemoryService {
             requireCurrent(projectId, chapter, commitId);
             var view = lockedView(commitId);
             check(view, version);
-            if (!"FAILED".equals(view.status())) throw new IllegalStateException("只有失败或中断的记忆整理可以重试");
+            if (!List.of("FAILED", "SKIPPED", "NEEDS_CONFIRMATION").contains(view.status())) throw new IllegalStateException("只有失败、待处理或未执行的记忆整理可以启动");
             jdbc.update("UPDATE canon_memory_job SET status='PENDING', error_message=NULL, row_version=row_version+1, updated_at=now() WHERE commit_id=?", commitId);
         });
         return status(projectId, chapter);
@@ -168,6 +191,57 @@ public class PublishedMemoryService {
                     ? "NEEDS_CONFIRMATION" : "SUCCEEDED", request.candidates());
         });
         return status(projectId, chapter);
+    }
+
+    /** Author edits use the same source evidence and entity checks, with optimistic locking and an audit snapshot. */
+    public View save(UUID projectId, int chapter, UUID commitId, Confirmation request) {
+        transactions.executeWithoutResult(tx -> {
+            var commit = requireCurrent(projectId, chapter, commitId);
+            var view = lockedView(commitId);
+            check(view, request.version());
+            if (List.of("PENDING", "RUNNING", "SUPERSEDED").contains(view.status()))
+                throw new IllegalStateException("记忆正在整理或来源失效，暂不能修改");
+            String body = jdbc.queryForObject("SELECT source_body FROM canon_memory_job WHERE commit_id=?", String.class, commitId);
+            if (body == null) body = names.render(projectId, manuscripts.findByIdAndProjectId(
+                    commit.getManuscriptVersionId(), projectId).orElseThrow().getContent()).body();
+            PublishedMemoryPolicy.validate(request.candidates(), body);
+            if (request.candidates().stream().anyMatch(f -> f.decision() != FactDecision.ACCEPTED && f.decision() != FactDecision.REJECTED))
+                throw new IllegalArgumentException("记忆条目只能保存或移除，不能留待确认");
+            if (view.candidates().equals(request.candidates()) && "SUCCEEDED".equals(view.status())) return;
+            var currentCatalog = catalog.forPublishedMemory(projectId);
+            var accepted = request.candidates().stream().filter(f -> f.decision() == FactDecision.ACCEPTED).toList();
+            for (var fact : accepted) if (!PublishedMemoryPolicy.autoAcceptable(fact, currentCatalog, currentCatalog))
+                throw new IllegalArgumentException("记忆实体引用无法解析：" + fact.id());
+            recordHistory(projectId, commitId, view, "EDIT");
+            var project = access.requireOwnedProject(projectId);
+            long revision = project.commitCanon(project.getCurrentCanonVersion());
+            materializer.retire(commitId, revision);
+            materializer.materialize(projectId, chapter, commitId, revision, accepted);
+            commit.replaceMemoryFacts(accepted);
+            commits.saveAndFlush(commit);
+            finish(commitId, "SUCCEEDED", request.candidates());
+            events.emit(commit, revision);
+        });
+        return status(projectId, chapter);
+    }
+
+    public List<History> history(UUID projectId, int chapter, UUID commitId) {
+        return transactions.execute(tx -> {
+            requireCurrent(projectId, chapter, commitId);
+            return jdbc.query("SELECT id,memory_version,action,candidates,created_at FROM canon_memory_history "
+                    + "WHERE commit_id=? AND project_id=? ORDER BY memory_version DESC LIMIT 20",
+                    (rs, row) -> new History(rs.getObject(1, UUID.class), rs.getLong(2), rs.getString(3),
+                            read(rs.getString(4)), rs.getTimestamp(5).toInstant()), commitId, projectId);
+        });
+    }
+
+    private void recordHistory(UUID projectId, UUID commitId, View view, String action) {
+        var snapshot = new java.util.LinkedHashMap<String, FactProposal>();
+        view.candidates().forEach(f -> snapshot.put(f.id(), f));
+        // A failed re-extraction may contain new drafts; preserve the still-applied memory as well.
+        commits.findById(commitId).orElseThrow().getAcceptedFacts().forEach(f -> snapshot.put(f.id(), f));
+        jdbc.update("INSERT INTO canon_memory_history(id,commit_id,project_id,memory_version,action,candidates) "
+                + "VALUES (?,?,?,?,?,CAST(? AS jsonb))", UUID.randomUUID(), commitId, projectId, view.version(), action, write(List.copyOf(snapshot.values())));
     }
     private boolean sameClaim(FactProposal a, FactProposal b) {
         var left = mapper.valueToTree(PublishedMemoryPolicy.decide(a, FactDecision.PENDING));

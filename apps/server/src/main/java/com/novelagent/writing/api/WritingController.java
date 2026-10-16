@@ -1,6 +1,9 @@
 package com.novelagent.writing.api;
 
 import com.novelagent.writing.application.WritingService;
+import com.novelagent.platform.api.ContentUpdateRequest;
+import com.novelagent.writing.domain.ManuscriptContent;
+import com.novelagent.writing.domain.ChapterReviewContent;
 import java.net.URI;
 import java.util.UUID;
 import java.util.List;
@@ -13,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 章节写作。
  *
- * <p>统一提供合同、合同审阅、正文和审稿的版本操作及导出。确认合同、确认正文、确认审稿和提交正史是不同门禁，不能相互代替。</p>
+ * <p>提供正文和审稿操作及导出；合同与合同审阅仅保留历史读取，旧写入口校验项目权限后返回410。</p>
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/chapters/{chapterNumber}")
@@ -33,7 +36,7 @@ public class WritingController {
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
     /**
-     * 列出本章历史合同版本摘要，供作者显式选择生成基准。
+     * 列出本章历史合同版本摘要，不作为新正文生成基准。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -56,49 +59,9 @@ public class WritingController {
             @PathVariable UUID id) {
         return service.contractVersion(projectId, chapterNumber, id);
     }
+
     /**
-     * 根据当前发布规划及记忆生成或有限调整合同草稿，模型返回后核对主要来源；不自动审阅或确认。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    @PostMapping("/contracts/actions/generate")
-    public ResponseEntity<ChapterContractResponse> generateContract(@PathVariable UUID projectId,
-            @PathVariable int chapterNumber, @RequestBody GenerateWritingRequest request) {
-        ChapterContractResponse value = service.generateContract(projectId, chapterNumber, request);
-        return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/chapters/" + chapterNumber + "/contracts/" + value.id()))
-                .eTag(tag(value.version())).body(value);
-    }
-    /**
-     * 按合同当前状态和行版本保存作者编辑；修改后的合同不能沿用不匹配的旧审阅批准。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param id 当前方法所操作记录的稳定 ID。
-     * @param match If-Match 请求头中的预期编辑行版本。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    @PutMapping("/contracts/{id}")
-    public ResponseEntity<ChapterContractResponse> updateContract(@PathVariable UUID projectId, @PathVariable UUID id,
-            @RequestHeader("If-Match") String match, @RequestBody UpdateChapterContractRequest request) {
-        ChapterContractResponse value = service.updateContract(projectId, id, parse(match), request.content());
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
-    }
-    /**
-     * 核对最新合同、最新已确认审阅及来源行版本后确认合同，为正式正文提供依据。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param id 当前方法所操作记录的稳定 ID。
-     * @param match If-Match 请求头中的预期编辑行版本。
-     */
-    @PostMapping("/contracts/{id}/actions/approve")
-    public ResponseEntity<ChapterContractResponse> approveContract(@PathVariable UUID projectId, @PathVariable UUID id,
-            @RequestHeader("If-Match") String match) {
-        ChapterContractResponse value = service.approveContract(projectId, id, parse(match));
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
-    }
-    /**
-     * 读取本章最新合同审阅报告；是否可用于批准合同还需核对来源版本和状态。
+     * 读取本章历史合同审阅报告，不再执行合同批准流程。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
@@ -110,36 +73,19 @@ public class WritingController {
                 .map(value -> ResponseEntity.ok().eTag(tag(value.version())).body(value))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
-    /**
-     * 独立审阅当前大纲下的合同草稿，保存与合同 ID 及行版本绑定的报告，不直接批准合同。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    @PostMapping("/contract-reviews/actions/generate")
-    public ResponseEntity<ChapterContractReviewResponse> generateContractReview(@PathVariable UUID projectId,
-            @PathVariable int chapterNumber, @RequestBody GenerateWritingRequest request) {
-        ChapterContractReviewResponse value = service.generateContractReview(projectId, chapterNumber, request);
-        return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/chapters/" + chapterNumber
-                + "/contract-reviews/" + value.id())).eTag(tag(value.version())).body(value);
+
+    /** Retired routes ignore old mutation payloads and versions, after checking project ownership. */
+    @PostMapping({"/contracts/actions/generate", "/contracts/{id}/actions/approve",
+            "/contract-reviews/actions/generate", "/contract-reviews/{id}/actions/approve"})
+    public void rejectRetiredContractAction(@PathVariable UUID projectId) {
+        service.rejectRetiredContractWrite(projectId);
     }
-    /**
-     * 保存作者对审阅问题的处理并确认报告；来源合同或最新报告变化时拒绝使用旧结果。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param id 当前方法所操作记录的稳定 ID。
-     * @param match If-Match 请求头中的预期编辑行版本。
-     * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
-     */
-    @PostMapping("/contract-reviews/{id}/actions/approve")
-    public ResponseEntity<ChapterContractReviewResponse> approveContractReview(@PathVariable UUID projectId,
-            @PathVariable UUID id, @RequestHeader("If-Match") String match,
-            @RequestBody(required = false) UpdateChapterContractReviewRequest request) {
-        ChapterContractReviewResponse value = service.approveContractReview(projectId, id, parse(match),
-                request == null ? null : request.content());
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
+
+    @PutMapping("/contracts/{id}")
+    public void rejectRetiredContractUpdate(@PathVariable UUID projectId) {
+        service.rejectRetiredContractWrite(projectId);
     }
+
     /**
      * 读取本章最新保存正文并按当前人物名称渲染，最新草稿不等于作者接受或有效正史。
      *
@@ -199,7 +145,7 @@ public class WritingController {
      */
     @PutMapping("/manuscripts/{id}")
     public ResponseEntity<ManuscriptResponse> updateManuscript(@PathVariable UUID projectId, @PathVariable UUID id,
-            @RequestHeader("If-Match") String match, @RequestBody UpdateManuscriptRequest request) {
+            @RequestHeader("If-Match") String match, @RequestBody ContentUpdateRequest<ManuscriptContent> request) {
         ManuscriptResponse value = service.updateManuscript(projectId, id, parse(match), request.content());
         return ResponseEntity.ok().eTag(tag(value.version())).body(value);
     }
@@ -280,7 +226,7 @@ public class WritingController {
      */
     @PutMapping("/reviews/{id}")
     public ResponseEntity<ChapterReviewResponse> updateReview(@PathVariable UUID projectId, @PathVariable UUID id,
-            @RequestHeader("If-Match") String match, @RequestBody UpdateChapterReviewRequest request) {
+            @RequestHeader("If-Match") String match, @RequestBody ContentUpdateRequest<ChapterReviewContent> request) {
         ChapterReviewResponse value = service.updateReview(projectId, id, parse(match), request.content());
         return ResponseEntity.ok().eTag(tag(value.version())).body(value);
     }
@@ -294,7 +240,8 @@ public class WritingController {
      */
     @PostMapping("/reviews/{id}/actions/approve")
     public ResponseEntity<ChapterReviewResponse> approveReview(@PathVariable UUID projectId, @PathVariable UUID id,
-            @RequestHeader("If-Match") String match, @RequestBody(required = false) UpdateChapterReviewRequest request) {
+            @RequestHeader("If-Match") String match,
+            @RequestBody(required = false) ContentUpdateRequest<ChapterReviewContent> request) {
         ChapterReviewResponse value = service.approveReview(projectId, id, parse(match), request == null ? null : request.content());
         return ResponseEntity.ok().eTag(tag(value.version())).body(value);
     }

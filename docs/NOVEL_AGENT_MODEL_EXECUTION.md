@@ -1,6 +1,30 @@
 # 模型请求架构与资料去重
 
+## 自动B/C结构化返回（2026-10-13）
+
+ModelOutputProtocol统一管理本轮输出说明、wire Schema、解码与快照。DraftLoopModel显式选择requestJsonWithBoundaries，其余用例仍走原纯文本request，不是全局改JSON。旧/新Codex均传outputSchema，直接HTTP与DeepSeek Responses传text.format.json_schema；直接HTTP按OpenAI规范启用strict，DeepSeek不附未文档化字段。Schema进入最终输入预算及快照哈希，协议与业务保存成功后才确认资料送达。非法JSON/字段或证据记OUTPUT_VALIDATION，不自动降级或增加模型请求。底层请求使用本地替身验证，未验证真实账号支持情况；不修改历史任务、提示词数据库或小说内容。
+
+协议依据：[OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)、[DeepSeek Responses](https://api-docs.deepseek.com/api/create-response/)及本机生成的Codex App Server TurnStartParams。下面较早日期“纯文本不变”描述不再适用于自动B/C，其余阶段仍成立。
+
 2026-10-10。此次调整只改请求层，不增加文学 Agent、不改变模型纯文本返回、不覆盖数据库里的提示词配置或小说版本。
+
+## 本地 Fast 关闭（2026-10-13）
+
+按作者要求，两个小说系统私有 runtime 的 `config.toml` 已移除 `service_tier = "fast"`，并设置 `[features].fast_mode = false`。本次未修改模型及推理强度，不修改桌面 Codex 配置、小说数据或提示词。作者选择等待整个章节推进范围结束后重启；结束后检查全部任务、记忆整理和租约空闲再加载配置，不在章节间的短暂空闲重启，不中断或重跑生成。
+
+两个 runtime 的原生 `config/read` 均返回 `fast_mode=false`、`service_tier=null`；独立测试线程的新建及跨进程恢复均返回 `serviceTier=null`，即不使用 priority。测试线程已归档，生成轮次为0，不改业务线程或小说资料。
+
+已生效：2026-10-13 20:08（Asia/Singapore），第7至13章范围任务成功结束且所有任务、记忆整理及有效租约均空闲后重启8081。健康检查UP，5173页面与模型配置代理200；当前保存配置为 `gpt-6.1-sol / high`、版本6，本次只读核对，未改模型设置。未重跑任务或修改小说数据。
+
+## 历史 Fast 启用记录（2026-10-12）
+
+按作者要求在小说系统独立的 `tmp/codex-runtime/home/config.toml` 和 `tmp/codex-runtime-oauth/home/config.toml` 设置 `service_tier = "fast"`、`[features].fast_mode = true`。配置属于本机运行环境，目录被 Git 忽略，不修改用户的桌面 Codex 配置；作用于使用这些环境的小说 Codex 请求，不是单本小说的数据库开关。DeepSeek 和直接 HTTP 入口不受此配置影响，清空 tmp 后需重新设置。
+
+原生 `config/read`、零生成轮次的临时 `thread/start` 与既有业务线程 `thread/resume` 已确认服务档位为 `priority`（当前协议的 Fast 表示），模型仍为 `gpt-6.1-sol`、推理强度仍为 `xhigh`。这只验证请求配置，不证明供应商已实际提供加速。既有业务线程由服务持有写锁，验证不得抢锁或中断任务；有运行任务时不重启。
+
+已启用：2026-10-12 19:59（UTC+08），全部生成任务、记忆队列及会话租约空闲后重启后端；健康检查 UP，5173 前端及 API 代理均为 200，模型设置版本 5 不变。新建和复用会话验证均未发送生成轮次；一次性等待心跳已暂停，不重跑现有任务。
+
+Fast 提高额度消耗，具体适用倍率与可用性以[官方速度说明](https://learn.chatgpt.com/docs/agent-configuration/speed)为准。此次没有发起付费生成、重跑任务、改变提示词或修改小说版本，前端现有模型配置仍只展示模型与推理强度。
 
 ## 职责划分
 

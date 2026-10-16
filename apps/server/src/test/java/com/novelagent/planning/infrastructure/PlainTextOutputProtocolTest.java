@@ -9,6 +9,31 @@ class PlainTextOutputProtocolTest {
     private final ObjectMapper json = new ObjectMapper();
     private PlainTextOutputProtocol codec(String schema) throws Exception { return new PlainTextOutputProtocol(json.readTree(schema)); }
 
+    @Test void localReferencesExpandNestedEvidenceAndEnumsInBothDirections() throws Exception {
+        var codec = codec("""
+                {"type":"object","required":["dimension","evidence"],"properties":{
+                "dimension":{"$ref":"#/$defs/dimension"},"evidence":{"$ref":"#/$defs/evidence"}},
+                "$defs":{"dimension":{"type":"string","enum":["LOGIC","STYLE"]},
+                "evidence":{"type":"array","items":{"$ref":"#/$defs/quote"}},
+                "quote":{"type":"object","required":["chapterNumber","quote"],"properties":{
+                "chapterNumber":{"type":"integer"},"quote":{"type":"string"}}}}}
+                """);
+        assertThat(codec.instructions()).contains("LOGIC / STYLE", "## @evidence/*/chapterNumber", "## @evidence/*/quote");
+        var result = json.readTree(codec.decode("## @dimension\nLOGIC\n## @evidence/1/chapterNumber\n2\n## @evidence/1/quote\n她说：别走。"));
+        assertThat(result.at("/evidence/0/chapterNumber").asInt()).isEqualTo(2);
+        assertThat(result.at("/evidence/0/quote").asText()).isEqualTo("她说：别走。");
+        assertThatThrownBy(() -> codec.decode("## @dimension\nLOGIC\n## @evidence\n第2章，她说别走"))
+                .hasMessageContaining("记录须分标题填写");
+    }
+
+    @Test void unsafeUnresolvedAndRecursiveReferencesFailBeforeRequestingModel() {
+        for (String reference : new String[] {"https://example.com/schema", "#/$defs/missing", "#/$defs/loop"}) {
+            assertThatThrownBy(() -> codec("{\"$ref\":\"" + reference
+                    + "\",\"$defs\":{\"loop\":{\"$ref\":\"#/$defs/loop\"}}}"))
+                    .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("返回协议");
+        }
+    }
+
     @Test void freeProsePreservesParagraphsQuotesAndOrdinaryHeadings() throws Exception {
         var codec = codec("{\"properties\":{\"text\":{\"type\":\"string\"}}}");
         String body = "# 第一章\n\n她说：\"别走。\"\n他停下。";

@@ -50,6 +50,10 @@ public class ChatGptResponsesClient {
     }
     public Result request(String instructions, JsonNode input, AgentRunRecorder.EffectiveSettings settings,
             String binding, Consumer<String> progress, Runnable activityObserver) {
+        return request(instructions, input, settings, binding, progress, activityObserver, null, null);
+    }
+    public Result request(String instructions, JsonNode input, AgentRunRecorder.EffectiveSettings settings,
+            String binding, Consumer<String> progress, Runnable activityObserver, String schemaName, JsonNode schema) {
         var credentials = auth.authorization();
         if (!binding.equals(accountBinding(credentials)))
             throw new ChatGptAccessException("AUTHENTICATION", "账号在请求前发生变化，未发送旧会话资料，请重新生成");
@@ -58,6 +62,11 @@ public class ChatGptResponsesClient {
         payload.set("input", input);
         payload.putObject("reasoning").put("effort", settings.effort());
         payload.putArray("include").add("reasoning.encrypted_content");
+        if (schema != null && !schema.isNull()) {
+            var format = payload.putObject("text").putObject("format").put("type", "json_schema")
+                    .put("name", schemaName).put("strict", true);
+            format.set("schema", schema);
+        }
         var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(45))
                 .header("Authorization", "Bearer " + credentials.accessToken())
                 .header("Accept", "text/event-stream").header("Content-Type", "application/json")

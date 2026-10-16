@@ -39,19 +39,43 @@ public class DraftLoopStore {
     @Transactional
     public DraftLoopRun create(UUID projectId, UUID requestKey, int chapter, com.novelagent.planning.application.ModelProvider provider,
             boolean writeFirst, int maxRounds, DraftLoopContext.Source frozen) {
+        return createLocked(projectId, requestKey, chapter, provider, writeFirst, maxRounds, frozen, null, 0);
+    }
+
+    /** Parent and child are bound under the same project lock; only this exact owner bypasses the range-task exclusion. */
+    @Transactional
+    public DraftLoopRun createForAutomation(UUID projectId, UUID requestKey, int chapter,
+            com.novelagent.planning.application.ModelProvider provider, boolean writeFirst, int maxRounds,
+            DraftLoopContext.Source frozen, UUID automationId, int attempt) {
+        return createLocked(projectId, requestKey, chapter, provider, writeFirst, maxRounds, frozen, automationId, attempt);
+    }
+
+    private DraftLoopRun createLocked(UUID projectId, UUID requestKey, int chapter,
+            com.novelagent.planning.application.ModelProvider provider, boolean writeFirst, int maxRounds,
+            DraftLoopContext.Source frozen, UUID automationId, int attempt) {
         lockProject(projectId);
+        var parent = automationId == null ? null : automations.findLocked(projectId, automationId)
+                .orElseThrow(() -> new IllegalArgumentException("章节推进任务不存在"));
+        if (parent != null && (parent.getStatus() != com.novelagent.agent.domain.AutomationStatus.RUNNING
+                || parent.isCancelRequested() || parent.getAttempt() != attempt || parent.getCurrentChapter() != chapter
+                || parent.getProvider() != provider || parent.getMaxLoopRounds() != maxRounds
+                || !parent.getOutlineId().equals(frozen.basis().writingBasis().outlineId()))) {
+            throw new IllegalStateException("章节推进任务的来源或执行尝试已变化");
+        }
         var existing = runs.findByProjectIdAndRequestKey(projectId, requestKey);
         if (existing.isPresent()) {
             var run = existing.get();
             requireSameRequest(run, chapter, provider, writeFirst, maxRounds);
+            if (!Objects.equals(run.getAutomationId(), automationId) || !Objects.equals(run.getAutomationAttempt(),
+                    automationId == null ? null : attempt)) throw new IllegalArgumentException("自动编辑任务归属不一致");
             return run;
         }
         if (!runs.findByProjectIdAndStatusIn(projectId, List.of(DraftLoopRun.Status.PENDING, DraftLoopRun.Status.RUNNING)).isEmpty()) {
             throw new IllegalStateException("项目已有自动编辑任务，请等待或停止后再开始");
         }
         if (automations.findTop50ByProjectIdOrderByCreatedAtDesc(projectId).stream().anyMatch(value ->
-                value.getStatus() == com.novelagent.agent.domain.AutomationStatus.PENDING
-                        || value.getStatus() == com.novelagent.agent.domain.AutomationStatus.RUNNING)) {
+                !value.getId().equals(automationId) && (value.getStatus() == com.novelagent.agent.domain.AutomationStatus.PENDING
+                        || value.getStatus() == com.novelagent.agent.domain.AutomationStatus.RUNNING))) {
             throw new IllegalStateException("项目的章节推进任务正在运行，请先停止或等待该任务");
         }
         var current = contexts.capture(projectId, chapter);
@@ -67,6 +91,11 @@ public class DraftLoopStore {
         }
         var run = DraftLoopRun.create(projectId, requestKey, chapter, provider, writeFirst, maxRounds, frozen.basis(), current.latest());
         run.assignWorker(recovery.identity());
+        if (parent != null) {
+            run.attachAutomation(automationId, attempt);
+            parent.bindLoop(run.getId(), attempt, chapter);
+            automations.saveAndFlush(parent);
+        }
         return runs.saveAndFlush(run);
     }
 
@@ -101,6 +130,29 @@ public class DraftLoopStore {
 
     @Transactional
     public boolean claim(UUID projectId, UUID id) { return locked(projectId, id).claim(); }
+
+    /** Resume only the exact parent's failed child; fresh source checks still run before any paid call. */
+    @Transactional
+    public Optional<DraftLoopRun> retryForAutomation(com.novelagent.agent.domain.AutomationRun requested) {
+        lockProject(requested.getProjectId());
+        var parent = automations.findLocked(requested.getProjectId(), requested.getId())
+                .orElseThrow(() -> new IllegalArgumentException("章节推进任务不存在"));
+        if (parent.getStatus() != com.novelagent.agent.domain.AutomationStatus.RUNNING || parent.isCancelRequested()
+                || parent.getAttempt() != requested.getAttempt()) throw new IllegalStateException("章节推进执行尝试已变化");
+        if (parent.getCurrentLoopId() == null) return Optional.empty();
+        var run = locked(parent.getProjectId(), parent.getCurrentLoopId());
+        if (!parent.getId().equals(run.getAutomationId()) || run.getChapterNumber() != parent.getCurrentChapter()
+                || run.getProvider() != parent.getProvider() || run.getMaxRounds() != parent.getMaxLoopRounds())
+            throw new IllegalStateException("失败节点不属于当前章节推进任务");
+        if (run.getStatus() != DraftLoopRun.Status.FAILED) {
+            if (run.active()) throw new IllegalStateException("自动编辑任务仍在运行");
+            return Optional.empty();
+        }
+        run.retry(); run.assignWorker(recovery.identity()); run.attachAutomation(parent.getId(), parent.getAttempt());
+        run.claim();
+        valid(run);
+        return Optional.of(run);
+    }
 
     @Transactional
     public DraftLoopRun cancel(UUID projectId, UUID id) {
@@ -156,6 +208,11 @@ public class DraftLoopStore {
     /** 来源/当前正文改变或被作者确认即停止，取消之后迟到结果不能产生新稿。 */
     private boolean valid(DraftLoopRun run) {
         if (run.getStatus() != DraftLoopRun.Status.RUNNING) return false;
+        if (run.getAutomationId() != null && !automations.findLocked(run.getProjectId(), run.getAutomationId())
+                .filter(parent -> parent.ownsLoop(run.getId(), run.getAutomationAttempt(), run.getChapterNumber())).isPresent()) {
+            run.stop(DraftLoopRun.StopReason.CANCELLED);
+            return false;
+        }
         DraftLoopContext.Source source;
         try { source = contexts.capture(run.getProjectId(), run.getChapterNumber()); }
         catch (IllegalArgumentException | IllegalStateException changed) { run.stop(DraftLoopRun.StopReason.SOURCE_CHANGED); return false; }

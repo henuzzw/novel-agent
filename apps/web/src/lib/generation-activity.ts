@@ -4,9 +4,10 @@ import type { AgentRun } from '@/api/agentRuns'
 
 export const generationStages: Record<string, string> = {
   BOOK_TITLE: '自动书名',
+  PROJECT_CHAT: '创作对话',
   OUTLINE: '分层大纲',
   CHAPTER_CONTRACT: '章节合同', CHAPTER_CONTRACT_REVIEW: '合同审阅', MANUSCRIPT: '正文',
-  CHAPTER_REVIEW: '章节审稿', QUALITY_REVIEW: '质量检查', IMPORT_PLANNING: '导入规划',
+  CHAPTER_REVIEW: '发布后记忆整理', QUALITY_REVIEW: '质量检查', IMPORT_PLANNING: '导入规划',
   IMPORT_SOURCE_ANALYSIS: '原文解析', STYLE_ANALYSIS: '风格分析', STYLE_PREVIEW: '风格试写',
   STYLE_RECOMMENDATION: '风格推荐', STYLE_PREVIEW_REVIEW: '试写审阅', STYLE_PREVIEW_REVISION: '试写修订',
   FIRST_THREE_CHAPTERS_REVIEW: '前三章审阅', MANUSCRIPT_LOCAL_EDIT: '局部改写', DRAFT_JUDGE_REVISION: '自动裁决与修订',
@@ -78,20 +79,33 @@ export function completeGenerationResponse(id: string | null, body: unknown) {
   endGenerationRequest(id, outcome?.status === 'CANCELLED' ? new Error('生成已停止')
     : outcome?.status === 'FAILED' ? new Error(outcome.errorMessage || '生成失败') : undefined)
 }
+
+function latestByStage(items: GenerationActivity[]) {
+  const latest = new Map<string, { activity: GenerationActivity; startedAt: number }>()
+  for (const activity of items) {
+    const startedAt = Date.parse(activity.startedAt)
+    const previous = latest.get(activity.stage)
+    if (!previous || startedAt > previous.startedAt) latest.set(activity.stage, { activity, startedAt })
+  }
+  return latest
+}
+
 export function generationRows(projectId: string, runs: AgentRun[]) {
   const models: GenerationActivity[] = runs.filter(run => generationStages[aliases[run.stage] ?? run.stage])
     .map(run => ({ id: run.id, projectId, stage: aliases[run.stage] ?? run.stage, status: run.status,
       startedAt: run.startedAt, completedAt: run.completedAt, errorMessage: run.errorMessage, source: 'model', chapter: null }))
   const local = generationRequests.value.filter(item => item.projectId === projectId)
+  const latestRequests = latestByStage(local)
+  const latestModels = latestByStage(models)
   const core = ['SNOWFLAKE_PLANNING', 'CHARACTER_DESIGN', 'OUTLINE', 'MANUSCRIPT', 'CHAPTER_REVIEW', 'QUALITY_REVIEW']
-  const stages = [...new Set([...core, ...[...local, ...models].map(item => item.stage)])]
+  const stages = [...new Set([...core, ...latestRequests.keys(), ...latestModels.keys()])]
+  const now = Date.now()
   return stages.map(stage => {
-    const newest = (items: GenerationActivity[]) => items.filter(item => item.stage === stage)
-      .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0]
-    const request = newest(local), model = newest(models)
+    const request = latestRequests.get(stage)?.activity
+    const model = latestModels.get(stage)
     // A completed model call must not override a still-pending HTTP save or an HTTP validation failure.
-    const activity = request && (!model || Date.parse(model.startedAt) <= Date.parse(request.completedAt ?? new Date().toISOString()))
-      ? request : model
-    return { stage, label: generationStages[stage]!, activity: activity ?? null, model: model ?? null }
+    const activity = request && (!model || model.startedAt <= (request.completedAt ? Date.parse(request.completedAt) : now))
+      ? request : model?.activity
+    return { stage, label: generationStages[stage]!, activity: activity ?? null, model: model?.activity ?? null }
   })
 }

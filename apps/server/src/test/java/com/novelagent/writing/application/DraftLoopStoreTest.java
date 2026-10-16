@@ -25,8 +25,9 @@ class DraftLoopStoreTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final DraftLoopContext contexts = mock(DraftLoopContext.class);
     private final CharacterNameService names = mock(CharacterNameService.class);
+    private final AutomationRunRepository automations = mock(AutomationRunRepository.class);
     private final DraftLoopStore store = new DraftLoopStore(runs, manuscripts, access, contexts, names,
-            mock(EntityManager.class), mock(DraftLoopRecovery.class), mock(AutomationRunRepository.class));
+            mock(EntityManager.class), mock(DraftLoopRecovery.class), automations);
     private final ManuscriptContent before = new ManuscriptContent("标题", "她递还纸条。", "摘要", List.of());
     private final ManuscriptVersion source = ManuscriptVersion.create(UUID.randomUUID(), project, null, 1, 1,
             "DEEPSEEK", null, null, before, List.of());
@@ -92,5 +93,39 @@ class DraftLoopStoreTest {
         when(access.requireOwnedProject(project)).thenThrow(new IllegalArgumentException("项目不可见"));
         assertThatThrownBy(() -> store.get(project, run.getId())).hasMessageContaining("不可见");
         verify(runs, never()).findByIdAndProjectId(any(), any());
+    }
+
+    @Test void parentCancellationOrChangedAttemptRejectsLateOutput() {
+        var parent = com.novelagent.agent.domain.AutomationRun.create(project, UUID.randomUUID(), 1, 1, ModelProvider.DEEPSEEK, null);
+        parent.start(java.time.Instant.now()); parent.bindLoop(run.getId(), parent.getAttempt(), 1);
+        run.attachAutomation(parent.getId(), parent.getAttempt());
+        when(automations.findLocked(project, parent.getId())).thenReturn(Optional.of(parent));
+        parent.cancel(); parent.checkpoint();
+        store.checked(project, run.getId(), before, report());
+        assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.CANCELLED);
+        verifyNoInteractions(contexts, manuscripts);
+    }
+
+    private com.novelagent.agent.domain.AutomationRun failedParent() {
+        var parent = com.novelagent.agent.domain.AutomationRun.create(project, run.getBasis().writingBasis().outlineId(), 1, 1, ModelProvider.DEEPSEEK, null);
+        parent.configureLoop(1); parent.start(java.time.Instant.now()); parent.bindLoop(run.getId(), parent.getAttempt(), 1);
+        run.attachAutomation(parent.getId(), parent.getAttempt());
+        when(automations.findLocked(project, parent.getId())).thenReturn(Optional.of(parent));
+        store.checked(project, run.getId(), before, report());
+        run.fail("C输出格式错误"); parent.fail("DRAFT_LOOP_FAILED"); parent.start(java.time.Instant.now());
+        return parent;
+    }
+    @Test void retriesExactFailedCWithCurrentParentAttemptAndPreservedSource() {
+        var parent = failedParent();
+        var retry = store.retryForAutomation(parent).orElseThrow();
+        assertThat(retry.getStatus()).isEqualTo(DraftLoopRun.Status.RUNNING);
+        assertThat(retry.getPhase()).isEqualTo(DraftLoopRun.Phase.C); assertThat(retry.getRounds()).hasSize(1);
+        assertThat(retry.getAutomationAttempt()).isEqualTo(parent.getAttempt());
+        verify(manuscripts, never()).saveAndFlush(any());
+    }
+    @Test void retryStopsWhenSourceChangedOrDraftWasAccepted() {
+        var parent = failedParent(); source.accept();
+        assertThat(store.retryForAutomation(parent).orElseThrow().getStopReason()).isEqualTo(DraftLoopRun.StopReason.SOURCE_CHANGED);
+        verify(manuscripts, never()).saveAndFlush(any());
     }
 }

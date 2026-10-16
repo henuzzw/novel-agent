@@ -85,6 +85,17 @@ class DraftLoopRunTest {
         assertThatThrownBy(() -> run.checked(content("原稿"), report("原稿"))).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test void explicitRetryKeepsCReportDraftAndAccumulatedRoundsAndCannotReviveStoppedRuns() {
+        var run = run(3); run.checked(content("原稿"), report("原稿"));
+        var id = run.getManuscriptId(); var basis = run.getBasis();
+        run.fail("裁决格式错误"); run.retry(); assertThat(run.claim()).isTrue();
+        assertThat(run.getPhase()).isEqualTo(DraftLoopRun.Phase.C);
+        assertThat(run.getRounds()).hasSize(1); assertThat(run.getManuscriptId()).isEqualTo(id);
+        assertThat(run.getBasis()).isSameAs(basis); assertThat(run.getMaxRounds()).isEqualTo(3);
+        assertThat(run.getErrorMessage()).isNull(); run.stop(DraftLoopRun.StopReason.CANCELLED);
+        assertThatThrownBy(run::retry).isInstanceOf(IllegalStateException.class);
+    }
+
     @Test void transportEvidenceAndDecisionCoverageAreValidatedNotLiteraryStructure() {
         var run = run(10);
         assertThatThrownBy(() -> run.checked(content("原稿"), report("不存在的引文"))).hasMessageContaining("证据");

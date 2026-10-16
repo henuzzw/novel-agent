@@ -67,6 +67,39 @@ class ArchitectureTest {
         });
     }
 
+    @Test void typedFactsUseIndependentStrategiesInTheCallersTransaction() {
+        String coordinator = "com.novelagent.canon.application.TypedCanonMaterializer";
+        assertThat(dependencies.get(coordinator)).contains("com.novelagent.canon.application.CanonFactProjector")
+                .noneMatch(type -> type.startsWith("com.novelagent.canon.infrastructure.") && type.endsWith("FactProjector"));
+        assertThat(dependencies.get("com.novelagent.canon.application.CanonFactProjector"))
+                .noneMatch(type -> type.startsWith("org.springframework.") || type.contains(".infrastructure."));
+        for (Class<?> type : List.of(
+                com.novelagent.canon.infrastructure.EventFactProjector.class,
+                com.novelagent.canon.infrastructure.StateFactProjector.class,
+                com.novelagent.canon.infrastructure.RelationshipFactProjector.class,
+                com.novelagent.canon.infrastructure.KnowledgeFactProjector.class,
+                com.novelagent.canon.infrastructure.ForeshadowFactProjector.class)) {
+            assertThat(dependencies.get(type.getName())).doesNotContain(coordinator);
+            assertThat(AnnotatedElementUtils.findMergedAnnotation(type, Transactional.class)).isNull();
+            for (var method : type.getDeclaredMethods()) {
+                assertThat(AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class)).isNull();
+            }
+        }
+    }
+
+    @Test void canonFactAndEntityPoliciesDependOnStoragePorts() {
+        for (var entry : Map.of(
+                "TypedCanonMaterializer", "CanonFactStore",
+                "EntityResolutionService", "EntityResolutionStore").entrySet()) {
+            var service = dependencies.get("com.novelagent.canon.application." + entry.getKey());
+            assertThat(service).contains("com.novelagent.canon.application." + entry.getValue());
+            assertThat(service).noneMatch(type -> type.startsWith("org.springframework.jdbc.")
+                    || type.startsWith("java.sql.") || type.contains(".infrastructure."));
+            assertThat(dependencies.get("com.novelagent.canon.application." + entry.getValue()))
+                    .noneMatch(type -> type.startsWith("org.springframework.") || type.contains(".infrastructure."));
+        }
+    }
+
     @Test void projectOwnershipChecksUseOneAccessPolicy() {
         List<String> readers = methodCalls.entrySet().stream()
                 .filter(entry -> entry.getValue().contains("com.novelagent.project.domain.NovelProject#getOwnerId"))
@@ -145,6 +178,28 @@ class ArchitectureTest {
         assertThat(AnnotatedElementUtils.findMergedAnnotation(WritingService.class, Transactional.class)).isNull();
         for (var method : WritingService.class.getDeclaredMethods()) {
             assertThat(AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class)).as(method.toString()).isNull();
+        }
+    }
+
+    @Test void characterProfilesDependOnAStoragePortAndKeepUseCaseTransactions() throws Exception {
+        var service = dependencies.get("com.novelagent.canon.application.CharacterProfileService");
+        assertThat(service).contains("com.novelagent.canon.application.CharacterProfileStore");
+        assertThat(service).noneMatch(type -> type.contains(".infrastructure.")
+                || type.startsWith("org.springframework.jdbc.") || type.startsWith("java.sql."));
+        assertThat(dependencies.get("com.novelagent.canon.application.CharacterProfileStore"))
+                .noneMatch(type -> type.contains(".infrastructure.") || type.startsWith("org.springframework.")
+                        || type.startsWith("java.sql."));
+        assertThat(dependencies.get("com.novelagent.canon.infrastructure.JdbcCharacterProfileStore"))
+                .contains("com.novelagent.canon.application.CharacterProfileStore")
+                .doesNotContain("com.novelagent.canon.application.CharacterProfileService");
+
+        Class<?> type = com.novelagent.canon.application.CharacterProfileService.class;
+        for (var method : type.getDeclaredMethods()) {
+            if (Set.of("list", "update", "promptContext").contains(method.getName())) {
+                var transaction = AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class);
+                assertThat(transaction).as(method.toString()).isNotNull();
+                assertThat(transaction.readOnly()).isEqualTo(method.getName().equals("promptContext"));
+            }
         }
     }
 

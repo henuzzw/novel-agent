@@ -102,24 +102,6 @@ public class CharacterNameService {
     }
 
     /**
-     * 按创作准备蓝图建立稳定人物身份，并保留已有命名；蓝图是规划来源而非正文事实。
-     *
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param taskId 创作准备等来源任务 ID。
-     * @param blueprints 待应用或补全的结构化人物蓝图。
-     */
-    @Transactional
-    public void initializeFromBlueprints(UUID projectId, UUID taskId, List<com.novelagent.planning.domain.CharacterBlueprint> blueprints) {
-        access.requireOwnedProject(projectId);
-        Map<String, String> names = new LinkedHashMap<>();
-        for (var blueprint : blueprints) {
-            putName(names, "PROTAGONIST".equals(blueprint.role()) ? "PROTAGONIST"
-                    : "BLUEPRINT_" + UUID.nameUUIDFromBytes(blueprint.name().getBytes(java.nio.charset.StandardCharsets.UTF_8)), blueprint.name());
-        }
-        registerNames(projectId, names, "PREPARATION:" + taskId);
-    }
-
-    /**
      * 按标准名、来源名及有效别名检查已有人物，避免重复登记；角色键已占用时使用基于姓名的稳定键。新记录标记 PLANNED，带规划证据来源，不带正史提交。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。

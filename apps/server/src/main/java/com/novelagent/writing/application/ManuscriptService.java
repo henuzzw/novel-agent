@@ -110,6 +110,7 @@ public class ManuscriptService {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     ManuscriptVersion prepareManuscript(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
+        long sourceCanonVersion = contexts.requireOwnedProject(projectId).getCurrentCanonVersion();
         WritingContextService.Context context = contexts.context(projectId, chapterNumber);
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
         var writingBasis = ChapterWritingBasisService.capture(context);
@@ -127,6 +128,7 @@ public class ManuscriptService {
                         .orElseThrow(() -> new WritingResourceNotFoundException(
                                 "正文版本", request.baseManuscriptVersionId()));
         ManuscriptContent previousContent = base == null ? null : base.getContent();
+        if (base == null) contexts.requireMemoryReady(projectId, chapterNumber);
         String styleContext = styles.promptContext(projectId);
         MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.MANUSCRIPT, provider,
                 context.budgetInputs(context.writingMaterials(), context.writingArc(), context.chapter(), plan,
@@ -136,6 +138,8 @@ public class ManuscriptService {
                 context.chapter(), plan, recalled, previousContent, provider,
                 context.instructionWithPreparation(normalize(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
+        if (contexts.requireOwnedProject(projectId).getCurrentCanonVersion() != sourceCanonVersion)
+            throw new IllegalStateException("生成期间前文正史或记忆已变化，请重新生成");
         if (!java.util.Objects.equals(styleContext, styles.promptContext(projectId))) {
             throw new IllegalStateException("生成期间写作风格已变化，请刷新后重试");
         }

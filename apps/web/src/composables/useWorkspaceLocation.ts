@@ -1,9 +1,9 @@
 import { computed, inject, ref } from 'vue'
 import { routeLocationKey, routerKey, type LocationQueryRaw, type Router } from 'vue-router'
 
-export const workspaceSections = ['imports', 'outline', 'materials', 'experience', 'runs', 'settings', 'writing'] as const
+export const workspaceSections = ['imports', 'outline', 'materials', 'experience', 'chat', 'runs', 'settings', 'writing'] as const
 export const planningViews = ['outline', 'style'] as const
-export const writingViews = ['manuscript', 'quality', 'opening', 'review', 'memory'] as const
+export const writingViews = ['manuscript', 'history', 'quality', 'opening', 'review', 'memory'] as const
 export const materialViews = ['profiles', 'entities', 'timeline', 'foreshadows', 'relations', 'style'] as const
 
 type PendingNavigation = { path: string; query: LocationQueryRaw; hash: string }
@@ -35,15 +35,16 @@ export function readWorkspaceChapter(value: unknown): number {
   return Number(value)
 }
 
-export function useWorkspaceChoice<T extends string>(key: string, choices: readonly T[], fallback: T | (() => T)) {
+export function useWorkspaceChoice<T extends string>(key: string, choices: readonly T[] | (() => readonly T[]), fallback: T | (() => T)) {
   const router = inject(routerKey, null)
   const route = inject(routeLocationKey, null)
   const local = ref<T | null>(null)
   const defaultValue = () => typeof fallback === 'function' ? fallback() : fallback
+  const available = () => typeof choices === 'function' ? choices() : choices
   return computed<T>({
-    get: () => route ? readWorkspaceChoice(route.query[key], choices, defaultValue()) : local.value ?? defaultValue(),
+    get: () => readWorkspaceChoice(route ? route.query[key] : local.value, available(), defaultValue()),
     set: value => {
-      if (!choices.includes(value)) return
+      if (!available().includes(value)) return
       if (router) updateQuery(router, key, value)
       else local.value = value
     },

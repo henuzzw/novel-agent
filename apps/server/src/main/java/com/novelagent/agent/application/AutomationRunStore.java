@@ -34,6 +34,9 @@ public class AutomationRunStore {
     private final ProjectAccessService access;
     private final EntityManager entityManager;
     private final com.novelagent.writing.infrastructure.DraftLoopRunRepository draftLoops;
+    private final com.novelagent.canon.infrastructure.CanonCommitRepository canon;
+    private final com.novelagent.writing.infrastructure.ManuscriptVersionRepository manuscripts;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     public AutomationRunStore(
             AutomationRunRepository runs,
@@ -43,15 +46,27 @@ public class AutomationRunStore {
         this(runs, outlines, access, entityManager, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public AutomationRunStore(AutomationRunRepository runs, OutlineVersionRepository outlines,
             ProjectAccessService access, EntityManager entityManager,
             com.novelagent.writing.infrastructure.DraftLoopRunRepository draftLoops) {
+        this(runs, outlines, access, entityManager, draftLoops, null, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AutomationRunStore(AutomationRunRepository runs, OutlineVersionRepository outlines,
+            ProjectAccessService access, EntityManager entityManager,
+            com.novelagent.writing.infrastructure.DraftLoopRunRepository draftLoops,
+            com.novelagent.canon.infrastructure.CanonCommitRepository canon,
+            com.novelagent.writing.infrastructure.ManuscriptVersionRepository manuscripts,
+            org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.runs = runs;
         this.outlines = outlines;
         this.access = access;
         this.entityManager = entityManager;
         this.draftLoops = draftLoops;
+        this.canon = canon;
+        this.manuscripts = manuscripts;
+        this.jdbc = jdbc;
     }
 
     /**
@@ -73,6 +88,8 @@ public class AutomationRunStore {
                     || run.getProvider() != provider || run.isQualityReviewEnabled() != request.qualityReviewEnabled()
                     || run.getMaxAutoRevisionRounds() != request.maxAutoRevisionRounds()
                     || run.getMaxGenerationSteps() != request.generationStepLimit()
+                    || run.getMaxLoopRounds() != request.loopRoundLimit()
+                    || run.isAutoPublish() != request.automaticPublication() || run.isAutoMemory() != request.automaticMemory()
                     || !java.util.Objects.equals(run.getInstruction(), request.instruction())) {
                 throw new IllegalArgumentException("同一幂等键不能用于不同任务");
             }
@@ -93,6 +110,8 @@ public class AutomationRunStore {
         AutomationRun run = AutomationRun.create(projectId, outline.getId(), requestKey, request.firstChapter(),
                 request.lastChapter(), request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider(),
                 request.instruction(), request.qualityReviewEnabled(), request.maxAutoRevisionRounds(), request.generationStepLimit());
+        run.configureLoop(request.loopRoundLimit());
+        run.configurePublication(request.automaticPublication(), request.automaticMemory());
         Set<Integer> chapterNumbers = outline.getContent().arcs().stream()
                 .flatMap(arc -> arc.chapters().stream()).map(chapter -> chapter.number()).collect(Collectors.toSet());
         for (int chapter = request.firstChapter(); chapter <= request.lastChapter(); chapter++) {
@@ -168,9 +187,11 @@ public class AutomationRunStore {
      */
     @Transactional
     public AutomationRun cancel(UUID projectId, UUID id) {
-        access.requireOwnedProject(projectId);
+        var project = access.requireOwnedProject(projectId);
+        entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
         AutomationRun run = locked(projectId, id);
         run.cancel();
+        run.checkpoint();
         return runs.saveAndFlush(run);
     }
 
@@ -215,8 +236,39 @@ public class AutomationRunStore {
     }
 
     private AutomationRun locked(UUID projectId, UUID id) {
+        access.requireOwnedProject(projectId);
         return runs.findLocked(projectId, id)
                 .orElseThrow(() -> new WritingResourceNotFoundException("自动任务", id));
+    }
+
+    /** Publication is committed; a fresh transaction atomically claims only an explicitly armed range. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public Optional<AutomationRun> claimPublication(UUID projectId, UUID id, int publishedChapter) {
+        var project = access.requireOwnedProject(projectId);
+        entityManager.refresh(project, LockModeType.PESSIMISTIC_WRITE);
+        var run = locked(projectId, id);
+        if (run.getStatus() != AutomationStatus.WAITING_FOR_USER || !run.isWaitingForPublication()
+                || run.isCancelRequested() || run.getCurrentChapter() != publishedChapter) return Optional.empty();
+        if (!run.getOutlineId().equals(project.getCurrentOutlineVersionId())) return Optional.empty();
+        if (!draftLoops.findByProjectIdAndStatusIn(projectId, List.of(
+                com.novelagent.writing.domain.DraftLoopRun.Status.PENDING,
+                com.novelagent.writing.domain.DraftLoopRun.Status.RUNNING)).isEmpty()) return Optional.empty();
+        var commit = canon.findByProjectIdAndChapterNumberAndActiveTrue(projectId, publishedChapter).orElse(null);
+        var latest = manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, publishedChapter).orElse(null);
+        if (commit == null || latest == null || !commit.getManuscriptVersionId().equals(latest.getId())
+                || latest.getStatus() != com.novelagent.writing.domain.ManuscriptStatus.AUTHOR_ACCEPTED) return Optional.empty();
+        // A completed model request is not enough: the memory transaction must have succeeded.
+        if (run.isAutoMemory() && Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM canon_commit c LEFT JOIN canon_memory_job j ON j.commit_id=c.id
+                  WHERE c.project_id=? AND c.active AND c.canon_version<=? AND (j.status IS NULL OR j.status<>'SUCCEEDED'))
+                """, Boolean.class, projectId, commit.getCanonVersion()))) {
+            run.waitForMemory();
+            runs.saveAndFlush(run);
+            return Optional.empty();
+        }
+        run.start(Instant.now());
+        run.advanceChapter();
+        return Optional.of(runs.saveAndFlush(run));
     }
 
     private void requireNoDraftLoop(UUID projectId) {

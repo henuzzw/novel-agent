@@ -36,6 +36,24 @@ export interface AgentRunSummary {
   estimatedCost: number
   currency: string
   tokenSource: string
+  actualInputTokens: number
+  actualOutputTokens: number
+  estimatedInputTokens: number
+  estimatedOutputTokens: number
+  actualCalls: number
+  estimatedCalls: number
+  unknownCalls: number
+}
+
+export interface AgentTokenUsage {
+  asOf: string
+  recentFrom: string
+  projectTotal: AgentRunSummary
+  lastFiveHours: AgentRunSummary
+}
+
+export function getAgentTokenUsage(projectId: string) {
+  return apiRequest<AgentTokenUsage>(`/api/v1/projects/${projectId}/agent-runs/usage`)
 }
 
 export function listAgentRuns(projectId: string) {
