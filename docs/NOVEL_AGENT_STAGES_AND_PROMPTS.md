@@ -6,6 +6,12 @@
 
 ## 1. 阶段总览
 
+### 2026-10-20 提示词整理与投影稳健性
+
+默认发布号 `prompt-cleanup-2026-10-20`（用户已保存的模板不受影响）。通用规则中的校园测试样例（登记名单、座位、教室后门、讲题、照片失踪、选座、三个人坐一起等）改为与题材无关的表述；样例仍保留在测试与评测语料中。CreativeStrategyGuide 的大纲/正文/审阅/试写“强开篇落点”只在 FANQIE_GRIPPING 下拼接，STANDARD 不再携带“仅 FANQIE 适用”的整段规则；WritingCraftRules 删除与策略指南重复的开篇策略段；质量检查与 EDITOR_RULES 的评分、条数、逐字证据要求只保留一份。
+
+Outbox（V065）：失败事件按 3 秒起、最长 5 分钟指数退避并记录 last_error，不再占满批次饿死后续事件；同一聚合有更早事件在退避时后续事件顺延，保持顺序；Kafka 超时即结束本轮。按单实例部署设计。Neo4j：启动后后台以 IF NOT EXISTS 建立投影键索引（不建唯一约束，Neo4j 不可用只告警，`app.neo4j.schema-init=false` 可关闭）；版本回收查询改为带标签匹配以使用索引。
+
 ### 2026-10-13 自动B/C原生JSON Schema
 
 自动QUALITY_REVIEW（B）与DRAFT_JUDGE_REVISION（C）显式请求原生Schema，不再生成或解析`## @...`标题；手动QUALITY_REVIEW保持原格式。B返回问题和独立quote证据数组；C返回逐项裁决与完整content或null，正文不拆文学属性。系统与阶段提示中的默认旧纯文本返回说明在本轮请求中移除，数据库模板与历史配置不覆盖；输出规则由服务端固定协议控制。两种Codex传outputSchema，Responses入口传text.format.json_schema，预算和任务快照含Schema。格式错误、原文证据及C编号校验仍在任务成功之前执行，不自动降级或重跑；章节推进支持来源未变的失败节点续跑。后文2026-10-12标题协议是历史版本，详见[NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md](NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md)。

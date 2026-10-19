@@ -4,6 +4,8 @@ import com.novelagent.canon.domain.OutboxEvent;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * 正史事件存储。
@@ -12,9 +14,22 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> {
     /**
-     * 按创建时间取最早 20 个尚未发布 Outbox 事件，供发布器分批处理；查询本身不标记已发布。
-     *
-     * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
+     * 取到期的未发布事件：跳过仍在退避期的事件，同一聚合若有更早的事件在退避中，后续事件也暂不发送，保持聚合内顺序。
      */
-    List<OutboxEvent> findTop20ByPublishedAtIsNullOrderByCreatedAtAsc();
+    String PUBLISHABLE_SQL = """
+            SELECT o.* FROM outbox_event o
+             WHERE o.published_at IS NULL
+               AND (o.next_attempt_at IS NULL OR o.next_attempt_at <= now())
+               AND NOT EXISTS (
+                   SELECT 1 FROM outbox_event earlier
+                    WHERE earlier.aggregate_id = o.aggregate_id
+                      AND earlier.published_at IS NULL
+                      AND earlier.next_attempt_at > now()
+                      AND earlier.created_at < o.created_at)
+             ORDER BY o.created_at
+             LIMIT :limit
+            """;
+
+    @Query(value = PUBLISHABLE_SQL, nativeQuery = true)
+    List<OutboxEvent> findPublishable(@Param("limit") int limit);
 }

@@ -74,14 +74,17 @@ class GraphProjectionConsumer {
 
     private void retireGraphVersion(UUID projectId, long version) {
         neo4j.query("""
-                MATCH (source {projectId: $projectId})-[relation:RELATED_TO|KNOWS]->()
+                MATCH (source:StoryEntity {projectId: $projectId})-[relation:RELATED_TO|KNOWS]->()
                 WHERE relation.canonVersion = $canonVersion
                 DELETE relation
                 """).bindAll(Map.of("projectId", projectId.toString(), "canonVersion", version)).run();
         neo4j.query("""
-                MATCH (node)
-                WHERE node.projectId = $projectId AND node.canonVersion = $canonVersion
-                  AND (node:StoryFact OR node:StoryEvent OR node:StateChange OR node:Foreshadow)
+                CALL () {
+                    MATCH (node:StoryFact {projectId: $projectId, canonVersion: $canonVersion}) RETURN node
+                    UNION MATCH (node:StoryEvent {projectId: $projectId, canonVersion: $canonVersion}) RETURN node
+                    UNION MATCH (node:StateChange {projectId: $projectId, canonVersion: $canonVersion}) RETURN node
+                    UNION MATCH (node:Foreshadow {projectId: $projectId, canonVersion: $canonVersion}) RETURN node
+                }
                 DETACH DELETE node
                 """).bindAll(Map.of("projectId", projectId.toString(), "canonVersion", version)).run();
         neo4j.query("""

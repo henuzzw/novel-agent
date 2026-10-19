@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Database overrides take precedence; runtime data and schemas remain owned by each workflow.
  */
 public final class AgentPromptDefaults {
-    public static final String RELEASE = "creative-boundaries-2026-10-10";
+    public static final String RELEASE = "prompt-cleanup-2026-10-20";
     private static final Map<String, String> TEMPLATES = new ConcurrentHashMap<>();
     private AgentPromptDefaults() { }
 

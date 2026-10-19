@@ -73,7 +73,7 @@ public class PlanningCheckpointRunner {
                 input.put("averageChapterWords", (int) Math.ceil(wordBudget.targetWords() / (double) chapterCount));
             }
             input.put("policy", CreativeStrategyGuide.render(source.source().creativeStrategy()));
-            input.put("openingDesignRules", CreativeStrategyGuide.outlineRules());
+            input.put("openingDesignRules", CreativeStrategyGuide.outlineRules(source.source().creativeStrategy()));
             input.set("precedingPlans", mapper.valueToTree(claim.precedingPlans().stream()
                     .map(value -> value.result()).toList()));
             String raw = models.request(projectId, "PLANNING_CHECKPOINT", source.source().provider(),

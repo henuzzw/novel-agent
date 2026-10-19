@@ -31,21 +31,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 class WritingPromptFactory {
     private static final String DETAIL_RULES = """
             \n细节与语义约束：
-            1. 道具和动作先符合人物身份与场景流程，再承担表达作用。普通生活细节允许合理创作；影响权限、能力、动机或关系的补充须有依据。不能为了写紧张随手让学生拿着管理选座的名单，不能靠编造‘老师交给她登记’修补来源。
-            2. 谁请教谁、谁懂哪道题、谁帮助谁、何时发生必须能从上下文读明白。‘我讲不明白，她反过来帮我’需辨明是表达不清、不会解答还是另一道题，不用含混的互助句强行证明人物优秀。
-            3. 描写可服务于空间、氛围、人物、信息或节奏，不必句句推动剧情；删掉完全可互换的布景和反复填充的动作。门、名单、书包等不是禁用词，确有空间作用、持有依据或情绪作用时保留。
+            1. 道具和动作先符合人物身份与场景流程，再承担表达作用。普通生活细节允许合理创作；影响权限、能力、动机或关系的补充须有依据，不能为制造紧张让人物持有无来源的物品或权限。
+            2. 谁请教谁、谁帮助谁、帮什么、何时发生必须能从上下文读明白；不用含混的互助句强行证明人物优秀。
+            3. 描写可服务于空间、氛围、人物、信息或节奏，不必句句推动剧情；删掉完全可互换的布景和反复填充的动作。普通物件不是禁用词，确有空间作用、持有依据或情绪作用时保留。
             4. 修订顺序为删除无效内容、澄清已有语义、必要的风格润色。不能新编事件、道具来源、人物知识或关系来给旧句找理由；无法确定且会改动事实时保留原文交作者决定。
             """;
     private static final String EDITOR_RULES = """
             \n独立编辑检查要求：
-            使用现有 STYLE、FLUENCY、LOGIC、SCENE 四维，每维恰好一个评分和依据；score 0～100，无法判断时 null。最多 20 条问题，severity 只能 INFO/WARNING，resolved=false，id 唯一。
-            每条 evidence 必须逐字存在于 body 的连续原文，不拼接或加省略号；description 明确问题及已提供依据或缺失的信息，suggestion 给出最小修改及需保留的事实。缺少依据不能写成已证明的事实矛盾。
-            FLUENCY 核对主语、指代、同一/不同对象、‘反过来’等关系是否清楚；LOGIC 核对动作先后、道具来源和使用权限、能力与帮助关系，不把文学含混或有限信息一概当矛盾。
+            使用现有 STYLE、FLUENCY、LOGIC、SCENE 四维，每维恰好一个评分和依据；score 0～100，无法判断时 null。最多 20 条问题，按影响大小排序，severity 只能 INFO/WARNING，resolved=false，id 唯一。
+            每条 evidence 必须逐字存在于 body 的连续原文，不拼接、不改写、不加省略号、不引用计划充当正文；description 明确问题及已提供依据或缺失的信息，suggestion 给出最小修改及需保留的事实。缺少依据不能写成已证明的事实矛盾。
+            FLUENCY 核对主语、指代、同一/不同对象及帮助方向是否清楚；LOGIC 核对动作先后、道具来源和使用权限、能力与帮助关系，不把文学含混或有限信息一概当矛盾。
             SCENE 评估细节对空间、氛围、人物、信息或节奏的实际作用，检查重复小动作和概述堆积；不要求每句推进剧情，不因平静场景或普通物件报错。STYLE 对照选定风格，不以统一的少比喻、少议论标准评分。
-            修改优先级：删除无用内容 → 澄清已有语义 → 必要润色。严禁通过编造‘老师让她登记’、新题目、新能力或新动机填漏洞；涉及改变关系或事件而不能确定时明确交作者确认。
-            回归对照，仅为编辑规则，不是本书素材：‘教室后门开着’若未承担空间/氛围作用，可建议删除但不是逻辑错误；若后门是离场路径或决定人物可听见什么，应保留。
-            ‘手里攥着座位名单的边角’若名单由门口工作人员管理且未交代学生持有依据，指出来源疑点；若正文已明确工作人员交付登记，应保留，不按‘名单’关键词判错。
-            ‘碰上我讲不明白的，还能反过来帮我’若同一道题的认知与帮助方向不清，指出语义缺口；若明确我帮她数学、她帮我英语，不是矛盾。正在推早已稳固的桌子若表现紧张，不是无用动作。
+            判断依据是上下文而不是关键词：布景未承担作用可建议删除但不是逻辑错误，承担路径、视听范围或氛围作用时应保留；物品来源未交代时指出疑点，正文已交代则不报；分工明确的互相帮助不是矛盾。
+            修改优先级：删除无用内容 → 澄清已有语义 → 必要润色。不得通过新编授权、道具来源、能力或动机填漏洞；涉及改变关系或事件而不能确定时明确交作者确认。
             没有有证据的问题则 issues=[]；检查不能保证零错误，不能放行正史、不抽取事实、不改写原稿或输出正文之外的新情节。
             """;
     // Selected craft rules adapted from novel-writer-skill; see THIRD_PARTY_NOTICES.md.
@@ -123,7 +121,7 @@ class WritingPromptFactory {
                         + MANUSCRIPT_STYLE_RULES
                         + com.novelagent.planning.application.ScenePlanningGuide.writingRules()
                         + craft.manuscript()
-                        + CreativeStrategyGuide.manuscriptRules()
+                        + CreativeStrategyGuide.manuscriptRules(policy(projectId))
                         + "\n按本次纯文本保存标题返回完整正文和实际修改说明。"));
     }
 
@@ -149,7 +147,7 @@ class WritingPromptFactory {
                         + MANUSCRIPT_STYLE_RULES
                                 .replace("已应用项目写作风格时，以该档案指导表达；未配置时沿用故事圣经的风格。", "以本次试写风格档案指导表达。")
                                 .replace("本章大纲计划", "第一章计划")
-                        + craft.preview() + CreativeStrategyGuide.previewRules()));
+                        + craft.preview() + CreativeStrategyGuide.previewRules(policy(projectId))));
     }
 
     Prompt reviewStylePreview(java.util.UUID projectId, StoryBibleContent bible, OutlineArc arc,
@@ -165,7 +163,7 @@ class WritingPromptFactory {
                         + "\n候选风格：" + WritingStyleGuide.render(source.profile())
                         + "\n试写要求：" + value(source.instruction())
                         + "\n待检查样例（完整 JSON）：" + json(source.content()) + craft.preview()
-                        + CreativeStrategyGuide.previewReviewRules()));
+                        + CreativeStrategyGuide.previewReviewRules(policy(projectId))));
     }
 
     Prompt reviseStylePreview(java.util.UUID projectId, StoryBibleContent bible, OutlineArc arc,
@@ -208,8 +206,7 @@ class WritingPromptFactory {
             ManuscriptContent manuscript, NovelMemoryContext memory, String instruction) {
         return rendered(projectId, new Prompt(
                 com.novelagent.prompt.application.AgentPromptDefaults.system("QUALITY_REVIEW"),
-                "逐项检查 STYLE、FLUENCY、LOGIC、SCENE 四个维度，每个维度恰好提供一项评分和依据。"
-                        + "score 为 0 至 100；上下文不足以判断时填 null 并说明缺少的依据，不能假装已校验。"
+                "逐项检查 STYLE、FLUENCY、LOGIC、SCENE 四个维度；上下文不足以判断时 score 填 null 并说明缺少的依据，不能假装已校验。"
                         + "STYLE：表达以已应用项目风格为准，未配置时沿用故事圣经；人物声线、视角与事实优先。识别模板化总结、空泛比喻、重复解释和不合身份的表达。"
                         + "已提供风格执行指南时，逐项核对叙述声线、句式节奏、描写取舍、对白方式、情绪表达、场景速度与避免模式；"
                         + "STYLE 的 rationale 说明有文本依据的符合点与偏差，不要求每项都报问题。STYLE 问题的 description 指明偏离的档案维度，"
@@ -218,10 +215,7 @@ class WritingPromptFactory {
                         + "LOGIC：检查动作先后、原因与结果、人物反应、信息来源、场景转接；区分悬念、省略与明确矛盾。"
                         + "SCENE：识别流水账和概述堆积，检查目标、阻力、互动和状态变化；"
                         + "必要的过渡概述、平静场景或刻意留白不能只因缺少冲突就被判错。"
-                        + "issues 最多 20 条，按影响大小排序；severity 只能为 WARNING 或 INFO，resolved 必须为 false。"
-                        + "每条 evidence 必须是 body 中逐字存在的连续原文，不能拼接、改写、加省略号或引用计划充当正文。"
-                        + "suggestion 写明如何修改并保留哪些事实；不要凭空补出未提供的历史或人物动机。"
-                        + "没有明确问题则 issues 返回空数组。不得把文学偏好当作阻断正史的硬规则。"
+                        + "不要凭空补出未提供的历史或人物动机，不得把文学偏好当作阻断正史的硬规则。"
                         + "按因果与人物依据、场景作用、语言表达的层次定位问题，分别归入现有四类，不新增评分维度。"
                         + "关注对白是否只复述双方已知背景、人物意图是否有文本依据、感知表述是否真正冗余；"
                         + "误认、延迟理解、有限视角、心理描写和平静对白本身不是错误，不按比喻密度、感官数量或固定句长判错。"
@@ -232,7 +226,7 @@ class WritingPromptFactory {
                         + "\n项目写作风格：" + styles.promptContext(projectId)
                         + "\n本章大纲计划：" + json(contract) + "\n正文：" + json(manuscript)
                         + "\n前文与长期记忆：" + memory.toPromptText() + "\n作者要求：" + value(instruction)
-                        + craft.qualityReview() + CreativeStrategyGuide.reviewRules()));
+                        + craft.qualityReview() + CreativeStrategyGuide.reviewRules(policy(projectId))));
     }
 
     Prompt styleRecommendation(java.util.UUID projectId, StoryBibleContent bible, String instruction) {
@@ -311,6 +305,11 @@ class WritingPromptFactory {
                 contract, relatedIds, references);
     }
 
+    private CreativeStrategyPolicy policy(UUID projectId) {
+        CreativeStrategyPolicy policy = strategies == null ? null : strategies.policy(projectId);
+        return policy == null ? CreativeStrategyPolicy.of(CreativeStrategy.STANDARD) : policy;
+    }
+
     private Prompt rendered(java.util.UUID projectId, Prompt prompt) {
         String strategy = strategies == null
                 ? CreativeStrategyGuide.render(CreativeStrategyPolicy.of(CreativeStrategy.STANDARD))
@@ -348,7 +347,7 @@ class WritingPromptFactory {
                         + "已有人物、物品、地点优先引用目录中的有效ID；不得伪造ID。"
                         + "第一人称根据明确视角绑定具体人物，不因正文用‘我’就写‘姓名待核对’，也不能把对话中的‘我’都当叙述者。"
                         + "新物品和地点可使用有辨识度的描述性名称，名称不要求逐字出现在引文中，但存在及状态必须有逐字证据。"
-                        + "同一物品前后使用一致名称；照片记录与纸条实物不能无依据合并。"
+                        + "同一物品前后使用一致名称；不同实物或其记录（如照片与原件）不能无依据合并。"
                         + "无法确认主体的内容可作为有证据的EVENT_CREATE文字记录，不伪造人物身份、关系或知情事实。"
                         + "STATE_CHANGE的entityId指状态所属实体，不是赠送人或接收人的ID；entityType/stateEntityType必须匹配。"
                         + "同一实体同一字段的变化按实际发生顺序记录，章末返回、归还或离场不能遗漏；不要以中途状态冒充章末状态。"

@@ -68,7 +68,13 @@ public class CreativeStrategyService {
      */
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId) {
-        return CreativeStrategyGuide.render(CreativeStrategyPolicy.from(access.requireOwnedProject(projectId)));
+        return CreativeStrategyGuide.render(policy(projectId));
+    }
+
+    /** 读取项目已保存策略，供各阶段决定是否拼接强开篇落点规则。 */
+    @Transactional(readOnly = true)
+    public CreativeStrategyPolicy policy(UUID projectId) {
+        return CreativeStrategyPolicy.from(access.requireOwnedProject(projectId));
     }
 
     private static State state(NovelProject project) {

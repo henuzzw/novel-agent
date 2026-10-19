@@ -48,7 +48,13 @@ class CreativeStrategyServiceTest {
                 .isEqualTo(new CreativeStrategyService.State(CreativeStrategy.FANQIE_GRIPPING, 1, 1));
         assertThat(project.getSetting("writingStyle")).isEqualTo(Map.of("name", "轻快口语"));
         assertThat(service.promptContext(project.getId())).contains("番茄强开篇", "第一章", "第二章", "第三章",
-                "不临时开挂", "开头试写", "不要求片段完成整章");
+                "不临时开挂");
+        var gripping = service.policy(project.getId());
+        assertThat(CreativeStrategyGuide.previewRules(gripping)).contains("不强求整章兑现");
+        var standard = com.novelagent.project.domain.CreativeStrategyPolicy.of(CreativeStrategy.STANDARD);
+        assertThat(CreativeStrategyGuide.outlineRules(standard) + CreativeStrategyGuide.manuscriptRules(standard)
+                + CreativeStrategyGuide.reviewRules(standard) + CreativeStrategyGuide.previewRules(standard)
+                + CreativeStrategyGuide.previewReviewRules(standard)).isEmpty();
         verify(entities).refresh(project, LockModeType.PESSIMISTIC_WRITE);
     }
 

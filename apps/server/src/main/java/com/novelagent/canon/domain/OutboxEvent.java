@@ -14,6 +14,8 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "outbox_event")
 public class OutboxEvent {
+    private static final long MAX_BACKOFF_SECONDS = 300;
+
     @Id
     private UUID id;
 
@@ -36,6 +38,12 @@ public class OutboxEvent {
     @Column(nullable = false)
     private int attempts;
 
+    @Column(name = "next_attempt_at")
+    private Instant nextAttemptAt;
+
+    @Column(name = "last_error", length = 500)
+    private String lastError;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -53,10 +61,28 @@ public class OutboxEvent {
 
     public void markPublished() {
         publishedAt = Instant.now();
+        nextAttemptAt = null;
+        lastError = null;
     }
 
     public void recordFailure() {
+        recordFailure(Instant.now(), null);
+    }
+
+    /** 记录一次发布失败，并按 3 秒起、最长 5 分钟的指数退避安排下次重试。 */
+    public void recordFailure(Instant now, String error) {
         attempts++;
+        long delaySeconds = Math.min(MAX_BACKOFF_SECONDS, 3L << Math.min(attempts - 1, 10));
+        nextAttemptAt = now.plusSeconds(delaySeconds);
+        lastError = error == null ? null : error.substring(0, Math.min(error.length(), 500));
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public String getLastError() {
+        return lastError;
     }
 
     public UUID getId() {

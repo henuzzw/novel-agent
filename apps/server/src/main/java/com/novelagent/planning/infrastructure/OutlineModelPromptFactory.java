@@ -73,7 +73,7 @@ public class OutlineModelPromptFactory {
                 【项目创作策略（系统辅助规则，不是作者原文）】
                 %s
                 策略与作者明确选择不一致时，以不违反上游边界的作者要求为准；不能为了套用强开篇删除作者指定的成年开场、回忆框架或慢热安排。
-                若作者指定照片缺失等回忆入口，保留入口，让已知线索引出核实、寻找或判断的当前问题并连接回忆；无法建立依据时说明限制，不虚构删除者、动机或危机。
+                若作者指定某个物件、事件或时间点作为回忆入口，保留入口，让已知线索引出核实、寻找或判断的当前问题并连接回忆；无法建立依据时说明限制，不虚构删除者、动机或危机。
 
                 【已发布故事圣经（完整 JSON）】
                 %s
@@ -122,7 +122,7 @@ public class OutlineModelPromptFactory {
                 budget.recommendedVolumeCount(), budget.recommendedChapterCount(),
                 budget.recommendedChapterMinWords(), budget.recommendedChapterMaxWords(),
                 modeRules) + com.novelagent.planning.application.ReaderExperiencePlanningGuide.rules()
-                + CreativeStrategyGuide.outlineRules()
+                + CreativeStrategyGuide.outlineRules(policy)
                 + com.novelagent.planning.application.ScenePlanningGuide.planningRules();
     }
 

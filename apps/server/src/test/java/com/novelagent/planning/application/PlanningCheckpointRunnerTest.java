@@ -65,7 +65,7 @@ class PlanningCheckpointRunnerTest {
         verify(models).request(eq(project), eq("PLANNING_CHECKPOINT"), eq(ModelProvider.DEEPSEEK), anyString(),
                 prompt.capture(), any(), eq("planning_checkpoint_v1"), eq(10000), eq(CodexSessionPolicy.NEW_THREAD));
         assertThat(mapper.readTree(prompt.getValue()).path("openingDesignRules").asText())
-                .isEqualTo(CreativeStrategyGuide.outlineRules());
+                .isEqualTo(CreativeStrategyGuide.outlineRules(source.source().creativeStrategy()));
     }
 
     @Test void failedModelRecordsFailureWithoutPublishingOrRetrying() {

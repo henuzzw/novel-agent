@@ -56,7 +56,7 @@ public class ImportedOutlineGenerator {
                 + "\n【调整基准；空则重新生成】\n" + previous
                 + "\n续写时前 " + occurred + " 章必须忠实保留原文事件并标记 OCCURRED，其余 PLANNED；改编全部 PLANNED。"
                 + "未来设计不等于已发生事实，不把已知结局提前泄露。"
-                + CreativeStrategyGuide.render(strategy) + CreativeStrategyGuide.outlineRules() + ScenePlanningGuide.planningRules();
+                + CreativeStrategyGuide.render(strategy) + CreativeStrategyGuide.outlineRules(strategy) + ScenePlanningGuide.planningRules();
         var result = new java.util.concurrent.atomic.AtomicReference<GeneratedOutline>();
         models.request(projectId, "IMPORT_REVERSE_OUTLINE", provider, AgentPromptDefaults.system(key), prompt,
                 schema.value(), "imported_outline", 16000, raw -> {
