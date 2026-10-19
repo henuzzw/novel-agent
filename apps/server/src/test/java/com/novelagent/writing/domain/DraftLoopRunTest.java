@@ -27,76 +27,64 @@ class DraftLoopRunTest {
                 content(body), List.of("FLUENCY-1 澄清指代"));
     }
 
-    @Test void emptyReportStopsWithoutRequiringCOrAuthor() {
+    @Test void stopsOnlyForRealOutcomesAndNeverClaimsUncheckedRevisionsPassed() {
         var run = run(10); run.checked(content("原稿"), new DraftCheck("未发现明确问题", List.of()));
         assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.B_CLEAR);
         assertThat(run.getRounds()).hasSize(1); assertThat(run.getRounds().getFirst().judgment()).isNull();
         assertThatThrownBy(() -> run.judged(revision("新稿"))).isInstanceOf(IllegalStateException.class);
-    }
 
-    @Test void rejectedSuggestionsDoNotPretendBWasClear() {
-        var run = run(10); run.checked(content("原稿"), report("原稿"));
-        assertThat(run.judged(new DraftJudgment(DraftJudgment.Action.NO_CHANGE,
+        var rejected = run(10); rejected.checked(content("原稿"), report("原稿"));
+        assertThat(rejected.judged(new DraftJudgment(DraftJudgment.Action.NO_CHANGE,
                 List.of(new DraftJudgment.Decision("FLUENCY-1", DraftJudgment.Verdict.REJECT, "有限视角不是作者错误")), null, List.of()))).isFalse();
-        assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.C_NO_CHANGE);
-        assertThat(run.getRounds().getFirst().check().issues()).hasSize(1);
-    }
+        assertThat(rejected.getStopReason()).isEqualTo(DraftLoopRun.StopReason.C_NO_CHANGE);
+        assertThat(rejected.getRounds().getFirst().check().issues()).hasSize(1);
 
-    @Test void deferredNewDesignDoesNotCreateDraft() {
-        var run = run(10); run.checked(content("原稿"), report("原稿"));
-        assertThat(run.judged(new DraftJudgment(DraftJudgment.Action.NEEDS_CONTEXT,
+        var deferred = run(10); deferred.checked(content("原稿"), report("原稿"));
+        assertThat(deferred.judged(new DraftJudgment(DraftJudgment.Action.NEEDS_CONTEXT,
                 List.of(new DraftJudgment.Decision("FLUENCY-1", DraftJudgment.Verdict.DEFER, "需要变更人物既往经历")), null, List.of()))).isFalse();
-        assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.NEEDS_CONTEXT);
-    }
+        assertThat(deferred.getStopReason()).isEqualTo(DraftLoopRun.StopReason.NEEDS_CONTEXT);
 
-    @Test void unchangedBodyStopsWithoutVersionChurn() {
-        var run = run(10); run.checked(content("原稿"), report("原稿"));
-        assertThat(run.judged(revision("原稿"))).isFalse();
-        assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.NO_PROGRESS);
-        assertThat(run.getRounds().getFirst().afterManuscriptId()).isNull();
-    }
+        var unchanged = run(10); unchanged.checked(content("原稿"), report("原稿"));
+        assertThat(unchanged.judged(revision("原稿"))).isFalse();
+        assertThat(unchanged.getStopReason()).isEqualTo(DraftLoopRun.StopReason.NO_PROGRESS);
+        assertThat(unchanged.getRounds().getFirst().afterManuscriptId()).isNull();
 
-    @Test void oscillationIsDetectedAgainstAllPreviousBodies() {
-        var run = run(10); run.checked(content("原稿"), report("原稿"));
-        assertThat(run.judged(revision("新稿"))).isTrue(); run.revised(manuscript("新稿", 2), "新稿");
-        run.checked(content("新稿"), report("新稿"));
-        assertThat(run.judged(revision("原稿"))).isFalse();
-        assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.CYCLE_DETECTED);
-    }
+        var oscillating = run(10); oscillating.checked(content("原稿"), report("原稿"));
+        assertThat(oscillating.judged(revision("新稿"))).isTrue(); oscillating.revised(manuscript("新稿", 2), "新稿");
+        oscillating.checked(content("新稿"), report("新稿"));
+        assertThat(oscillating.judged(revision("原稿"))).isFalse();
+        assertThat(oscillating.getStopReason()).isEqualTo(DraftLoopRun.StopReason.CYCLE_DETECTED);
 
-    @Test void tenthRevisionIsSavedButNotAdvertisedAsRecheckedOrPassed() {
-        var run = run(10);
+        var capped = run(10);
         for (int i = 1; i <= 10; i++) {
             String before = i == 1 ? "原稿" : "新稿" + (i - 1), after = "新稿" + i;
-            run.checked(content(before), report(before)); assertThat(run.judged(revision(after))).isTrue();
-            run.revised(manuscript(after, i + 1), after);
+            capped.checked(content(before), report(before)); assertThat(capped.judged(revision(after))).isTrue();
+            capped.revised(manuscript(after, i + 1), after);
         }
-        assertThat(run.getStopReason()).isEqualTo(DraftLoopRun.StopReason.ROUND_LIMIT);
-        assertThat(run.getRounds()).hasSize(10);
-        assertThat(run.getRounds().getLast().afterManuscriptId()).isEqualTo(run.getManuscriptId());
-        assertThat(run.getStatus()).isEqualTo(DraftLoopRun.Status.STOPPED);
-        assertThatThrownBy(() -> run.checked(content("新稿10"), report("新稿10"))).isInstanceOf(IllegalStateException.class);
+        assertThat(capped.getStopReason()).isEqualTo(DraftLoopRun.StopReason.ROUND_LIMIT);
+        assertThat(capped.getRounds()).hasSize(10);
+        assertThat(capped.getRounds().getLast().afterManuscriptId()).isEqualTo(capped.getManuscriptId());
+        assertThat(capped.getStatus()).isEqualTo(DraftLoopRun.Status.STOPPED);
+        assertThatThrownBy(() -> capped.checked(content("新稿10"), report("新稿10"))).isInstanceOf(IllegalStateException.class);
     }
 
-    @Test void cancellationCannotBeOverwrittenByFailureOrLateCheck() {
+    @Test void cancellationAndExplicitRetryKeepAccumulatedState() {
         var run = run(10); run.stop(DraftLoopRun.StopReason.CANCELLED); run.fail("迟到错误");
         assertThat(run.getStatus()).isEqualTo(DraftLoopRun.Status.CANCELLED);
         assertThat(run.getErrorMessage()).isNull();
         assertThatThrownBy(() -> run.checked(content("原稿"), report("原稿"))).isInstanceOf(IllegalStateException.class);
+
+        var retried = run(3); retried.checked(content("原稿"), report("原稿"));
+        var id = retried.getManuscriptId(); var basis = retried.getBasis();
+        retried.fail("裁决格式错误"); retried.retry(); assertThat(retried.claim()).isTrue();
+        assertThat(retried.getPhase()).isEqualTo(DraftLoopRun.Phase.C);
+        assertThat(retried.getRounds()).hasSize(1); assertThat(retried.getManuscriptId()).isEqualTo(id);
+        assertThat(retried.getBasis()).isSameAs(basis); assertThat(retried.getMaxRounds()).isEqualTo(3);
+        assertThat(retried.getErrorMessage()).isNull(); retried.stop(DraftLoopRun.StopReason.CANCELLED);
+        assertThatThrownBy(retried::retry).isInstanceOf(IllegalStateException.class);
     }
 
-    @Test void explicitRetryKeepsCReportDraftAndAccumulatedRoundsAndCannotReviveStoppedRuns() {
-        var run = run(3); run.checked(content("原稿"), report("原稿"));
-        var id = run.getManuscriptId(); var basis = run.getBasis();
-        run.fail("裁决格式错误"); run.retry(); assertThat(run.claim()).isTrue();
-        assertThat(run.getPhase()).isEqualTo(DraftLoopRun.Phase.C);
-        assertThat(run.getRounds()).hasSize(1); assertThat(run.getManuscriptId()).isEqualTo(id);
-        assertThat(run.getBasis()).isSameAs(basis); assertThat(run.getMaxRounds()).isEqualTo(3);
-        assertThat(run.getErrorMessage()).isNull(); run.stop(DraftLoopRun.StopReason.CANCELLED);
-        assertThatThrownBy(run::retry).isInstanceOf(IllegalStateException.class);
-    }
-
-    @Test void transportEvidenceAndDecisionCoverageAreValidatedNotLiteraryStructure() {
+    @Test void validatesTransportAndRequiresRealModelLimitAndDraft() {
         var run = run(10);
         assertThatThrownBy(() -> run.checked(content("原稿"), report("不存在的引文"))).hasMessageContaining("证据");
         run.checked(content("原稿"), report("原稿"));
@@ -104,9 +92,7 @@ class DraftLoopRunTest {
                 List.of(new DraftJudgment.Decision("unknown", DraftJudgment.Verdict.REJECT, "原因")), null, List.of());
         assertThatThrownBy(() -> run.judged(wrong)).hasMessageContaining("不一致");
         assertThat(run.getPhase()).isEqualTo(DraftLoopRun.Phase.C);
-    }
 
-    @Test void requiresRealModelValidLimitAndDraftForCheckOnly() {
         assertThatThrownBy(() -> DraftLoopRun.create(project, UUID.randomUUID(), 1, ModelProvider.LOCAL_TEMPLATE, true, 10, null, null)).hasMessageContaining("真实模型");
         assertThatThrownBy(() -> run(11)).hasMessageContaining("10");
         assertThatThrownBy(() -> DraftLoopRun.create(project, UUID.randomUUID(), 1, ModelProvider.DEEPSEEK, false, 10, null, null)).hasMessageContaining("草稿");

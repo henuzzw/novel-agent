@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class FirstThreeChaptersServiceTest {
     private final FirstThreeChaptersStore store = mock(FirstThreeChaptersStore.class);
@@ -50,28 +51,30 @@ class FirstThreeChaptersServiceTest {
         verify(model, times(1)).check(source, ModelProvider.DEEPSEEK, "查因果");
         verify(store).save(eq(source), eq(List.of()), eq("DEEPSEEK"), eq("查因果"), any(), any());
     }
-    @Test void lowerAuthorBudgetOrContextOverflowRejectsBeforeCall() {
+    @Test void invalidBudgetSourceOrSelectionIsRejectedBeforeCall() {
         assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", source.fingerprint(), 11999))
                 .hasMessageContaining("预算不足");
         when(model.budget(any(), any(), any())).thenReturn(budget(false));
         assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", source.fingerprint(), 99999))
                 .hasMessageContaining("预算不足");
         verify(model, never()).check(any(), any(), any());
-    }
-    @Test void missingBodyCannotBeReplacedWithContract() {
+
+        assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", "old", 13000))
+                .hasMessageContaining("来源已变化");
+        verify(model, never()).check(any(), any(), any());
+
         when(store.snapshot(any(), any())).thenReturn(new FirstThreeChaptersSource(PROJECT, source.outlineId(), 4,
                 source.bibleId(), 5, 6, source.strategy(), "outline", "bible", "style", "profile",
                 source.chapters().subList(0, 2), List.of("缺少第三章正文"), source.fingerprint()));
         assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", source.fingerprint(), 13000))
                 .hasMessageContaining("缺少第三章正文");
         verify(model, never()).check(any(), any(), any());
+
+        assertThatThrownBy(() -> service.get(PROJECT, List.of(UUID.randomUUID()), ModelProvider.DEEPSEEK, ""))
+                .hasMessageContaining("三个不同正文版本");
+        assertThatThrownBy(() -> service.get(PROJECT, List.of(), null, "")).hasMessageContaining("明确选择");
     }
-    @Test void changedBudgetSourceIsRejectedBeforeCall() {
-        assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", "old", 13000))
-                .hasMessageContaining("来源已变化");
-        verify(model, never()).check(any(), any(), any());
-    }
-    @Test void fabricatedOrWrongChapterEvidenceCannotBeSaved() {
+    @Test void fabricatedEvidenceOrSourceChangesCannotBeSavedAsSuccess() {
         var bad = new FirstThreeChaptersContent("范围", unassessed().assessments(), List.of(
                 new FirstThreeChaptersContent.Issue("i1", FirstThreeChaptersContent.Dimension.LOGIC, "问题", "核对",
                         List.of(new FirstThreeChaptersContent.Evidence(2, "Ending 1.")))));
@@ -79,6 +82,13 @@ class FirstThreeChaptersServiceTest {
         assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", source.fingerprint(), 13000))
                 .hasMessageContaining("连续原文");
         verify(store, never()).save(any(), any(), any(), any(), any(), any());
+
+        when(model.check(any(), any(), any())).thenReturn(unassessed());
+        Mockito.doThrow(new IllegalStateException("检查期间正文已变化"))
+                .when(store).save(any(), any(), any(), any(), any(), any());
+        assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", source.fingerprint(), 13000))
+                .hasMessageContaining("检查期间");
+        verify(model, times(2)).check(any(), any(), any());
     }
     @Test void latestStaleAndEarlierValidAreDistinguished() {
         var stale = new FirstThreeChaptersSource(PROJECT, source.outlineId(), 4, source.bibleId(), 5, 6,
@@ -89,17 +99,5 @@ class FirstThreeChaptersServiceTest {
         var view = service.get(PROJECT, List.of(), ModelProvider.DEEPSEEK, "");
         assertThat(view.latestReport().current()).isFalse();
         assertThat(view.latestValidReport().id()).isEqualTo(valid.getId());
-    }
-    @Test void sourceChangedDuringModelCallDoesNotReturnSuccessfulReport() {
-        org.mockito.Mockito.doThrow(new IllegalStateException("检查期间正文已变化"))
-                .when(store).save(any(), any(), any(), any(), any(), any());
-        assertThatThrownBy(() -> service.check(PROJECT, List.of(), ModelProvider.DEEPSEEK, "", source.fingerprint(), 13000))
-                .hasMessageContaining("检查期间");
-        verify(model, times(1)).check(any(), any(), any());
-    }
-    @Test void explicitSelectionMustHaveThreeDifferentIdsAndExplicitProvider() {
-        assertThatThrownBy(() -> service.get(PROJECT, List.of(UUID.randomUUID()), ModelProvider.DEEPSEEK, ""))
-                .hasMessageContaining("三个不同正文版本");
-        assertThatThrownBy(() -> service.get(PROJECT, List.of(), null, "")).hasMessageContaining("明确选择");
     }
 }

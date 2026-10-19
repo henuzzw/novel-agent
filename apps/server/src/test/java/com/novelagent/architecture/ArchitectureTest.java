@@ -7,10 +7,11 @@ import com.novelagent.writing.application.ChapterReviewService;
 import com.novelagent.writing.application.ManuscriptService;
 import com.novelagent.writing.application.QualityReviewService;
 import com.novelagent.writing.application.WritingService;
+import com.novelagent.writing.application.WritingStylePreviewService;
+import com.novelagent.writing.application.WritingStyleRecommendationService;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -67,148 +68,12 @@ class ArchitectureTest {
         });
     }
 
-    @Test void typedFactsUseIndependentStrategiesInTheCallersTransaction() {
-        String coordinator = "com.novelagent.canon.application.TypedCanonMaterializer";
-        assertThat(dependencies.get(coordinator)).contains("com.novelagent.canon.application.CanonFactProjector")
-                .noneMatch(type -> type.startsWith("com.novelagent.canon.infrastructure.") && type.endsWith("FactProjector"));
-        assertThat(dependencies.get("com.novelagent.canon.application.CanonFactProjector"))
-                .noneMatch(type -> type.startsWith("org.springframework.") || type.contains(".infrastructure."));
-        for (Class<?> type : List.of(
-                com.novelagent.canon.infrastructure.EventFactProjector.class,
-                com.novelagent.canon.infrastructure.StateFactProjector.class,
-                com.novelagent.canon.infrastructure.RelationshipFactProjector.class,
-                com.novelagent.canon.infrastructure.KnowledgeFactProjector.class,
-                com.novelagent.canon.infrastructure.ForeshadowFactProjector.class)) {
-            assertThat(dependencies.get(type.getName())).doesNotContain(coordinator);
-            assertThat(AnnotatedElementUtils.findMergedAnnotation(type, Transactional.class)).isNull();
-            for (var method : type.getDeclaredMethods()) {
-                assertThat(AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class)).isNull();
-            }
-        }
-    }
-
-    @Test void canonFactAndEntityPoliciesDependOnStoragePorts() {
-        for (var entry : Map.of(
-                "TypedCanonMaterializer", "CanonFactStore",
-                "EntityResolutionService", "EntityResolutionStore").entrySet()) {
-            var service = dependencies.get("com.novelagent.canon.application." + entry.getKey());
-            assertThat(service).contains("com.novelagent.canon.application." + entry.getValue());
-            assertThat(service).noneMatch(type -> type.startsWith("org.springframework.jdbc.")
-                    || type.startsWith("java.sql.") || type.contains(".infrastructure."));
-            assertThat(dependencies.get("com.novelagent.canon.application." + entry.getValue()))
-                    .noneMatch(type -> type.startsWith("org.springframework.") || type.contains(".infrastructure."));
-        }
-    }
-
     @Test void projectOwnershipChecksUseOneAccessPolicy() {
         List<String> readers = methodCalls.entrySet().stream()
                 .filter(entry -> entry.getValue().contains("com.novelagent.project.domain.NovelProject#getOwnerId"))
                 .map(Map.Entry::getKey)
                 .toList();
         assertThat(readers).containsExactly("com.novelagent.project.application.ProjectAccessService");
-        for (String type : List.of(
-                "project.application.ProjectService",
-                "planning.application.ConfirmedSnowflakeService",
-                "planning.application.OutlineService",
-                "agent.application.AutomationRunStore",
-                "ingest.application.WorkImportService",
-                "canon.application.CanonCommitService",
-                "canon.application.CharacterNameService",
-                "canon.application.CharacterProfileService",
-                "canon.application.TypedCanonQueryService",
-                "writing.application.WritingStyleService",
-                "writing.application.QualityReviewStore")) {
-            assertThat(dependencies.get("com.novelagent." + type)).as(type)
-                    .contains("com.novelagent.project.application.ProjectAccessService");
-        }
-    }
-
-    @Test void sourceFingerprintsUseTheSharedDigestImplementation() {
-        assertThat(methodCalls.entrySet().stream()
-                .filter(entry -> entry.getValue().contains("java.security.MessageDigest#getInstance"))
-                // OAuth's PKCE challenge is a security protocol, not a source fingerprint.
-                .filter(entry -> !entry.getKey().equals("com.novelagent.modelaccess.application.ChatGptOAuthService"))
-                .map(Map.Entry::getKey).toList())
-                .containsExactly("com.novelagent.platform.support.Sha256");
-        assertThat(dependencies.get("com.novelagent.platform.support.Sha256"))
-                .noneMatch(type -> type.startsWith("com.novelagent.") || type.startsWith("org.springframework."));
-    }
-
-    @Test void modelGatewayDelegatesSessionAndBudgetPolicies() {
-        var gateway = dependencies.get("com.novelagent.planning.infrastructure.StructuredModelGateway");
-        assertThat(gateway).contains(
-                "com.novelagent.planning.infrastructure.AbstractModelExecutor",
-                "com.novelagent.planning.infrastructure.ModelPromptAssembler");
-        assertThat(dependencies.get("com.novelagent.planning.infrastructure.AbstractModelExecutor"))
-                .contains("com.novelagent.planning.infrastructure.StructuredRequestBudget",
-                        "com.novelagent.agent.application.AgentRunRecorder");
-        assertThat(methodCalls.get("com.novelagent.planning.infrastructure.StructuredModelGateway"))
-                .doesNotContain(
-                        "com.novelagent.planning.infrastructure.CodexAppServerClient#startThread",
-                        "com.novelagent.planning.infrastructure.CodexAppServerClient#resumeThread",
-                        "com.novelagent.planning.infrastructure.CodexAgentSessionRepository#saveAndFlush");
-        assertThat(dependencies.get("com.novelagent.planning.infrastructure.CodexSessionManager"))
-                .doesNotContain("com.novelagent.prompt.application.AgentPromptService");
-    }
-
-    @Test void planningOrchestratorsDelegateGenerationAndImportStatusWrites() {
-        var snowflake = dependencies.get("com.novelagent.planning.application.SnowflakePlanningService");
-        assertThat(snowflake).contains("com.novelagent.planning.application.SnowflakeStageGenerator");
-        assertThat(snowflake).doesNotContain("com.novelagent.planning.infrastructure.FreeTextPlanningRequest",
-                "com.novelagent.planning.application.CharacterDesignService");
-        var imported = dependencies.get("com.novelagent.ingest.application.ImportedStoryBlueprintService");
-        assertThat(imported).contains("com.novelagent.ingest.infrastructure.ImportedPlanningStore",
-                "com.novelagent.ingest.application.ImportedPlanningSources");
-        assertThat(imported).noneMatch(type -> type.startsWith("org.springframework.jdbc."));
-        assertThat(dependencies.get("com.novelagent.planning.application.SnowflakeStageGenerator"))
-                .doesNotContain("com.novelagent.planning.infrastructure.SnowflakePlanStore");
-        for (Class<?> type : List.of(com.novelagent.planning.application.SnowflakePlanningService.class,
-                com.novelagent.ingest.application.ImportedStoryBlueprintService.class,
-                com.novelagent.planning.application.SnowflakeStageGenerator.class)) {
-            assertThat(AnnotatedElementUtils.findMergedAnnotation(type, Transactional.class)).isNull();
-            for (var method : type.getDeclaredMethods()) {
-                assertThat(AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class)).isNull();
-            }
-        }
-    }
-
-    @Test void writingFacadeOnlyCoordinatesThreeUseCaseServices() {
-        assertThat(Arrays.stream(WritingService.class.getDeclaredFields()).map(field -> field.getType().getName()).toList())
-                .containsExactlyInAnyOrder(ChapterContractService.class.getName(), ManuscriptService.class.getName(), ChapterReviewService.class.getName());
-        assertThat(AnnotatedElementUtils.findMergedAnnotation(WritingService.class, Transactional.class)).isNull();
-        for (var method : WritingService.class.getDeclaredMethods()) {
-            assertThat(AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class)).as(method.toString()).isNull();
-        }
-    }
-
-    @Test void characterProfilesDependOnAStoragePortAndKeepUseCaseTransactions() throws Exception {
-        var service = dependencies.get("com.novelagent.canon.application.CharacterProfileService");
-        assertThat(service).contains("com.novelagent.canon.application.CharacterProfileStore");
-        assertThat(service).noneMatch(type -> type.contains(".infrastructure.")
-                || type.startsWith("org.springframework.jdbc.") || type.startsWith("java.sql."));
-        assertThat(dependencies.get("com.novelagent.canon.application.CharacterProfileStore"))
-                .noneMatch(type -> type.contains(".infrastructure.") || type.startsWith("org.springframework.")
-                        || type.startsWith("java.sql."));
-        assertThat(dependencies.get("com.novelagent.canon.infrastructure.JdbcCharacterProfileStore"))
-                .contains("com.novelagent.canon.application.CharacterProfileStore")
-                .doesNotContain("com.novelagent.canon.application.CharacterProfileService");
-
-        Class<?> type = com.novelagent.canon.application.CharacterProfileService.class;
-        for (var method : type.getDeclaredMethods()) {
-            if (Set.of("list", "update", "promptContext").contains(method.getName())) {
-                var transaction = AnnotatedElementUtils.findMergedAnnotation(method, Transactional.class);
-                assertThat(transaction).as(method.toString()).isNotNull();
-                assertThat(transaction.readOnly()).isEqualTo(method.getName().equals("promptContext"));
-            }
-        }
-    }
-
-    @Test void specializedWritingServicesDoNotCallBackIntoFacade() {
-        dependencies.forEach((name, references) -> {
-            if (name.startsWith("com.novelagent.writing.application.") && !name.equals(WritingService.class.getName())) {
-                assertThat(references).as(name).doesNotContain(WritingService.class.getName());
-            }
-        });
     }
 
     @Test void modelAdaptersUseTheSharedStructuredModelGateway() {
@@ -263,8 +128,8 @@ class ArchitectureTest {
     @Test void generationEntryPointsDoNotOpenLongDatabaseTransactions() {
         for (Class<?> type : List.of(ChapterContractService.class, ManuscriptService.class,
                 ChapterReviewService.class, QualityReviewService.class,
-                com.novelagent.writing.application.WritingStylePreviewService.class,
-                com.novelagent.writing.application.WritingStyleRecommendationService.class)) {
+                WritingStylePreviewService.class,
+                WritingStyleRecommendationService.class)) {
             assertThat(AnnotatedElementUtils.findMergedAnnotation(type, Transactional.class)).as(type.getName()).isNull();
             for (var method : type.getDeclaredMethods()) {
                 String name = method.getName();

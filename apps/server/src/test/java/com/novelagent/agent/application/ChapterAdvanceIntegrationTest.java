@@ -1,5 +1,6 @@
 package com.novelagent.agent.application;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -7,33 +8,39 @@ import com.novelagent.agent.api.CreateAutomationRunRequest;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.canon.api.PublishManuscriptRequest;
 import com.novelagent.canon.application.CanonPublicationService;
+import com.novelagent.canon.application.PublishedMemoryService;
+import com.novelagent.canon.infrastructure.OutboxPublisher;
+import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.*;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.domain.*;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import com.novelagent.writing.application.*;
 import com.novelagent.writing.domain.*;
 import com.novelagent.writing.infrastructure.*;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Isolated real migrations, child state and canonical publication; no real model, vector or graph requests. */
 @SpringBootTest(properties={"spring.kafka.listener.auto-startup=false", "spring.kafka.admin.auto-create=false",
         "logging.file.name=target/chapter-advance-test.log"})
-@EnabledIfEnvironmentVariable(named="NOVEL_ADVANCE_DB_TEST", matches="true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ChapterAdvanceIntegrationTest {
     private static final String SCHEMA = "advance_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -46,16 +53,15 @@ class ChapterAdvanceIntegrationTest {
     @Autowired OutlineVersionRepository outlines;
     @Autowired ManuscriptVersionRepository manuscripts;
     @Autowired JdbcTemplate jdbc;
-    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
+    @Autowired PlatformTransactionManager transactions;
     @MockitoBean DraftLoopModel model;
     @MockitoBean DraftLoopContext contexts;
-    @MockitoBean com.novelagent.canon.application.PublishedMemoryService memory;
-    @MockitoBean com.novelagent.canon.infrastructure.OutboxPublisher outbox;
-    @MockitoBean com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill embeddings;
+    @MockitoBean PublishedMemoryService memory;
+    @MockitoBean OutboxPublisher outbox;
+    @MockitoBean SemanticEmbeddingBackfill embeddings;
 
     @DynamicPropertySource static void database(DynamicPropertyRegistry p) {
-        p.add("spring.datasource.url", () -> "jdbc:postgresql://" + env("DB_HOST","localhost") + ":" + env("DB_PORT","5432")
-                + "/" + env("DB_NAME","novel_agent") + "?currentSchema=" + SCHEMA + ",public&sslmode=" + env("DB_SSL_MODE","disable"));
+        p.add("spring.datasource.url", () -> TestDatabase.url() + "?currentSchema=" + SCHEMA + ",public&sslmode=" + env("DB_SSL_MODE","disable"));
         p.add("spring.flyway.default-schema", () -> SCHEMA); p.add("spring.flyway.schemas", () -> SCHEMA);
         p.add("spring.jpa.properties.hibernate.default_schema", () -> SCHEMA);
     }
@@ -109,7 +115,7 @@ class ChapterAdvanceIntegrationTest {
                 null,false,0,100,3,autoPublish,autoMemory)).id();
     }
     private void await(UUID project, UUID run, AutomationStatus status, int chapter) throws Exception {
-        long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (System.nanoTime() < end) {
             var current = service.get(project, run);
             if (current.status() == status && current.currentChapter() == chapter
@@ -163,5 +169,4 @@ class ChapterAdvanceIntegrationTest {
     }
     private static ManuscriptContent content(String body) { return new ManuscriptContent("标题",body,"摘要",List.of()); }
     @AfterAll void cleanup() { jdbc.execute("DROP SCHEMA IF EXISTS " + SCHEMA + " CASCADE"); }
-    private static String env(String key, String fallback) { return System.getenv().getOrDefault(key,fallback); }
 }

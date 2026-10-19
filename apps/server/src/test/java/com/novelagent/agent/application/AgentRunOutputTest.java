@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class AgentRunOutputTest {
@@ -81,7 +82,7 @@ class AgentRunOutputTest {
         UUID run = (UUID) stored[18];
         assertThat(buffer.get(project, run)).isNull();
         recorder.progressSink().accept("after completion");
-        verify(jdbc, org.mockito.Mockito.times(2)).update(anyString(), any(Object[].class));
+        verify(jdbc, Mockito.times(2)).update(anyString(), any(Object[].class));
     }
 
     @Test void outputReadChecksOwnershipAndNeverPrefersLiveContentOverFinishedRecord() {
@@ -98,9 +99,9 @@ class AgentRunOutputTest {
         when(repository.output(project, run)).thenReturn(Optional.of(finished));
         assertThat(service.output(project, run)).contains(finished);
         var other = UUID.randomUUID();
-        org.mockito.Mockito.doThrow(new ProjectNotFoundException(other)).when(access).requireOwnedProject(other);
+        Mockito.doThrow(new ProjectNotFoundException(other)).when(access).requireOwnedProject(other);
         assertThatThrownBy(() -> service.output(other, run)).isInstanceOf(ProjectNotFoundException.class);
-        verify(repository, org.mockito.Mockito.never()).output(other, run);
+        verify(repository, Mockito.never()).output(other, run);
     }
 
     @Test void emptySubscriptionDoesNotStartModelOrReturnAnEmitter() {
@@ -109,7 +110,7 @@ class AgentRunOutputTest {
         UUID project = UUID.randomUUID(), run = UUID.randomUUID();
         when(queries.output(project, run)).thenReturn(Optional.empty());
         assertThat(service.open(project, run)).isEmpty();
-        org.mockito.Mockito.clearInvocations(queries);
+        Mockito.clearInvocations(queries);
         service.tick();
         verifyNoInteractions(queries);
     }

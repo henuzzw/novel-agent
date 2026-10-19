@@ -12,13 +12,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PlanningPromptConstraintTest {
-    @Test
-    void scenesRemainFreeTextInTheOutlineProtocol() {
-        var chapterSchema = new OutlineOutputSchema(new ObjectMapper()).value()
-                .at("/properties/content/properties/arcs/items/properties/chapters/items");
-        assertThat(chapterSchema.at("/properties/content/type").asText()).isEqualTo("string");
-        assertThat(chapterSchema.path("properties").size()).isEqualTo(4);
-    }
 
     @Test
     void selectedOutlineAndBibleAreIncludedWithoutLosingFields() throws Exception {

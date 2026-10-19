@@ -5,10 +5,11 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.ingest.application.ImportAnalysisStore;
-import com.novelagent.ingest.application.WorkImportService;
 import com.novelagent.ingest.application.ImportedPlanningSources;
+import com.novelagent.ingest.application.WorkImportService;
 import com.novelagent.planning.domain.*;
 import com.novelagent.planning.infrastructure.*;
 import com.novelagent.project.application.*;
@@ -35,7 +36,7 @@ class ConfirmedSnowflakeServiceTest {
     private final CharacterNameService names = mock(CharacterNameService.class);
     private final ConfirmedSnowflakeService service = new ConfirmedSnowflakeService(access, plans, snapshots,
             projects, sync, names, mapper, mock(JdbcTemplate.class), new ImportedPlanningSources(analyses, imports));
-    private com.fasterxml.jackson.databind.node.ObjectNode input;
+    private ObjectNode input;
     private SnowflakePlan plan;
 
     @BeforeEach void setup() {

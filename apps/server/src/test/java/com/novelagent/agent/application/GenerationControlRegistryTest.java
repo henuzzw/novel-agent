@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -17,7 +18,7 @@ class GenerationControlRegistryTest {
         try (var scope = registry.background(request, () -> true)) {
             assertThatThrownBy(() -> registry.start(project, UUID.randomUUID())).isInstanceOf(GenerationStoppedException.class);
         }
-        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        var reads = new AtomicInteger();
         try (var scope = registry.background(request, () -> reads.incrementAndGet() > 1)) {
             assertThatThrownBy(() -> registry.start(project, UUID.randomUUID())).isInstanceOf(GenerationStoppedException.class);
         }

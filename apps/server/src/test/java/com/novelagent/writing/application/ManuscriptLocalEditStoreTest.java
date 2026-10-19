@@ -12,15 +12,18 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.domain.OutlineStatus;
-import com.novelagent.planning.domain.OutlineArc;
-import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.CharacterBlueprintFixtures;
+import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineContent;
+import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.domain.OutlineVersion;
+import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.writing.api.ManuscriptLocalEditRequest;
@@ -83,8 +86,8 @@ class ManuscriptLocalEditStoreTest {
         when(outline.getStatus()).thenReturn(OutlineStatus.PUBLISHED);
         var chapter = new ChapterPlan(1, "title", "Alice", "goal", "event", "reveal", "hook", 1000, 2000);
         var arc = new OutlineArc(1, "arc", "goal", "conflict", "turn", "outcome", 1000, 2000, List.of(chapter));
-        when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent("title", "premise", "structure", "pacing", 1000, 2000, List.of(arc)));
-        when(bible.getContent()).thenReturn(com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(List.of()));
+        when(outline.getContent()).thenReturn(new OutlineContent("title", "premise", "structure", "pacing", 1000, 2000, List.of(arc)));
+        when(bible.getContent()).thenReturn(CharacterBlueprintFixtures.bible(List.of()));
         when(bible.getId()).thenReturn(bibleId);
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
         when(contexts.context(id, 1)).thenReturn(new WritingContextService.Context(outline, bible, arc, chapter));
@@ -113,7 +116,7 @@ class ManuscriptLocalEditStoreTest {
         var freshBible = StoryBibleVersion.create(bible.getId(), id, 1, "TEST", null, null, null, bible.getContent());
         freshBible.publish();
         return WritingContextService.prepared(WritingContextService.resolve(freshOutline, freshBible, 1,
-                com.novelagent.project.domain.CreativeStrategyPolicy.from(project)), project);
+                CreativeStrategyPolicy.from(project)), project);
     }
 
     @Test

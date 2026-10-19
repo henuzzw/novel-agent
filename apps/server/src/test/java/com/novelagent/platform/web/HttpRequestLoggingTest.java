@@ -8,7 +8,12 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.platform.api.ApiExceptionHandler;
+import com.novelagent.project.api.ProjectResponse;
+import jakarta.servlet.http.HttpServletResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,9 +21,9 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.*;
@@ -40,7 +45,7 @@ class HttpRequestLoggingTest {
         appender.start(); logger.addAppender(appender);
     }
     @AfterEach void cleanup() { logger.detachAppender(appender); appender.stop(); MDC.clear(); }
-    private String logs() { return appender.list.stream().map(ILoggingEvent::getFormattedMessage).collect(java.util.stream.Collectors.joining("\n")); }
+    private String logs() { return appender.list.stream().map(ILoggingEvent::getFormattedMessage).collect(Collectors.joining("\n")); }
 
     @Test void recordsParametersBodiesResponseProjectAndCorrelationWithoutChangingPayload() throws Exception {
         MDC.put("requestId", "outer"); MDC.put("projectId", "outerProject");
@@ -58,7 +63,7 @@ class HttpRequestLoggingTest {
     }
     @Test void logsHandledErrorsAndMalformedBodiesWithoutRawSource() throws Exception {
         mvc.perform(get(BASE + "/fail")).andExpect(status().isBadRequest());
-        assertThat(logs()).contains("status=400", "INVALID_REQUEST").doesNotContain("private source");
+        assertThat(logs()).contains("status=400", "invalid-request").doesNotContain("private source");
         appender.list.clear();
         mvc.perform(post(BASE + "/echo").contentType(MediaType.APPLICATION_JSON).content("{private source"))
                 .andExpect(status().isBadRequest());
@@ -66,7 +71,7 @@ class HttpRequestLoggingTest {
     }
     @Test void logsMultipartAndBinaryMetadataOnly() throws Exception {
         mvc.perform(multipart(BASE + "/upload").file(new MockMultipartFile("file", "chapter.md", "text/markdown",
-                "private uploaded source".getBytes(java.nio.charset.StandardCharsets.UTF_8)))).andExpect(status().isOk());
+                "private uploaded source".getBytes(StandardCharsets.UTF_8)))).andExpect(status().isOk());
         assertThat(logs()).contains("chapter.md", "bytes", "MULTIPART").doesNotContain("private uploaded source");
         appender.list.clear();
         mvc.perform(get(BASE + "/download")).andExpect(status().isOk()).andExpect(content().bytes(new byte[] {1, 2, 3}));
@@ -85,7 +90,7 @@ class HttpRequestLoggingTest {
     @Test void filterAlsoRecordsRejectionsBeforeMvcAndRestoresMdcOnUnhandledFailure() throws Exception {
         var filter = new HttpRequestLogFilter(); var request = new MockHttpServletRequest("OPTIONS", BASE + "/echo");
         var response = new MockHttpServletResponse();
-        filter.doFilter(request, response, (req, res) -> ((jakarta.servlet.http.HttpServletResponse) res).setStatus(403));
+        filter.doFilter(request, response, (req, res) -> ((HttpServletResponse) res).setStatus(403));
         assertThat(logs()).contains("HTTP_START", "HTTP_END", "status=403", PROJECT);
         appender.list.clear();
         assertThatThrownBy(() -> filter.doFilter(new MockHttpServletRequest("GET", BASE + "/fail"),
@@ -114,9 +119,9 @@ class HttpRequestLoggingTest {
     static class TestController {
         SseEmitter emitter;
         @PostMapping("/api/v1/projects")
-        ResponseEntity<com.novelagent.project.api.ProjectResponse> create(@RequestBody Map<String, Object> input) {
-            return ResponseEntity.status(201).body(new com.novelagent.project.api.ProjectResponse(
-                    java.util.UUID.fromString(PROJECT), "Test", null, null, 0, 0, null, null, null, null));
+        ResponseEntity<ProjectResponse> create(@RequestBody Map<String, Object> input) {
+            return ResponseEntity.status(201).body(new ProjectResponse(
+                    UUID.fromString(PROJECT), "Test", null, null, 0, 0, null, null, null, null));
         }
         @GetMapping("/api/v1/settings/test")
         Map<String, Object> settings() { return Map.of("version", 1); }

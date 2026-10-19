@@ -1,10 +1,15 @@
 package com.novelagent.writing.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.ChapterPlanStatus;
+import com.novelagent.planning.domain.CharacterBlueprint;
 import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.StoryBibleContent;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class WritingMaterialSelectionTest {
@@ -14,10 +19,10 @@ class WritingMaterialSelectionTest {
                 .withDevelopmentNotes("完整九步底稿".repeat(10000));
         assertThat(WritingMaterialSelection.forOpening(source)).isEqualTo(source.withDevelopmentNotes(null));
         assertThat(source.developmentNotes()).hasSize(60000);
-        var chapters = java.util.stream.IntStream.rangeClosed(1, 17).mapToObj(number ->
+        var chapters = IntStream.rangeClosed(1, 17).mapToObj(number ->
                 new ChapterPlan(number, "章" + number, "完整计划" + number,
-                        com.novelagent.planning.domain.ChapterPlanStatus.PLANNED)).toList();
-        var outline = new com.novelagent.planning.domain.OutlineContent("书名", "核心", "全书方向", "节奏", 40000, 50000,
+                        ChapterPlanStatus.PLANNED)).toList();
+        var outline = new OutlineContent("书名", "核心", "全书方向", "节奏", 40000, 50000,
                 List.of(new OutlineArc(1, "阶段", "目标", "冲突", "转折", "结果", 40000, 50000, chapters)));
         var selected = WritingMaterialSelection.forOpening(outline);
         assertThat(selected.arcs().getFirst().chapters()).containsExactlyElementsOf(chapters.subList(0, 3));
@@ -25,13 +30,13 @@ class WritingMaterialSelectionTest {
         assertThat(outline.chapterCount()).isEqualTo(17);
     }
     @Test void onlyFiltersCharactersForFullyResolvedExplicitRoster() throws Exception {
-        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        var json = new ObjectMapper();
         var a = json.readValue("{\"name\":\"江澈\",\"role\":\"PROTAGONIST\",\"identity\":\"学生\",\"coreDesire\":\"学习\"}",
-                com.novelagent.planning.domain.CharacterBlueprint.class);
+                CharacterBlueprint.class);
         var b = json.readValue("{\"name\":\"沈秋\",\"role\":\"SUPPORTING\",\"identity\":\"学生\",\"coreDesire\":\"学习\"}",
-                com.novelagent.planning.domain.CharacterBlueprint.class);
+                CharacterBlueprint.class);
         var c = json.readValue("{\"name\":\"许冬\",\"role\":\"SUPPORTING\",\"identity\":\"学生\",\"coreDesire\":\"学习\"}",
-                com.novelagent.planning.domain.CharacterBlueprint.class);
+                CharacterBlueprint.class);
         var source = new StoryBibleContent("核心", "主题", "校园", List.of(), "江澈", "", List.of(), List.of(),
                 "冲突", "代价", "清爽", "", List.of(), List.of(), List.of(a, b, c));
         assertThat(WritingMaterialSelection.forChapter(source, "核心人物：江澈、沈秋\n本章正文").characterBlueprints()).containsExactly(a, b);
@@ -48,8 +53,8 @@ class WritingMaterialSelectionTest {
         assertThat(selected.worldRules()).isEqualTo(original.worldRules());
         assertThat(selected.hardConstraints()).isEqualTo(original.hardConstraints());
         assertThat(original.developmentNotes()).hasSizeGreaterThan(1000);
-        var first = new ChapterPlan(1, "开头", "本章文字块", com.novelagent.planning.domain.ChapterPlanStatus.PLANNED);
-        var second = new ChapterPlan(2, "未来", "不能提前兑现", com.novelagent.planning.domain.ChapterPlanStatus.PLANNED);
+        var first = new ChapterPlan(1, "开头", "本章文字块", ChapterPlanStatus.PLANNED);
+        var second = new ChapterPlan(2, "未来", "不能提前兑现", ChapterPlanStatus.PLANNED);
         var arc = new OutlineArc(1, "开端", "目标", "冲突", "未来转折", "未来结果", 4000, 6000, List.of(first, second));
         assertThat(WritingMaterialSelection.forChapter(arc, first).chapters()).containsExactly(first);
         assertThat(arc.chapters()).containsExactly(first, second);

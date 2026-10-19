@@ -4,24 +4,37 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.RSASSASigner;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import com.novelagent.modelaccess.infrastructure.ChatGptHttp;
 import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore;
 import com.novelagent.project.application.CurrentActorProvider;
-import java.net.URI;
 import java.nio.file.Path;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 class ChatGptOAuthServiceTest {
     @TempDir Path directory;
@@ -42,7 +55,7 @@ class ChatGptOAuthServiceTest {
         return Jwt.withTokenValue("identity").header("alg", "RS256").subject(subject).audience(List.of("oaiapp_test"))
                 .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600)).claim("nonce", nonce).build();
     }
-    private com.fasterxml.jackson.databind.JsonNode tokens(String refresh) {
+    private JsonNode tokens(String refresh) {
         return json.createObjectNode().put("id_token", "identity").put("token_type", "Bearer").put("access_token", "access-test")
                 .put("refresh_token", refresh).put("expires_in", 3600).put("scope", "resource.invoke chatgpt.tokens.use.direct");
     }
@@ -66,7 +79,7 @@ class ChatGptOAuthServiceTest {
         assertThat(service.authorization().toString()).doesNotContain("access-test", "refresh-first");
         assertThatThrownBy(() -> service.complete(login.attemptId(), callback(p, p.get("state")))).hasMessageContaining("已完成");
         verify(http, times(1)).form(eq(ChatGptHttp.TOKEN), anyMap());
-        var form = org.mockito.ArgumentCaptor.forClass(Map.class);
+        var form = ArgumentCaptor.forClass(Map.class);
         verify(http).form(eq(ChatGptHttp.TOKEN), form.capture());
         assertThat(form.getValue().get("redirect_uri")).isEqualTo(p.get("redirect_uri"));
         assertThat(form.getValue().get("code_verifier").toString()).hasSize(43);
@@ -101,7 +114,7 @@ class ChatGptOAuthServiceTest {
         when(http.form(eq(ChatGptHttp.TOKEN), anyMap())).thenReturn(tokens("refresh-new"));
         when(decoder.decode("identity")).thenReturn(identity(null, "subject"));
         try (var workers = Executors.newFixedThreadPool(3)) {
-            var calls = workers.invokeAll(List.<java.util.concurrent.Callable<PrivateOAuthStore.Credentials>>of(
+            var calls = workers.invokeAll(List.<Callable<PrivateOAuthStore.Credentials>>of(
                     service::authorization, service::authorization, service::authorization));
             for (var call : calls) assertThat(call.get().refreshToken()).isEqualTo("refresh-new");
         }
@@ -127,26 +140,26 @@ class ChatGptOAuthServiceTest {
     }
     @Test void realJwtDecoderVerifiesSignatureIssuerAndExpiryBeforeInstallingIdentity() throws Exception {
         service.close();
-        var generator = java.security.KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
+        var generator = KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
         var keys = generator.generateKeyPair();
-        var verified = org.springframework.security.oauth2.jwt.NimbusJwtDecoder.withPublicKey((java.security.interfaces.RSAPublicKey) keys.getPublic()).build();
-        verified.setJwtValidator(org.springframework.security.oauth2.jwt.JwtValidators.createDefaultWithIssuer("https://auth.openai.com"));
+        var verified = NimbusJwtDecoder.withPublicKey((RSAPublicKey) keys.getPublic()).build();
+        verified.setJwtValidator(JwtValidators.createDefaultWithIssuer("https://auth.openai.com"));
         service = new ChatGptOAuthService(store, http, actors, verified);
         var login = service.begin(); var p = params(login);
-        var claims = new com.nimbusds.jwt.JWTClaimsSet.Builder().issuer("https://auth.openai.com").subject("subject")
-                .audience("oaiapp_test").issueTime(java.util.Date.from(Instant.now())).expirationTime(java.util.Date.from(Instant.now().plusSeconds(3600)))
+        var claims = new JWTClaimsSet.Builder().issuer("https://auth.openai.com").subject("subject")
+                .audience("oaiapp_test").issueTime(Date.from(Instant.now())).expirationTime(Date.from(Instant.now().plusSeconds(3600)))
                 .claim("nonce", p.get("nonce")).build();
-        var signed = new com.nimbusds.jwt.SignedJWT(new com.nimbusds.jose.JWSHeader(com.nimbusds.jose.JWSAlgorithm.RS256), claims);
-        signed.sign(new com.nimbusds.jose.crypto.RSASSASigner(keys.getPrivate()));
-        var returned = tokens("refresh-signed"); ((com.fasterxml.jackson.databind.node.ObjectNode) returned).put("id_token", signed.serialize());
+        var signed = new SignedJWT(new JWSHeader(JWSAlgorithm.RS256), claims);
+        signed.sign(new RSASSASigner(keys.getPrivate()));
+        var returned = tokens("refresh-signed"); ((ObjectNode) returned).put("id_token", signed.serialize());
         when(http.form(eq(ChatGptHttp.TOKEN), anyMap())).thenReturn(returned);
         service.complete(login.attemptId(), callback(p, p.get("state")));
         assertThat(service.status().connected()).isTrue();
         var next = service.begin(); var q = params(next);
         var wrongKeys = generator.generateKeyPair();
-        var forged = new com.nimbusds.jwt.SignedJWT(new com.nimbusds.jose.JWSHeader(com.nimbusds.jose.JWSAlgorithm.RS256), claims);
-        forged.sign(new com.nimbusds.jose.crypto.RSASSASigner(wrongKeys.getPrivate()));
-        ((com.fasterxml.jackson.databind.node.ObjectNode) returned).put("id_token", forged.serialize());
+        var forged = new SignedJWT(new JWSHeader(JWSAlgorithm.RS256), claims);
+        forged.sign(new RSASSASigner(wrongKeys.getPrivate()));
+        ((ObjectNode) returned).put("id_token", forged.serialize());
         assertThatThrownBy(() -> service.complete(next.attemptId(), callback(q, q.get("state")))).hasMessageContaining("身份签名");
         assertThat(service.status().connected()).isTrue();
         assertThat(store.hostId()).isEqualTo(new PrivateOAuthStore(json, directory.resolve("private").toString()).hostId());

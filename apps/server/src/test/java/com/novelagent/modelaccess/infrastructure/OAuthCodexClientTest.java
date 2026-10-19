@@ -7,6 +7,7 @@ import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.application.ChatGptOAuthService;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ class OAuthCodexClientTest {
         String binding = client.authorize();
         assertThat(client.launchCommand().toString()).contains("supports_websockets=false", "env_key=\"ACCESS_TOKEN\"", "features.shell_tool=false")
                 .doesNotContain("private-test-token", "private-refresh");
-        var environment = new java.util.HashMap<String, String>(); environment.put("OPENAI_API_KEY", "not-used");
+        var environment = new HashMap<String, String>(); environment.put("OPENAI_API_KEY", "not-used");
         client.configureEnvironment(environment);
         assertThat(environment).containsEntry("ACCESS_TOKEN", "private-test-token").doesNotContainKey("OPENAI_API_KEY");
         String content = "原文".repeat(6000); String id = CodexMaterialDelta.fingerprint(content);

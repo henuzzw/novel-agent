@@ -1,25 +1,28 @@
 package com.novelagent.writing.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.canon.api.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
-import com.novelagent.canon.api.UpdateCharacterProfileRequest;
+import com.novelagent.canon.infrastructure.JdbcCharacterProfileStore;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.canon.infrastructure.JdbcCharacterProfileStore;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import com.novelagent.writing.application.ReaderExperienceService;
 import com.novelagent.writing.domain.ReaderExperienceEvent;
 import com.novelagent.writing.domain.ReaderExperiencePlan;
@@ -29,6 +32,7 @@ import com.novelagent.writing.domain.ReaderExperienceSubmission;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -36,14 +40,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@EnabledIfEnvironmentVariable(named = "NOVEL_READER_EXPERIENCE_DB_TEST", matches = "true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ReaderExperienceJdbcStoreTest {
     private final String schema = "reader_experience_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -58,8 +61,7 @@ class ReaderExperienceJdbcStoreTest {
     private UUID project, manuscript, character, outline;
 
     @BeforeAll void databaseAndMigration() throws Exception {
-        var datasource = new DriverManagerDataSource("jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432")
-                + "/" + env("DB_NAME", "novel_agent") + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
+        var datasource = new DriverManagerDataSource(TestDatabase.url() + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
                 env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", "change-me"));
         jdbc = new JdbcTemplate(datasource);
         jdbc.execute("CREATE SCHEMA " + schema);
@@ -97,7 +99,7 @@ class ReaderExperienceJdbcStoreTest {
         jdbc.update("INSERT INTO story_entity(id, project_id, entity_type, canonical_name, source_name, role_key) VALUES (?, ?, 'CHARACTER', '林安', '林安', 'PROTAGONIST')", character, project);
         String token = "{{entity:" + character + ":CANONICAL}}";
         jdbc.update("INSERT INTO manuscript_version VALUES (?, ?, 2, 1, 'AUTHOR_ACCEPTED', ?::jsonb, 1, 'manuscript/1')",
-                manuscript, project, mapper.writeValueAsString(java.util.Map.of("title", token + "的纸条", "body", token + "把纸条交给我。", "summary", token + "交出纸条。")));
+                manuscript, project, mapper.writeValueAsString(Map.of("title", token + "的纸条", "body", token + "把纸条交给我。", "summary", token + "交出纸条。")));
         var chapter = new ChapterPlan(1, "纸条", "林安", "查线索", "交纸条", "签名", "谜题", 1000, 2000);
         var content = new OutlineContent("故事", "前提", "结构", "节奏", 1000, 2000,
                 List.of(new OutlineArc(1, "寻找", "目标", "冲突", "转折", "结果", 1000, 2000, List.of(chapter))));
@@ -140,7 +142,7 @@ class ReaderExperienceJdbcStoreTest {
         assertThat(first).isEqualTo(service.memory(project));
         UUID replacement = UUID.randomUUID();
         jdbc.update("INSERT INTO manuscript_version VALUES (?, ?, 4, 1, 'AUTHOR_ACCEPTED', ?::jsonb, 2, 'manuscript/1')", replacement, project,
-                mapper.writeValueAsString(java.util.Map.of("title", "新正文", "body", "我还回纸条。", "summary", "还回纸条。")));
+                mapper.writeValueAsString(Map.of("title", "新正文", "body", "我还回纸条。", "summary", "还回纸条。")));
         jdbc.update("UPDATE canon_commit SET active = false WHERE id = ?", commit);
         jdbc.update("INSERT INTO canon_commit VALUES (?, ?, 1, ?, 2, true)", UUID.randomUUID(), project, replacement);
         assertThat(service.source(project, manuscript).superseded()).isTrue();
@@ -223,5 +225,4 @@ class ReaderExperienceJdbcStoreTest {
     }
 
     @AfterAll void cleanup() { if (jdbc != null) jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE"); }
-    private static String env(String key, String fallback) { var value = System.getenv(key); return value == null || value.isBlank() ? fallback : value; }
 }

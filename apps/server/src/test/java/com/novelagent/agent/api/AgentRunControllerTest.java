@@ -9,10 +9,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ProjectAccessService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.infrastructure.AgentRunQueryRepository;
+import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
@@ -78,7 +79,7 @@ class AgentRunControllerTest {
         UUID projectId = UUID.randomUUID();
         UUID runId = UUID.randomUUID();
         var service = mock(AgentRunQueryService.class);
-        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var mapper = new ObjectMapper();
         when(service.requestSnapshot(projectId, runId)).thenReturn(Optional.of(
                 new AgentRunResponse.RequestSnapshotResponse(runId,
                         mapper.readTree("{\"effectiveSettings\":{\"provider\":\"DEEPSEEK\",\"model\":\"deepseek-flash\",\"version\":4}}"),

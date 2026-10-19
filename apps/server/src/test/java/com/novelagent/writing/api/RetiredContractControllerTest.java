@@ -1,6 +1,7 @@
 package com.novelagent.writing.api;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -45,31 +46,28 @@ class RetiredContractControllerTest {
             new ChapterContractService(contexts, contracts, contractReviews, names), manuscripts, reviews)))
             .setControllerAdvice(new ApiExceptionHandler()).build();
 
-    @Test void retiredWritesReturnGoneWithoutOldPayloadOrVersion() throws Exception {
+    @Test void retiredWritesCheckOwnershipAndReturnGoneWithoutParsingOldPayloads() throws Exception {
+        when(contexts.requireOwnedProject(projectId)).thenThrow(new ProjectNotFoundException(projectId));
+        for (Route route : retiredRoutes()) {
+            mvc.perform(request(route.method(), base + route.path())).andExpect(status().isNotFound());
+        }
+        verify(contexts, times(5)).requireOwnedProject(projectId);
+        verifyNoInteractions(contracts, contractReviews, names, manuscripts, reviews);
+        reset(contexts);
+
         for (Route route : retiredRoutes()) {
             mvc.perform(request(route.method(), base + route.path())).andExpect(status().isGone());
         }
         verify(contexts, times(5)).requireOwnedProject(projectId);
         verifyNoInteractions(contracts, contractReviews, names, manuscripts, reviews);
-    }
 
-    @Test void retiredWritesIgnoreObsoletePayloadAndVersionParsing() throws Exception {
         for (Route route : retiredRoutes()) {
             for (String body : List.of("{\"content\":{}}", "{broken")) {
                 mvc.perform(request(route.method(), base + route.path()).contentType(MediaType.APPLICATION_JSON)
                         .header("If-Match", "obsolete-version").content(body)).andExpect(status().isGone());
             }
         }
-        verify(contexts, times(10)).requireOwnedProject(projectId);
-        verifyNoInteractions(contracts, contractReviews, names, manuscripts, reviews);
-    }
-
-    @Test void retiredWritesCheckOwnershipBeforeReturningGone() throws Exception {
-        when(contexts.requireOwnedProject(projectId)).thenThrow(new ProjectNotFoundException(projectId));
-        for (Route route : retiredRoutes()) {
-            mvc.perform(request(route.method(), base + route.path())).andExpect(status().isNotFound());
-        }
-        verify(contexts, times(5)).requireOwnedProject(projectId);
+        verify(contexts, times(15)).requireOwnedProject(projectId);
         verifyNoInteractions(contracts, contractReviews, names, manuscripts, reviews);
     }
 

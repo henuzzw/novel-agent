@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,7 @@ class ImportedPlanningSourcesTest {
     private final WorkImportService imports = mock(WorkImportService.class);
     private final ImportedPlanningSources sources = new ImportedPlanningSources(analyses, imports);
 
-    private com.fasterxml.jackson.databind.node.ObjectNode frozen() {
+    private ObjectNode frozen() {
         var input = mapper.createObjectNode().put("mode", "ADAPT_SOURCE")
                 .put("sourceAnalysisId", analysisId.toString()).put("sourceAnalysisVersion", 2)
                 .put("sourceText", "完整原文\n保留格式").put("sourceChapterCount", 2).put("sourceTruncated", false);
@@ -52,8 +53,8 @@ class ImportedPlanningSourcesTest {
             case "text" -> text = "完整原文 保留格式";
             case "chapters" -> chapters = 1;
             case "truncated" -> truncated = true;
-            case "report" -> ((com.fasterxml.jackson.databind.node.ObjectNode) report).put("summary", "新结论");
-            case "numericType" -> ((com.fasterxml.jackson.databind.node.ObjectNode) report).put("version", "2");
+            case "report" -> ((ObjectNode) report).put("summary", "新结论");
+            case "numericType" -> ((ObjectNode) report).put("version", "2");
         }
         when(analyses.requireConfirmed(projectId, importId, analysisId, 2L, ImportPlanningMode.ADAPT_SOURCE))
                 .thenReturn(report);

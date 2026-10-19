@@ -1,10 +1,20 @@
 package com.novelagent.planning.infrastructure;
 
 import static org.assertj.core.api.Assertions.*;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -14,7 +24,7 @@ class CodexSessionWireTest {
         return new CodexAppServerClient(new ObjectMapper(), "unused", "test-model", "high", 5, temp.toString(), "unused", "") {
             @Override protected boolean externalAuthorization() { return true; }
             @Override protected List<String> launchCommand() {
-                return List.of(Path.of(System.getProperty("java.home"), "bin", "java.exe").toString(), "-cp",
+                return List.of(javaBin(), "-cp",
                         System.getProperty("java.class.path"), WireServer.class.getName());
             }
         };
@@ -28,9 +38,9 @@ class CodexSessionWireTest {
             var project = UUID.randomUUID();
             String thread = client.startThread(project, "资料读取任务");
             String content = "完整原文\r\n".repeat(1800);
-            String id = com.novelagent.modelaccess.infrastructure.CodexMaterialDelta.fingerprint(content);
-            client.saveMaterialFiles(project, java.util.Map.of(id, content));
-            client.openMaterialScope(thread, project, java.util.Set.of(id));
+            String id = CodexMaterialDelta.fingerprint(content);
+            client.saveMaterialFiles(project, Map.of(id, content));
+            client.openMaterialScope(thread, project, Set.of(id));
             var first = json.readTree(client.runStructuredTurn(thread, project, "read-material:" + id + ":0", null).output());
             assertThat(first.at("/toolDefinition/0/name").asText()).isEqualTo("novel_read_material");
             assertThat(first.at("/toolResult/success").asBoolean()).isTrue();
@@ -52,7 +62,7 @@ class CodexSessionWireTest {
         var client = new CodexAppServerClient(json, "unused", "test-model", "high", 5, temp.toString(), "unused", "") {
             @Override protected boolean externalAuthorization() { return true; }
             @Override protected List<String> launchCommand() {
-                return List.of(Path.of(System.getProperty("java.home"), "bin", "java.exe").toString(), "-cp",
+                return List.of(javaBin(), "-cp",
                         System.getProperty("java.class.path"), WireServer.class.getName());
             }
         };
@@ -61,7 +71,7 @@ class CodexSessionWireTest {
             String thread = client.startThread(project, "初次角色");
             client.resumeThread(thread, project, "已挂载会话的新角色");
             long started = System.nanoTime(); client.compactThread(thread);
-            assertThat(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)).isGreaterThanOrEqualTo(100);
+            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)).isGreaterThanOrEqualTo(100);
             var result = client.runStructuredTurn(thread, project, "本轮新增资料", null);
             var wire = json.readTree(result.output());
             assertThat(wire.path("threadId").asText()).isEqualTo(thread);
@@ -75,11 +85,11 @@ class CodexSessionWireTest {
     public static class WireServer {
         public static void main(String[] args) throws Exception {
             var json = new ObjectMapper(); String role = ""; boolean compacted = false;
-            com.fasterxml.jackson.databind.JsonNode definitions = json.createArrayNode();
+            JsonNode definitions = json.createArrayNode();
             boolean experimental = false;
-            com.fasterxml.jackson.databind.node.ObjectNode pendingTool = null;
-            var reader = new java.io.BufferedReader(new java.io.InputStreamReader(System.in, java.nio.charset.StandardCharsets.UTF_8));
-            var out = new java.io.PrintWriter(System.out, true, java.nio.charset.StandardCharsets.UTF_8);
+            ObjectNode pendingTool = null;
+            var reader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
+            var out = new PrintWriter(System.out, true, StandardCharsets.UTF_8);
             String line;
             while ((line = reader.readLine()) != null) {
                 var request = json.readTree(line); if (!request.has("id")) continue;
@@ -108,11 +118,11 @@ class CodexSessionWireTest {
                     out.println("{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"persisted-thread\",\"turn\":{\"id\":\"compact\",\"status\":\"completed\",\"items\":[]}}}");
                 }
                 if (method.equals("turn/start")) {
-                    var captured = params.deepCopy(); ((com.fasterxml.jackson.databind.node.ObjectNode) captured).put("lastDeveloperInstructions", role).put("compacted", compacted);
+                    var captured = params.deepCopy(); ((ObjectNode) captured).put("lastDeveloperInstructions", role).put("compacted", compacted);
                     String text = params.at("/input/0/text").asText();
                     if (text.startsWith("read-material:")) {
                         var parts = text.split(":");
-                        pendingTool = (com.fasterxml.jackson.databind.node.ObjectNode) captured;
+                        pendingTool = (ObjectNode) captured;
                         pendingTool.set("toolDefinition", definitions);
                         pendingTool.put("experimentalApi", experimental);
                         var call = json.createObjectNode().put("id", 9001).put("method", "item/tool/call");
@@ -124,11 +134,16 @@ class CodexSessionWireTest {
                 }
             }
         }
-        private static com.fasterxml.jackson.databind.JsonNode completion(ObjectMapper json, String text) {
+        private static JsonNode completion(ObjectMapper json, String text) {
             var event = json.createObjectNode().put("method", "turn/completed");
             event.putObject("params").put("threadId", "persisted-thread").putObject("turn").put("id", "generation").put("status", "completed")
                     .putArray("items").addObject().put("type", "agentMessage").put("text", text);
             return event;
         }
+    }
+
+    private static String javaBin() {
+        String name = System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java";
+        return Path.of(System.getProperty("java.home"), "bin", name).toString();
     }
 }

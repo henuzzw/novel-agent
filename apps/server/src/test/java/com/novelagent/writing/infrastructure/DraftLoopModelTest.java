@@ -7,11 +7,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
-import com.novelagent.prompt.application.AgentPromptCatalog;
-import com.novelagent.prompt.application.AgentPromptDefaults;
 import com.novelagent.writing.domain.*;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -53,7 +52,7 @@ class DraftLoopModelTest {
 
     @Test void invalidEvidenceIsRejectedInsideRecordedOutputBeforeSaving() {
         returns("{\"summary\":\"问题\",\"issues\":[{\"id\":\"L1\",\"category\":\"LOGIC\",\"description\":\"描述\",\"evidence\":\"凭空编的原文\",\"existingBasis\":\"\",\"gap\":\"\",\"candidateDesign\":\"\",\"impact\":\"\",\"suggestion\":\"修改\"}]}");
-        var saved = new java.util.concurrent.atomic.AtomicBoolean();
+        var saved = new AtomicBoolean();
         assertThatThrownBy(() -> model.check(run(), draft, ignored -> saved.set(true))).hasMessageContaining("证据");
         assertThat(saved).isFalse();
     }

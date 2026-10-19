@@ -17,6 +17,7 @@ import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.application.WritingStylePresets;
 import com.novelagent.writing.application.WritingStyleService;
+import com.novelagent.writing.domain.WritingStyleCraft;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -38,9 +39,9 @@ class WritingStylePreviewTest {
         var c = candidate.craft();
         var quote = "只存在于风格样本的引文甲乙";
         candidate = candidate.withCraft(candidate.basePresetId(), candidate.basePresetVersion(),
-                new com.novelagent.writing.domain.WritingStyleCraft(c.narratorPosition(), c.paragraphMoves(), c.sentenceMoves(),
+                new WritingStyleCraft(c.narratorPosition(), c.paragraphMoves(), c.sentenceMoves(),
                         c.wordChoice(), c.dialogueMoves(), c.rhetoricMoves(), c.sceneVariants(), c.revisionChecks(), c.examples(),
-                        List.of(new com.novelagent.writing.domain.WritingStyleCraft.Evidence("paragraphMoves", quote, "只归纳表达规律"))));
+                        List.of(new WritingStyleCraft.Evidence("paragraphMoves", quote, "只归纳表达规律"))));
         var prompt = factory.stylePreview(UUID.randomUUID(), bible, arc, chapter,
                 candidate, 800, "只写开场");
         assertThat(prompt.user()).contains(chapter.title(), "人物当前档案", "只写开场");

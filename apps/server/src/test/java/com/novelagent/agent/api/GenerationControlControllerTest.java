@@ -13,6 +13,8 @@ import com.novelagent.project.application.ProjectNotFoundException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 class GenerationControlControllerTest {
     @Test void ownershipIsRequiredAndFinishedCallsReturnConflict() throws Exception {
@@ -41,9 +43,9 @@ class GenerationControlControllerTest {
                 .andExpect(jsonPath("$.code").value("GENERATION_CANCELLED"));
     }
 
-    @org.springframework.web.bind.annotation.RestController
+    @RestController
     static class StoppedController {
-        @org.springframework.web.bind.annotation.PostMapping("/stopped")
+        @PostMapping("/stopped")
         public void stop() { throw new GenerationStoppedException(); }
     }
 }

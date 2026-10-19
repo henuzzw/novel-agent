@@ -2,6 +2,8 @@ package com.novelagent.planning.infrastructure;
 
 import static org.assertj.core.api.Assertions.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class JsonSchemaOutputProtocolTest {
@@ -19,13 +21,13 @@ class JsonSchemaOutputProtocolTest {
         var protocol = protocol();
         String input = "{\"action\":\"REVISED\",\"quotes\":[\"她说：\\\"好\\\"。\"],\"content\":{\"body\":\"甲\\n\\n乙\"}}";
         assertThat(json.readTree(protocol.decode(input)).at("/content/body").asText()).isEqualTo("甲\n\n乙");
-        ((com.fasterxml.jackson.databind.node.ObjectNode) protocol.wireSchema()).remove("required");
+        ((ObjectNode) protocol.wireSchema()).remove("required");
         assertThat(protocol.wireSchema().has("required")).isTrue();
         assertThat(protocol.decode("{\"action\":\"NO_CHANGE\",\"quotes\":[\"原文\"],\"content\":null}")).contains("\"content\":null");
     }
     @Test void rejectsMalformedDuplicateTrailingMissingEnumWrongTypeAndArrayBoundsBeforeSaving() throws Exception {
         var protocol = protocol();
-        for (String input : java.util.List.of("```json\n{}\n```", "{} {}",
+        for (String input : List.of("```json\n{}\n```", "{} {}",
                 "{\"action\":\"NO_CHANGE\",\"action\":\"REVISED\"}", "{}",
                 "{\"action\":\"WRONG\",\"quotes\":[\"a\"],\"content\":null}",
                 "{\"action\":\"NO_CHANGE\",\"quotes\":\"a\",\"content\":null}",

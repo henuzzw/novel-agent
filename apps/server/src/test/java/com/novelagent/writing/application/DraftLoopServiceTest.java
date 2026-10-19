@@ -4,15 +4,20 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import com.novelagent.agent.application.GenerationControlRegistry;
+import com.novelagent.agent.domain.AutomationRun;
+import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.domain.*;
 import com.novelagent.writing.infrastructure.DraftLoopModel;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class DraftLoopServiceTest {
     private final UUID project = UUID.randomUUID();
@@ -98,9 +103,9 @@ class DraftLoopServiceTest {
 
     @Test void automationRetryContinuesCWithoutRefreezingOrRepeatingAAndB() {
         run.wrote(manuscript(original, 1), original.body()); run.checked(original, issues()); run.fail("C格式错误");
-        var parent = com.novelagent.agent.domain.AutomationRun.create(project, UUID.randomUUID(), 1, 1, ModelProvider.DEEPSEEK, null);
-        parent.start(java.time.Instant.now());
-        when(store.retryForAutomation(parent)).thenAnswer(call -> { run.retry(); run.claim(); return java.util.Optional.of(run); });
+        var parent = AutomationRun.create(project, UUID.randomUUID(), 1, 1, ModelProvider.DEEPSEEK, null);
+        parent.start(Instant.now());
+        when(store.retryForAutomation(parent)).thenAnswer(call -> { run.retry(); run.claim(); return Optional.of(run); });
         doAnswer(call -> { Consumer<DraftJudgment> save = call.getArgument(3);
             save.accept(new DraftJudgment(DraftJudgment.Action.NO_CHANGE,
                     List.of(new DraftJudgment.Decision("F1", DraftJudgment.Verdict.REJECT, "现稿没有问题")), null, List.of())); return null;
@@ -111,16 +116,16 @@ class DraftLoopServiceTest {
         verify(store, never()).createForAutomation(any(), any(), anyInt(), any(), anyBoolean(), anyInt(), any(), any(), anyInt());
     }
     @Test void duplicateCreateDoesNotRecollectContextOrDispatchAnotherWorker() {
-        when(store.existing(project, run.getRequestKey(), 1, ModelProvider.DEEPSEEK, true, 10)).thenReturn(java.util.Optional.of(run));
+        when(store.existing(project, run.getRequestKey(), 1, ModelProvider.DEEPSEEK, true, 10)).thenReturn(Optional.of(run));
         assertThat(service.create(project, run.getRequestKey(), 1, ModelProvider.DEEPSEEK, true, 10)).isSameAs(run);
         verifyNoInteractions(contexts, model);
         verify(store, never()).create(any(), any(), anyInt(), any(), anyBoolean(), anyInt(), any());
     }
 
     @Test void ownedLoopUsesSameExecutorAndStopsBeforeAStageThatExceedsParentBudget() {
-        var parent = com.novelagent.agent.domain.AutomationRun.create(project, UUID.randomUUID(), UUID.randomUUID(),
+        var parent = AutomationRun.create(project, UUID.randomUUID(), UUID.randomUUID(),
                 1, 1, ModelProvider.DEEPSEEK, "保留人物选择", true, 0, 1);
-        parent.start(java.time.Instant.now());
+        parent.start(Instant.now());
         var frozen = new DraftLoopContext.Source(run.getBasis(), null, null);
         when(contexts.freeze(project, 1, ModelProvider.DEEPSEEK)).thenReturn(frozen);
         when(store.createForAutomation(eq(project), any(), eq(1), eq(ModelProvider.DEEPSEEK), eq(true), eq(3), any(), eq(parent.getId()), eq(1)))
@@ -129,10 +134,10 @@ class DraftLoopServiceTest {
         doAnswer(call -> { Consumer<GeneratedManuscript> save = call.getArgument(1); save.accept(new GeneratedManuscript(original)); return null; })
                 .when(model).write(eq(run), any());
         var result = service.runForAutomation(parent, true, new DraftLoopService.Progress() {
-            public boolean before(DraftLoopRun child) { parent.beginStep("DRAFT_" + child.getPhase()); return parent.getStatus() == com.novelagent.agent.domain.AutomationStatus.RUNNING; }
+            public boolean before(DraftLoopRun child) { parent.beginStep("DRAFT_" + child.getPhase()); return parent.getStatus() == AutomationStatus.RUNNING; }
             public void after(DraftLoopRun child) { parent.completeStep(child.getManuscriptId()); }
         });
-        var input = org.mockito.ArgumentCaptor.forClass(DraftLoopContext.Source.class);
+        var input = ArgumentCaptor.forClass(DraftLoopContext.Source.class);
         verify(store).createForAutomation(eq(project), any(), eq(1), eq(ModelProvider.DEEPSEEK), eq(true), eq(3), input.capture(), eq(parent.getId()), eq(1));
         assertThat(input.getValue().basis().prompt()).contains("保留人物选择");
         assertThat(result.getStatus()).isEqualTo(DraftLoopRun.Status.CANCELLED);

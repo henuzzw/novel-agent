@@ -1,20 +1,22 @@
 package com.novelagent.agent.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.sql.DriverManager;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /** Session-local PostgreSQL table only: never insert or update production model tasks. */
-@EnabledIfEnvironmentVariable(named = "NOVEL_USAGE_DB_TEST", matches = "true")
+@DatabaseTest
 class AgentTokenUsageRepositoryTest {
     @Test void scopesWholeProjectAndRollingWindowIncludingFailuresAndMissingUsage() throws Exception {
-        String url = "jdbc:postgresql://" + env("DB_HOST", "localhost") + ':' + env("DB_PORT", "5432") + '/' + env("DB_NAME", "novel_agent");
+        String url = TestDatabase.url();
         try (var connection = DriverManager.getConnection(url, env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", ""))) {
             connection.setAutoCommit(false);
             var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
@@ -59,5 +61,4 @@ class AgentTokenUsageRepositoryTest {
         jdbc.update("INSERT INTO agent_run VALUES (?,?,?,?,?,?,?,null,null,?,0)", project, status, time,
                 estimateInput, estimateOutput, input, output, input == null ? "ESTIMATED" : "ACTUAL");
     }
-    private static String env(String key, String fallback) { return System.getenv().getOrDefault(key, fallback); }
 }

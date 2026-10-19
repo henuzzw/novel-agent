@@ -10,10 +10,13 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.agent.application.ModelInputUnavailableException;
 import com.novelagent.planning.application.ModelProvider;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class FreeTextPlanningRequestTest {
     private final StructuredModelGateway models = mock(StructuredModelGateway.class);
@@ -38,13 +41,13 @@ class FreeTextPlanningRequestTest {
     @Test void nonEmptyInputFailureIsRejectedInsideRecordedCallback() {
         stub(mapper.createObjectNode().put("text", "当前环境没有可用的本地文件读取工具，无法读取指定完整来源。").toString());
         assertThatThrownBy(() -> texts.request(UUID.randomUUID(), "SNOWFLAKE_PLANNING", ModelProvider.DEEPSEEK,
-                "来源", "CORE", 8000)).isInstanceOf(com.novelagent.agent.application.ModelInputUnavailableException.class);
+                "来源", "CORE", 8000)).isInstanceOf(ModelInputUnavailableException.class);
     }
 
     private void stub(String output) {
-        org.mockito.Mockito.reset(models);
+        Mockito.reset(models);
         when(models.requestWithBoundaries(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any(), any(),
-                org.mockito.ArgumentMatchers.nullable(String.class)))
+                ArgumentMatchers.nullable(String.class)))
                 .thenAnswer(call -> {
                     JsonNode schema = call.getArgument(5);
                     assertThat(schema.path("properties").size()).isEqualTo(1);

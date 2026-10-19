@@ -8,6 +8,7 @@ import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class ImportedOutlineGeneratorTest {
@@ -26,7 +27,7 @@ class ImportedOutlineGeneratorTest {
     }
 
     private GeneratedOutline outline(int count) {
-        var chapters = java.util.stream.IntStream.rangeClosed(1, count)
+        var chapters = IntStream.rangeClosed(1, count)
                 .mapToObj(i -> new ChapterPlan(i, "章节" + i, "完整场景与行动后果" + i, ChapterPlanStatus.PLANNED, false)).toList();
         var arc = new OutlineArc(1, "第一阶段", "目标", "冲突", "转折", "结果", 20000, 40000, chapters);
         return new GeneratedOutline("TEST", new OutlineContent("书名", "前提", "结构", "节奏", 50000, 60000, List.of(arc)));

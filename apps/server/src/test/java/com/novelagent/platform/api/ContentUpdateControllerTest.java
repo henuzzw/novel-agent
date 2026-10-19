@@ -22,6 +22,7 @@ import com.novelagent.writing.domain.ManuscriptContent;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -70,6 +71,6 @@ class ContentUpdateControllerTest {
         mvc.perform(post(path).header("If-Match", "3")).andExpect(status().isOk());
         mvc.perform(post(path).header("If-Match", "3").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk());
-        verify(writing, org.mockito.Mockito.times(2)).approveReview(project, id, 3, null);
+        verify(writing, Mockito.times(2)).approveReview(project, id, 3, null);
     }
 }

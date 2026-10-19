@@ -3,11 +3,15 @@ package com.novelagent.planning.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.planning.infrastructure.OutlineModelPromptFactory;
 import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
+import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class CharacterBlueprintTest {
@@ -46,7 +50,7 @@ class CharacterBlueprintTest {
         assertThatThrownBy(() -> json.convertValue(node, CharacterBlueprint.class)).hasMessageContaining("3000");
         assertThatThrownBy(() -> CharacterBlueprintFixtures.bible(List.of(character, character)))
                 .hasMessageContaining("重复");
-        assertThatThrownBy(() -> CharacterBlueprintFixtures.bible(java.util.stream.IntStream.range(0, 13)
+        assertThatThrownBy(() -> CharacterBlueprintFixtures.bible(IntStream.range(0, 13)
                 .mapToObj(i -> CharacterBlueprintFixtures.character("角色" + i)).toList())).hasMessageContaining("12");
     }
 
@@ -54,9 +58,9 @@ class CharacterBlueprintTest {
         var schema = new StoryBibleOutputSchema(json).value();
         var entry = schema.at("/properties/content/properties/characterBlueprints/items");
         List<String> required = json.convertValue(entry.get("required"),
-                new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+                new TypeReference<List<String>>() { });
         assertThat(required).containsExactlyInAnyOrderElementsOf(Arrays.stream(CharacterBlueprint.class.getRecordComponents())
-                .map(java.lang.reflect.RecordComponent::getName).toList());
+                .map(RecordComponent::getName).toList());
         assertThat(entry.path("additionalProperties").asBoolean()).isFalse();
         var bible = CharacterBlueprintFixtures.bible(List.of(CharacterBlueprintFixtures.character("江澈")));
         var output = json.createObjectNode();
@@ -93,7 +97,7 @@ class CharacterBlueprintTest {
         var restored = json.readValue(json.writeValueAsString(parsed), StoryBibleContent.class);
         assertThat(restored).isEqualTo(bible);
         var budget = new OutlineWordBudget(50000, 40000, 60000, 1, 20, 2500, 2000, 3000);
-        String prompt = new com.novelagent.planning.infrastructure.OutlineModelPromptFactory(json)
+        String prompt = new OutlineModelPromptFactory(json)
                 .userPrompt(restored, budget, null, "");
         String bibleJson = prompt.split("【已发布故事圣经（完整 JSON）】", 2)[1].split("【篇幅参考】", 2)[0].trim();
         assertThat(json.readValue(bibleJson, StoryBibleContent.class)).isEqualTo(bible);

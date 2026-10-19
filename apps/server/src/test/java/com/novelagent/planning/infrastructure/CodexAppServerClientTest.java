@@ -3,20 +3,33 @@ package com.novelagent.planning.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.project.application.GlobalModelSettingsService;
+import com.novelagent.project.domain.GlobalModelSettings;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class CodexAppServerClientTest {
 
@@ -27,13 +40,13 @@ class CodexAppServerClientTest {
     void ongoingGenerationOutlivesTheOriginalDeadlineWithoutInterruptOrRetry(String method,
             @TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
-        var streamed = new java.util.ArrayList<String>();
-        var counter = new java.util.concurrent.atomic.AtomicInteger();
+        var scheduled = Executors.newSingleThreadScheduledExecutor();
+        var streamed = new ArrayList<String>();
+        var counter = new AtomicInteger();
         try {
-            org.mockito.Mockito.doAnswer(call -> {
+            Mockito.doAnswer(call -> {
                 scheduled.scheduleAtFixedRate(() -> {
                     int sequence = counter.incrementAndGet();
                     var event = mapper.createObjectNode().put("method", method);
@@ -49,23 +62,23 @@ class CodexAppServerClientTest {
                                 method.equals("item/agentMessage/delta") ? "x" : "PRIVATE");
                     }
                     client.handleMessage(event);
-                }, 50, 150, java.util.concurrent.TimeUnit.MILLISECONDS);
+                }, 50, 150, TimeUnit.MILLISECONDS);
                 scheduled.schedule(() -> client.handleMessage(completedTurn(mapper)),
-                        1600, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        1600, TimeUnit.MILLISECONDS);
                 return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
             var result = client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode(),
                     client.effectiveSettings(), streamed::add);
             assertThat(result.output()).isEqualTo("{\"ok\":true}");
             assertThat(counter.get()).isGreaterThan(1);
             assertThat(streamed).doesNotContain("PRIVATE");
-            org.mockito.Mockito.verify(client, org.mockito.Mockito.never())
-                    .interruptTimedOutTurn(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
-            org.mockito.Mockito.verify(client, org.mockito.Mockito.times(1))
-                    .request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            Mockito.verify(client, Mockito.never())
+                    .interruptTimedOutTurn(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+            Mockito.verify(client, Mockito.times(1))
+                    .request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
         } finally {
             scheduled.shutdownNow();
-            scheduled.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+            scheduled.awaitTermination(2, TimeUnit.SECONDS);
         }
     }
 
@@ -74,34 +87,34 @@ class CodexAppServerClientTest {
     void streamingThenStallingTimesOutFromTheLastProgressAndKeepsPartialOutput(@TempDir Path temp)
             throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
-        var streamed = new java.util.ArrayList<String>();
-        org.mockito.Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
+        var scheduled = Executors.newSingleThreadScheduledExecutor();
+        var streamed = new ArrayList<String>();
+        Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
         try {
             var progress = mapper.readTree("""
                     {"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn",
                     "itemId":"item","delta":"partial"}}
                     """);
-            org.mockito.Mockito.doAnswer(call -> {
-                scheduled.schedule(() -> client.handleMessage(progress), 500, java.util.concurrent.TimeUnit.MILLISECONDS);
+            Mockito.doAnswer(call -> {
+                scheduled.schedule(() -> client.handleMessage(progress), 500, TimeUnit.MILLISECONDS);
                 return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
             long started = System.nanoTime();
             assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input",
                     mapper.createObjectNode(), client.effectiveSettings(), streamed::add))
-                    .hasCauseInstanceOf(java.util.concurrent.TimeoutException.class)
+                    .hasCauseInstanceOf(TimeoutException.class)
                     .hasMessageContaining("连续无新进展等待上限 1 秒");
-            assertThat(java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
+            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
                     .isGreaterThanOrEqualTo(1400);
             assertThat(streamed).containsExactly("partial");
-            org.mockito.Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
+            Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
             assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()))
                     .hasMessageContaining("不能复用");
         } finally {
             scheduled.shutdownNow();
-            scheduled.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+            scheduled.awaitTermination(2, TimeUnit.SECONDS);
         }
     }
 
@@ -111,10 +124,10 @@ class CodexAppServerClientTest {
     void unrelatedEmptyOrRepeatedNotificationsCannotKeepAStalledTurnAlive(String kind,
             @TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
-        org.mockito.Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
+        var scheduled = Executors.newSingleThreadScheduledExecutor();
+        Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
         try {
             var event = mapper.createObjectNode().put("method",
                     kind.equals("heartbeat") ? "thread/status/changed"
@@ -126,17 +139,17 @@ class CodexAppServerClientTest {
             if (kind.equals("duplicate-usage")) {
                 params.putObject("tokenUsage").putObject("last").put("inputTokens", 10).put("outputTokens", 1);
             }
-            org.mockito.Mockito.doAnswer(call -> {
+            Mockito.doAnswer(call -> {
                 scheduled.scheduleAtFixedRate(() -> client.handleMessage(event),
-                        50, 150, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        50, 150, TimeUnit.MILLISECONDS);
                 return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
             assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()))
                     .hasMessageContaining("连续无新进展等待上限 1 秒");
-            org.mockito.Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
+            Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
         } finally {
             scheduled.shutdownNow();
-            scheduled.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS);
+            scheduled.awaitTermination(2, TimeUnit.SECONDS);
         }
     }
 
@@ -150,19 +163,19 @@ class CodexAppServerClientTest {
 
     @Test void cancellationInterruptsTheExactRemoteTurnAndBlocksPrematureReuse(@TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 10,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 10,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        var started = new java.util.concurrent.CountDownLatch(1);
-        org.mockito.Mockito.doAnswer(call -> {
+        var started = new CountDownLatch(1);
+        Mockito.doAnswer(call -> {
             client.handleMessage(mapper.readTree("""
                     {"method":"item/agentMessage/delta","params":{"threadId":"thread","turnId":"turn",
                     "itemId":"item","delta":"still generating"}}
                     """));
             started.countDown();
             return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-        }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
-        var failure = new java.util.concurrent.CompletableFuture<Throwable>();
+        }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
+        Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
+        var failure = new CompletableFuture<Throwable>();
         var worker = new Thread(() -> {
             try { client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()); }
             catch (Throwable error) { failure.complete(error); }
@@ -170,10 +183,10 @@ class CodexAppServerClientTest {
         });
         worker.start();
         try {
-            assertThat(started.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(started.await(3, TimeUnit.SECONDS)).isTrue();
             worker.interrupt();
-            assertThat(failure.get(3, java.util.concurrent.TimeUnit.SECONDS)).hasCauseInstanceOf(InterruptedException.class);
-            org.mockito.Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
+            assertThat(failure.get(3, TimeUnit.SECONDS)).hasCauseInstanceOf(InterruptedException.class);
+            Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
             assertThatThrownBy(() -> client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()))
                     .hasMessageContaining("不能复用");
             client.handleMessage(mapper.readTree("""
@@ -186,8 +199,8 @@ class CodexAppServerClientTest {
         var mapper = new ObjectMapper();
         var client = new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), "");
-        var response = new java.util.concurrent.CompletableFuture<JsonNode>();
-        var completed = new java.util.concurrent.CompletableFuture<Boolean>();
+        var response = new CompletableFuture<JsonNode>();
+        var completed = new CompletableFuture<Boolean>();
         var worker = new Thread(() -> {
             Thread.currentThread().interrupt();
             try {
@@ -198,35 +211,35 @@ class CodexAppServerClientTest {
         });
         worker.start();
         response.complete(mapper.readTree("{\"turn\":{\"id\":\"turn\"}}"));
-        try { assertThat(completed.get(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue(); }
+        try { assertThat(completed.get(3, TimeUnit.SECONDS)).isTrue(); }
         finally { worker.interrupt(); worker.join(3000); }
     }
 
     @Test void generationDeadlineIsSeparateFromProtocolRequestDeadline(@TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 1,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), "", null, 2));
-        var scheduled = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        var scheduled = Executors.newSingleThreadScheduledExecutor();
         try {
             JsonNode finished = mapper.readTree("""
                     {"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"completed",
                     "items":[{"type":"agentMessage","text":"{}"}]}}}
                     """);
-            org.mockito.Mockito.doAnswer(call -> {
-                scheduled.schedule(() -> client.handleMessage(finished), 1200, java.util.concurrent.TimeUnit.MILLISECONDS);
+            Mockito.doAnswer(call -> {
+                scheduled.schedule(() -> client.handleMessage(finished), 1200, TimeUnit.MILLISECONDS);
                 return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-            }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+            }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
             assertThat(client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()).output()).isEqualTo("{}");
         } finally { scheduled.shutdownNow(); }
     }
 
     @Test void streamsOnlyMatchingAgentMessagesAndReplacesWithFinalResponse(@TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        var streamed = new java.util.ArrayList<String>();
-        org.mockito.Mockito.doAnswer(call -> {
-            for (String event : java.util.List.of(
+        var streamed = new ArrayList<String>();
+        Mockito.doAnswer(call -> {
+            for (String event : List.of(
                     "{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"thread\",\"turnId\":\"old\",\"itemId\":\"item\",\"delta\":\"OLD\"}}",
                     "{\"method\":\"item/reasoning/textDelta\",\"params\":{\"threadId\":\"thread\",\"turnId\":\"turn\",\"delta\":\"PRIVATE\"}}",
                     "{\"method\":\"item/agentMessage/delta\",\"params\":{\"threadId\":\"thread\",\"turnId\":\"turn\",\"itemId\":\"item\",\"delta\":\"{\"}}",
@@ -236,7 +249,7 @@ class CodexAppServerClientTest {
                 client.handleMessage(mapper.readTree(event));
             }
             return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-        }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+        }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
         var result = client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode(),
                 client.effectiveSettings(), streamed::add);
         assertThat(result.output()).isEqualTo("{\"ok\":true}");
@@ -245,37 +258,37 @@ class CodexAppServerClientTest {
 
     @Test void timeoutInterruptsWithoutRetryAndBlocksReuseUntilOriginalTurnStops(@TempDir Path temp) throws Exception {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "xhigh", 1,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "xhigh", 1,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        org.mockito.Mockito.doReturn(mapper.readTree("{\"turn\":{\"id\":\"turn\"}}"))
-                .when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
-        org.mockito.Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
+        Mockito.doReturn(mapper.readTree("{\"turn\":{\"id\":\"turn\"}}"))
+                .when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
+        Mockito.doNothing().when(client).interruptTimedOutTurn("thread", "turn");
         UUID project = UUID.randomUUID();
         assertThatThrownBy(() -> client.runStructuredTurn("thread", project, "input", mapper.createObjectNode()))
                 .hasMessageContaining("等待上限 1 秒").hasMessageContaining("CODEX_CLI_TIMEOUT_SECONDS");
-        org.mockito.Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
+        Mockito.verify(client).interruptTimedOutTurn("thread", "turn");
         assertThatThrownBy(() -> client.runStructuredTurn("thread", project, "input", mapper.createObjectNode()))
                 .hasMessageContaining("不能复用");
-        org.mockito.Mockito.verify(client, org.mockito.Mockito.times(1))
-                .request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+        Mockito.verify(client, Mockito.times(1))
+                .request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
         client.handleMessage(mapper.readTree("""
                 {"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"turn","status":"interrupted"}}}
                 """));
-        org.mockito.Mockito.doAnswer(call -> {
+        Mockito.doAnswer(call -> {
             client.handleMessage(mapper.readTree("""
                     {"method":"turn/completed","params":{"threadId":"thread","turn":{"id":"new","status":"completed",
                     "items":[{"type":"agentMessage","text":"new output"}]}}}
                     """));
             return mapper.readTree("{\"turn\":{\"id\":\"new\"}}");
-        }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+        }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
         assertThat(client.runStructuredTurn("thread", project, "input", mapper.createObjectNode()).output()).isEqualTo("new output");
     }
 
     @Test
     void globalChoiceOverridesLegacyEnvironmentAndIsSharedAcrossProjects(@TempDir Path temp) {
-        var settings = org.mockito.Mockito.mock(com.novelagent.project.application.GlobalModelSettingsService.class);
-        org.mockito.Mockito.when(settings.get()).thenReturn(new com.novelagent.project.domain.GlobalModelSettings(
-                com.novelagent.planning.application.ModelProvider.DEEPSEEK, "gpt-6-luna", "low", "deepseek-flash", 1));
+        var settings = Mockito.mock(GlobalModelSettingsService.class);
+        Mockito.when(settings.get()).thenReturn(new GlobalModelSettings(
+                ModelProvider.DEEPSEEK, "gpt-6-luna", "low", "deepseek-flash", 1));
         var mapper = new ObjectMapper();
         var client = new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 600,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), "", settings);
@@ -284,7 +297,7 @@ class CodexAppServerClientTest {
             assertThat(params.path("model").asText()).isEqualTo("gpt-6-luna");
             assertThat(params.path("effort").asText()).isEqualTo("low");
         }
-        assertThat(client.effectiveSettings().provider()).isEqualTo(com.novelagent.planning.application.ModelProvider.LOCAL_CODEX);
+        assertThat(client.effectiveSettings().provider()).isEqualTo(ModelProvider.LOCAL_CODEX);
     }
 
     @Test
@@ -397,18 +410,18 @@ class CodexAppServerClientTest {
         assertThat(params.path("effort").asText()).isEqualTo("xhigh");
         assertThat(params.path("input").get(0).path("text").asText()).isEqualTo("写小说");
         assertThat(params.path("outputSchema").isObject()).isTrue();
-        var plain = client.structuredTurnParams("thread-1", UUID.randomUUID(), "写小说", com.fasterxml.jackson.databind.node.NullNode.getInstance());
+        var plain = client.structuredTurnParams("thread-1", UUID.randomUUID(), "写小说", NullNode.getInstance());
         assertThat(plain.has("outputSchema")).isFalse();
     }
 
     @Test
     void frozenSettingsAreUsedForBothThreadAndTurnWithoutReadingGlobalSettings(@TempDir Path temp) {
-        var settings = org.mockito.Mockito.mock(com.novelagent.project.application.GlobalModelSettingsService.class);
+        var settings = Mockito.mock(GlobalModelSettingsService.class);
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), "", settings));
         var frozen = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "gpt-6-luna", "low", 7L);
-        org.mockito.Mockito.doAnswer(call -> {
+        Mockito.doAnswer(call -> {
             String method = call.getArgument(0);
             JsonNode params = call.getArgument(1);
             assertThat(params.path("model").asText()).isEqualTo("gpt-6-luna");
@@ -422,21 +435,21 @@ class CodexAppServerClientTest {
                     "id":"turn","status":"completed","items":[{"type":"agentMessage","text":"{}"}]}}}
                     """));
             return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-        }).when(client).request(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        }).when(client).request(ArgumentMatchers.anyString(), ArgumentMatchers.any());
 
         UUID projectId = UUID.randomUUID();
         assertThat(client.startThread(projectId, "system", frozen)).isEqualTo("thread");
         assertThat(client.runStructuredTurn("thread", projectId, "input", mapper.createObjectNode(), frozen).output())
                 .isEqualTo("{}");
-        org.mockito.Mockito.verifyNoInteractions(settings);
+        Mockito.verifyNoInteractions(settings);
     }
 
     @Test
     void usageUsesMatchingTurnLastAndNeverThreadTotalIncludingEarlyNotifications(@TempDir Path temp) {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        org.mockito.Mockito.doAnswer(call -> {
+        Mockito.doAnswer(call -> {
             client.handleMessage(mapper.readTree("""
                     {"method":"thread/tokenUsage/updated","params":{"threadId":"thread","turnId":"old-turn",
                     "tokenUsage":{"last":{"inputTokens":999,"outputTokens":999},"total":{"inputTokens":9999,"outputTokens":9999}}}}
@@ -451,7 +464,7 @@ class CodexAppServerClientTest {
                     "id":"turn","status":"completed","items":[{"type":"agentMessage","text":"{}"}]}}}
                     """));
             return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-        }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+        }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
 
         var result = client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode());
         assertThat(result.usage().inputTokens()).isEqualTo(100);
@@ -463,9 +476,9 @@ class CodexAppServerClientTest {
     @Test
     void unrelatedTurnUsageIsNotAttachedToCurrentResult(@TempDir Path temp) {
         var mapper = new ObjectMapper();
-        var client = org.mockito.Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
+        var client = Mockito.spy(new CodexAppServerClient(mapper, "codex.exe", "gpt-6-sol", "high", 2,
                 temp.resolve("runtime").toString(), temp.resolve("auth.json").toString(), ""));
-        org.mockito.Mockito.doAnswer(call -> {
+        Mockito.doAnswer(call -> {
             client.handleMessage(mapper.readTree("""
                     {"method":"thread/tokenUsage/updated","params":{"threadId":"thread","turnId":"old-turn",
                     "tokenUsage":{"last":{"inputTokens":999,"outputTokens":999}}}}
@@ -475,7 +488,7 @@ class CodexAppServerClientTest {
                     "id":"turn","status":"completed","items":[{"type":"agentMessage","text":"{}"}]}}}
                     """));
             return mapper.readTree("{\"turn\":{\"id\":\"turn\"}}");
-        }).when(client).request(org.mockito.ArgumentMatchers.eq("turn/start"), org.mockito.ArgumentMatchers.any());
+        }).when(client).request(ArgumentMatchers.eq("turn/start"), ArgumentMatchers.any());
         assertThat(client.runStructuredTurn("thread", UUID.randomUUID(), "input", mapper.createObjectNode()).usage()).isNull();
     }
 }

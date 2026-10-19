@@ -39,7 +39,7 @@ class MemoryBudgetAllocatorTest {
         assertThat(constrained.usage().estimatedTokens()).isLessThanOrEqualTo(80);
     }
     @Test
-    void keepsPromptWithinBudgetAndPrioritizesSummary() {
+    void keepsPromptWithinBudgetAndEstimatesChineseConservatively() {
         MemoryBudgetAllocator allocator = new MemoryBudgetAllocator();
         var context = allocator.allocate(List.of(new NovelMemoryContext.SemanticMemory(
                 1, 1, 0.9, "主角确认旧钥匙来自实验室。", "很长的正文片段。".repeat(80))),
@@ -49,10 +49,7 @@ class MemoryBudgetAllocatorTest {
         assertThat(context.usage().estimatedTokens()).isLessThanOrEqualTo(80);
         assertThat(context.usage().truncated()).isTrue();
         assertThat(context.semanticMemories().getFirst().summary()).contains("旧钥匙");
-    }
 
-    @Test
-    void estimatesChineseMoreConservativelyThanAscii() {
         assertThat(MemoryBudgetAllocator.estimateTokens("中文测试"))
                 .isGreaterThan(MemoryBudgetAllocator.estimateTokens("test"));
     }
@@ -93,7 +90,7 @@ class MemoryBudgetAllocatorTest {
     }
 
     @Test
-    void smallerContextShrinksRecentBodiesAndContractStageUsesLessProse() {
+    void recentBodiesShrinkWithContextAndKeepParagraphBoundaries() {
         var memories = List.of(recent(3, "长正文。\n\n".repeat(1800), "长合同。".repeat(300)),
                 recent(2, "更早正文。\n\n".repeat(800), "长合同。".repeat(300)));
         var manuscript = new MemoryBudgetAllocator().allocate(memories, List.of(), plan(4000), List.of());
@@ -107,10 +104,7 @@ class MemoryBudgetAllocatorTest {
                 .isGreaterThan(contract.semanticMemories().getFirst().content().length());
         assertThat(manuscript.usage().estimatedTokens()).isLessThanOrEqualTo(4000);
         assertThat(contract.usage().estimatedTokens()).isLessThanOrEqualTo(5000);
-    }
 
-    @Test
-    void keepsEndingAtParagraphBoundaryAndDeduplicatesOtherRetrievalOfSameChapter() {
         String body = "开头已经离开。\n\n" + "中段行动和对话。\n\n".repeat(1500) + "最后他停在门口，没有进去。";
         var context = new MemoryBudgetAllocator().allocate(List.of(
                 recent(3, body, "合同约束"),
@@ -122,10 +116,7 @@ class MemoryBudgetAllocatorTest {
         assertThat(context.toPromptText()).contains("正文已裁剪，仅保留完整尾段");
         assertThat(context.usage().estimatedTokens()).isEqualTo(MemoryBudgetAllocator.estimateTokens(context.toPromptText()))
                 .isLessThanOrEqualTo(8000);
-    }
 
-    @Test
-    void shortBodyAppearsOnceAndUnfittableSingleParagraphIsExplicitlyMissing() {
         var shortContext = new MemoryBudgetAllocator().allocate(List.of(recent(1, "唯一短正文。", "合同")),
                 List.of(), plan(1000), List.of());
         assertThat(shortContext.semanticMemories().getFirst().chapterBody()).isEqualTo("唯一短正文。");

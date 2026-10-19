@@ -14,7 +14,7 @@ if ($Database) {
             if ($parts.Count -eq 2) { [Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1], 'Process') }
         }
     }
-    $env:NOVEL_AUTOMATION_DB_TEST = 'true'
+    $env:NOVEL_DB_TEST = 'true'
 }
 
 $arguments = @('-q', 'test')

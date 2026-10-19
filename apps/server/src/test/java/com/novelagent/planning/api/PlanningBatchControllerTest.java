@@ -11,6 +11,7 @@ import com.novelagent.planning.application.PlanningBatchService;
 import com.novelagent.planning.application.PlanningCheckpointRunner;
 import com.novelagent.planning.application.PlanningCheckpointService;
 import com.novelagent.platform.api.ApiExceptionHandler;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -31,8 +32,8 @@ class PlanningBatchControllerTest {
         var checkpointMvc = MockMvcBuilders.standaloneSetup(new PlanningCheckpointController(checkpoints, checkpointRunner))
                 .setControllerAdvice(new ApiExceptionHandler()).build();
         String base = "/api/v1/projects/" + project + "/planning-checkpoints/" + batch + "/actions/";
-        for (String action : java.util.List.of("run", "cancel", "retry")) {
-            for (String body : java.util.List.of("{}", "{\"version\":null}", "{\"version\":-1}")) {
+        for (String action : List.of("run", "cancel", "retry")) {
+            for (String body : List.of("{}", "{\"version\":null}", "{\"version\":-1}")) {
                 checkpointMvc.perform(post(base + action).contentType(MediaType.APPLICATION_JSON).content(body))
                         .andExpect(status().isBadRequest());
             }

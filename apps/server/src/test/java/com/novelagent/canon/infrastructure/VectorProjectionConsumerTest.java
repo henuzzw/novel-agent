@@ -17,8 +17,12 @@ import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class VectorProjectionConsumerTest {
@@ -58,10 +62,10 @@ class VectorProjectionConsumerTest {
 
         consumer.project(message(eventId, manuscriptId).replace("\"canonVersion\":1", "\"canonVersion\":23"));
 
-        verify(jdbc, org.mockito.Mockito.times(2)).update(anyString(), any(Object[].class));
-        var args = org.mockito.ArgumentCaptor.forClass(Object[].class);
-        verify(jdbc).update(org.mockito.ArgumentMatchers.contains("INSERT INTO semantic_document"), args.capture());
-        org.assertj.core.api.Assertions.assertThat(args.getValue()[4]).isEqualTo(1L);
+        verify(jdbc, Mockito.times(2)).update(anyString(), any(Object[].class));
+        var args = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).update(ArgumentMatchers.contains("INSERT INTO semantic_document"), args.capture());
+        Assertions.assertThat(args.getValue()[4]).isEqualTo(1L);
         verify(chunks).synchronize(any(UUID.class));
         verify(checkpoints).markCompleted(eventId, ProjectionCheckpointStore.ProjectionType.PGVECTOR);
     }
@@ -80,7 +84,7 @@ class VectorProjectionConsumerTest {
 
     @Test
     void deletedProjectMessagesCannotRecreateVectorsOrCheckpoints() throws Exception {
-        when(jdbc.queryForObject(anyString(), org.mockito.ArgumentMatchers.eq(Boolean.class), any(UUID.class)))
+        when(jdbc.queryForObject(anyString(), ArgumentMatchers.eq(Boolean.class), any(UUID.class)))
                 .thenReturn(false);
         consumer.project(message(UUID.randomUUID(), UUID.randomUUID()));
         verify(jdbc, never()).update(anyString(), any(Object[].class));

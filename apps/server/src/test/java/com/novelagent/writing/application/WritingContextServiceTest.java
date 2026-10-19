@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.novelagent.canon.application.CharacterNameService;
+import com.novelagent.canon.application.PublishedMemoryReadiness;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.memory.application.NovelMemoryService;
 import com.novelagent.planning.domain.ChapterPlan;
@@ -38,7 +40,7 @@ class WritingContextServiceTest {
     private final OutlineVersion outline = mock(OutlineVersion.class);
     private final StoryBibleVersion bible = mock(StoryBibleVersion.class);
     private final WritingContextService service = new WritingContextService(access, outlines, bibles, memory,
-            mock(com.novelagent.canon.application.CharacterNameService.class), mock(com.novelagent.canon.application.PublishedMemoryReadiness.class));
+            mock(CharacterNameService.class), mock(PublishedMemoryReadiness.class));
 
     @BeforeEach
     void sources() {

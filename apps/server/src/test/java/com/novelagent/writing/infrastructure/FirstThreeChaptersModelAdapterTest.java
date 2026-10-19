@@ -15,14 +15,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.agent.application.ModelFailureDetails;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
+import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import java.util.function.Consumer;
 
 class FirstThreeChaptersModelAdapterTest {
     private final StructuredModelGateway gateway = mock(StructuredModelGateway.class);
@@ -65,22 +68,22 @@ class FirstThreeChaptersModelAdapterTest {
         verifyNoInteractions(gateway);
     }
     @Test void inventedEvidenceIsRejectedAtModelBoundary() throws Exception {
-        var bad = new FirstThreeChaptersContent("范围", unassessed().assessments(), java.util.List.of(
+        var bad = new FirstThreeChaptersContent("范围", unassessed().assessments(), List.of(
                 new FirstThreeChaptersContent.Issue("1", FirstThreeChaptersContent.Dimension.CHARACTER, "问题", "核对",
-                        java.util.List.of(new FirstThreeChaptersContent.Evidence(1, "模型捏造的原文")))));
+                        List.of(new FirstThreeChaptersContent.Evidence(1, "模型捏造的原文")))));
         respond(mapper.writeValueAsString(bad));
         assertThatThrownBy(() -> adapter.check(source(), ModelProvider.DEEPSEEK, "")).hasMessageContaining("连续原文");
     }
     @Test void invalidEvidenceTypeFailsInsideTheRecordedCallbackWithSafeFieldDetails() throws Exception {
         var output = mapper.valueToTree(unassessed());
-        ((com.fasterxml.jackson.databind.node.ObjectNode) output.path("assessments").get(0))
+        ((ObjectNode) output.path("assessments").get(0))
                 .put("evidence", "private manuscript fragment");
         respond(output.toString());
         assertThatThrownBy(() -> adapter.check(source(), ModelProvider.LOCAL_CODEX, ""))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("三章报告输出校验失败", "assessments", "evidence")
                 .hasMessageNotContaining("private manuscript fragment")
-                .satisfies(error -> assertThat(com.novelagent.agent.application.ModelFailureDetails
+                .satisfies(error -> assertThat(ModelFailureDetails
                         .from((RuntimeException) error).category()).isEqualTo("OUTPUT_VALIDATION"));
     }
 }

@@ -12,10 +12,15 @@ import com.novelagent.agent.infrastructure.AgentRunQueryRepository;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class AgentRunQueryServiceTest {
     private final ProjectAccessService access = mock(ProjectAccessService.class);
@@ -35,14 +40,14 @@ class AgentRunQueryServiceTest {
 
     @Test void usageUsesOneUtcCutoffAndChecksOwnershipFirst() {
         UUID id = UUID.randomUUID();
-        var before = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        var before = OffsetDateTime.now(ZoneOffset.UTC);
         service.usage(id);
-        var cutoff = org.mockito.ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
-        var order = org.mockito.Mockito.inOrder(access, runs);
+        var cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+        var order = Mockito.inOrder(access, runs);
         order.verify(access).requireOwnedProject(id);
-        order.verify(runs).usage(org.mockito.ArgumentMatchers.eq(id), cutoff.capture());
-        assertThat(cutoff.getValue()).isBetween(before, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
-        assertThat(cutoff.getValue().getOffset()).isEqualTo(java.time.ZoneOffset.UTC);
+        order.verify(runs).usage(ArgumentMatchers.eq(id), cutoff.capture());
+        assertThat(cutoff.getValue()).isBetween(before, OffsetDateTime.now(ZoneOffset.UTC));
+        assertThat(cutoff.getValue().getOffset()).isEqualTo(ZoneOffset.UTC);
     }
 
     @Test void preservesEmptyResultsAndEstimatedSummary() {
