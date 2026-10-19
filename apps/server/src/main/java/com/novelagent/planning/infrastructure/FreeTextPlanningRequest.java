@@ -2,8 +2,10 @@ package com.novelagent.planning.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.agent.application.ModelOutputAvailability;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.prompt.application.AgentPromptDefaults;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
@@ -31,7 +33,7 @@ public class FreeTextPlanningRequest {
         schema.putObject("properties").putObject("text").put("type", "string");
         var text = new AtomicReference<String>();
         models.requestWithBoundaries(projectId, workflow, provider, AgentPromptDefaults.system(workflow), prompt,
-                schema, "snowflake_" + stage.toLowerCase(java.util.Locale.ROOT), maxTokens,
+                schema, "snowflake_" + stage.toLowerCase(Locale.ROOT), maxTokens,
                 CodexSessionPolicy.REUSE_THREAD, raw -> text.set(readText(raw)), frozenBoundaries);
         return text.get();
     }
@@ -43,7 +45,7 @@ public class FreeTextPlanningRequest {
                 throw new IllegalArgumentException("雪花规划未返回非空文本");
             }
             String text = root.path("text").asText().trim();
-            com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(text);
+            ModelOutputAvailability.requireAvailable(text);
             return text;
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("雪花规划响应无法读取", exception);

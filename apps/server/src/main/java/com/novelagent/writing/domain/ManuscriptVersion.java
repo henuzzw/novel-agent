@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -70,7 +71,7 @@ public class ManuscriptVersion {
     /** New manuscripts persist their outline source; legacy versions retain their historical contract link. */
     public ManuscriptVersion withWritingBasis(ManuscriptBasis basis) {
         if (writingBasis != null) throw new IllegalStateException("写作依据不能覆盖");
-        writingBasis = java.util.Objects.requireNonNull(basis);
+        writingBasis = Objects.requireNonNull(basis);
         return this;
     }
     public ManuscriptVersion inheritWritingBasis(ManuscriptVersion source) {
@@ -79,7 +80,7 @@ public class ManuscriptVersion {
     }
     public void linkReturnedReview(UUID reviewVersionId) {
         if (sourceReviewVersionId != null) throw new IllegalStateException("正文已关联打回审稿");
-        sourceReviewVersionId = java.util.Objects.requireNonNull(reviewVersionId);
+        sourceReviewVersionId = Objects.requireNonNull(reviewVersionId);
     }
     private static ManuscriptContent validate(ManuscriptContent value) {
         if (value == null) throw new IllegalArgumentException("正文不能为空");

@@ -1,9 +1,11 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.modelaccess.application.ChatGptAccessException;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ProxySelector;
 import java.net.URI;
@@ -68,7 +70,7 @@ public class ChatGptHttp {
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();
             throw new GenerationStoppedException();
-        } catch (java.io.IOException error) {
+        } catch (IOException error) {
             throw new ChatGptAccessException("NETWORK", "ChatGPT network 请求失败，请检查代理或网络；未自动重试");
         }
     }
@@ -101,7 +103,7 @@ public class ChatGptHttp {
                 return new ChatGptAccessException(error.category(), error.getMessage()
                         + "；未返回事件流，响应类型 " + safeMediaType(contentType) + "，" + kind + "；未保存为生成结果");
             }
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+        } catch (JsonProcessingException ignored) {
             if (body.stripLeading().startsWith("<")) kind = "HTML/XML页面（可能是网关页面）";
         }
         return new ChatGptAccessException("PROVIDER", "ChatGPT 未返回事件流，HTTP " + status

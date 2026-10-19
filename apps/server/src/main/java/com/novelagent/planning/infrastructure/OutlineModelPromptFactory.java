@@ -1,14 +1,17 @@
 package com.novelagent.planning.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.CharacterBlueprintGuide;
+import com.novelagent.planning.application.ReaderExperiencePlanningGuide;
+import com.novelagent.planning.application.ScenePlanningGuide;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.prompt.application.AgentPromptDefaults;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -20,7 +23,7 @@ public class OutlineModelPromptFactory {
     }
 
     public String systemPrompt() {
-        return com.novelagent.prompt.application.AgentPromptDefaults.system("OUTLINE");
+        return AgentPromptDefaults.system("OUTLINE");
     }
 
     public String userPrompt(StoryBibleContent bible, OutlineWordBudget budget, OutlineContent previousOutline,
@@ -121,17 +124,12 @@ public class OutlineModelPromptFactory {
                 budget.targetWords(), budget.acceptableMinWords(), budget.acceptableMaxWords(),
                 budget.recommendedVolumeCount(), budget.recommendedChapterCount(),
                 budget.recommendedChapterMinWords(), budget.recommendedChapterMaxWords(),
-                modeRules) + com.novelagent.planning.application.ReaderExperiencePlanningGuide.rules()
+                modeRules) + ReaderExperiencePlanningGuide.rules()
                 + CreativeStrategyGuide.outlineRules(policy)
-                + com.novelagent.planning.application.ScenePlanningGuide.planningRules();
+                + ScenePlanningGuide.planningRules();
     }
 
     private String json(Object value) {
-        try {
-            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
-        }
-        catch (JsonProcessingException exception) {
-            throw new IllegalStateException("大纲 Prompt 输入无法序列化", exception);
-        }
+        return Json.call(() -> mapper.writerWithDefaultPrettyPrinter().writeValueAsString(value), "大纲 Prompt 输入无法序列化");
     }
 }

@@ -1,5 +1,6 @@
 package com.novelagent.writing.domain;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -9,7 +10,7 @@ public record ReaderExperienceSource(UUID id, UUID projectId, long rowVersion, i
     public boolean canon() { return !superseded && id.equals(canonManuscriptId); }
     public String fingerprint() { return ReaderExperienceFingerprint.of(body == null ? "" : body); }
 
-    @com.fasterxml.jackson.annotation.JsonProperty("fingerprint")
+    @JsonProperty("fingerprint")
     public String getFingerprint() { return fingerprint(); }
 
     public void requireEvidence(UUID expectedProject, long expectedVersion, String evidence) {

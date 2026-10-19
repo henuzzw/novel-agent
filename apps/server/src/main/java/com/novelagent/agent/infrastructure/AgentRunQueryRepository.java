@@ -1,17 +1,18 @@
 package com.novelagent.agent.infrastructure;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.agent.api.AgentRunOutputResponse;
+import com.novelagent.agent.api.AgentRunPromptResponse;
+import com.novelagent.agent.api.AgentRunResponse.RequestSnapshotResponse;
 import com.novelagent.agent.api.AgentRunResponse;
 import com.novelagent.agent.api.AgentRunSummary;
 import com.novelagent.agent.api.AgentTokenUsage;
-import com.novelagent.agent.api.AgentRunPromptResponse;
-import com.novelagent.agent.api.AgentRunOutputResponse;
-import com.novelagent.agent.api.AgentRunResponse.RequestSnapshotResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import java.time.OffsetDateTime;
+import com.novelagent.platform.support.Json;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -71,7 +72,7 @@ public class AgentRunQueryRepository {
     }
 
     private AgentRunSummary summary(UUID projectId, OffsetDateTime from, OffsetDateTime until) {
-        var parameters = new java.util.ArrayList<Object>();
+        var parameters = new ArrayList<Object>();
         parameters.add(projectId);
         String range = "";
         if (from != null) { range += " AND started_at >= ?"; parameters.add(from); }
@@ -149,11 +150,7 @@ public class AgentRunQueryRepository {
      */
     private static JsonNode readJson(String value) {
         if (value == null) return null;
-        try {
-            return JSON.readTree(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Invalid stored agent run metadata", exception);
-        }
+        return Json.call(() -> JSON.readTree(value), "Invalid stored agent run metadata");
     }
 
     /**

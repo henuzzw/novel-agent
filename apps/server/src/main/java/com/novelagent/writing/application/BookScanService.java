@@ -1,10 +1,11 @@
 package com.novelagent.writing.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
+import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
+import com.novelagent.platform.support.Json;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.writing.domain.ReaderExperienceEntry;
 import com.novelagent.writing.domain.ReaderExperienceMemory;
@@ -67,7 +68,7 @@ public class BookScanService {
      * @param ledger 台账计划与已确认进展的展示视图。
      */
     View assemble(UUID outlineId, long rowVersion, long canonVersion,
-            List<com.novelagent.planning.domain.ChapterPlan> plans, ReaderExperienceMemory memory,
+            List<ChapterPlan> plans, ReaderExperienceMemory memory,
             List<ReaderExperienceEntry> ledger) {
         var summaries = new ArrayList<ReaderExperienceMemory.Chapter>(memory.unassignedChapters());
         memory.arcs().forEach(arc -> summaries.addAll(arc.chapters()));
@@ -103,7 +104,6 @@ public class BookScanService {
     }
 
     private String hash(Object value) {
-        try { return Sha256.ofBytes(mapper.writeValueAsBytes(value)); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("全书来源无法生成指纹", exception); }
+        return Json.call(() -> Sha256.ofBytes(mapper.writeValueAsBytes(value)), "全书来源无法生成指纹");
     }
 }

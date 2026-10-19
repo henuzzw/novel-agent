@@ -3,6 +3,7 @@ package com.novelagent.memory.application;
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +37,6 @@ public class MemoryPreviewService {
         var project = access.requireOwnedProject(projectId);
         var budget = budgetPlanner.plan(stage, provider, query);
         return memory.recall(stage, projectId, chapterNumber, project.getCurrentCanonVersion(), query, budget,
-                project.getCurrentBibleVersionId(), java.util.List.of());
+                project.getCurrentBibleVersionId(), List.of());
     }
 }

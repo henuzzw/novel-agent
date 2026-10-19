@@ -12,6 +12,7 @@ import com.novelagent.project.api.ProjectResponse;
 import com.novelagent.project.application.ProjectService;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -48,7 +49,7 @@ public class ImportedStoryBlueprintService {
         if (!importId.toString().equals(input.path("sourceImportId").asText())) {
             throw new IllegalArgumentException("该雪花底稿不属于当前导入，不能继续");
         }
-        if (!java.util.Set.of("FAILED", "CANCELLED", "SUCCEEDED").contains(plan.status())) {
+        if (!Set.of("FAILED", "CANCELLED", "SUCCEEDED").contains(plan.status())) {
             throw new IllegalArgumentException("该雪花规划正在生成，不能重复继续");
         }
         var request = new PrepareImportedStoryRequest(plan.provider(),

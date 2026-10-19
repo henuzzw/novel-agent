@@ -3,6 +3,7 @@ package com.novelagent.project.application;
 import com.novelagent.project.api.CreateProjectRequest;
 import com.novelagent.project.api.CreativeIntentRequest;
 import com.novelagent.project.api.ProjectResponse;
+import com.novelagent.project.domain.CreativeBoundaries;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
@@ -10,6 +11,7 @@ import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,10 +56,10 @@ public class ProjectService {
                 request.name() == null || request.name().isBlank() ? "待生成书名" : request.name(),
                 request.entryMode());
         if (request.name() == null || request.name().isBlank()) {
-            project.setSetting("automaticTitle", java.util.Map.of("pending", true));
+            project.setSetting("automaticTitle", Map.of("pending", true));
         }
         CreativeStrategyPolicy.of(request.creativeStrategy()).applyTo(project);
-        com.novelagent.project.domain.CreativeBoundaries.defaults()
+        CreativeBoundaries.defaults()
                 .choose(request.worldMode(), request.adaptationScope(), false).applyTo(project);
         projectRepository.saveAndFlush(project);
 

@@ -1,22 +1,24 @@
 package com.novelagent.writing.application;
 
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
+import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineStatus;
-import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.domain.StoryBibleStatus;
+import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
-import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.domain.NovelProject;
-import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CreativeStrategyGuide;
-import com.novelagent.writing.domain.ManuscriptStatus;
+import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.domain.NovelProject;
 import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.QualityReviewResponse;
 import com.novelagent.writing.domain.ChapterContractVersion;
+import com.novelagent.writing.domain.ManuscriptBasis;
 import com.novelagent.writing.domain.ManuscriptContent;
+import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.domain.QualityReviewContent;
 import com.novelagent.writing.domain.QualityReviewVersion;
@@ -25,6 +27,8 @@ import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import com.novelagent.writing.infrastructure.QualityReviewVersionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import java.util.Comparator;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -71,12 +75,12 @@ public class QualityReviewStore {
         this.entityManager = entityManager;
     }
 
-    public record Snapshot(NovelProject project, ManuscriptVersion manuscript, com.novelagent.writing.domain.ManuscriptBasis writingBasis,
+    public record Snapshot(NovelProject project, ManuscriptVersion manuscript, ManuscriptBasis writingBasis,
             StoryBibleVersion bible, ManuscriptContent rendered, String styleContext, String profileContext, String fingerprint,
             String futureContext) {
         public Snapshot(NovelProject project, ManuscriptVersion manuscript, ChapterContractVersion contract,
                 StoryBibleVersion bible, ManuscriptContent rendered, String styleContext, String profileContext, String fingerprint) {
-            this(project, manuscript, new com.novelagent.writing.domain.ManuscriptBasis(contract.getSourceOutlineVersionId(),
+            this(project, manuscript, new ManuscriptBasis(contract.getSourceOutlineVersionId(),
                     "legacy", contract.getContent()), bible, rendered, styleContext, profileContext, fingerprint, "");
         }
     }
@@ -122,7 +126,7 @@ public class QualityReviewStore {
                         + "，行版本=" + outline.getRowVersion() + "\n"
                         + outline.getContent().arcs().stream().flatMap(arc -> arc.chapters().stream())
                                 .filter(plan -> plan.number() > chapter)
-                                .min(java.util.Comparator.comparingInt(com.novelagent.planning.domain.ChapterPlan::number))
+                                .min(Comparator.comparingInt(ChapterPlan::number))
                                 .map(Object::toString).orElse("末章，无下一章计划。"));
     }
 
@@ -195,7 +199,7 @@ public class QualityReviewStore {
         Snapshot current = lockedSnapshot(report.getProjectId(), report.getChapterNumber());
         if (!matches(report, current) || (draft.getWritingBasis() != null
                 ? !draft.getWritingBasis().outlineId().equals(current.writingBasis().outlineId())
-                : !java.util.Objects.equals(draft.getSourceContractVersionId(), current.manuscript().getSourceContractVersionId()))
+                : !Objects.equals(draft.getSourceContractVersionId(), current.manuscript().getSourceContractVersionId()))
                 || !report.getSourceManuscriptId().equals(draft.getBaseManuscriptVersionId())) {
             throw new IllegalStateException("润色期间正文或写作依据已变化，请重新检查");
         }

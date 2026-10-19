@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.writing.domain.WritingStyleProfile;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -99,7 +100,7 @@ class WritingOutputSchemas {
         properties.putObject("issues").put("type", "array").set("items", issue);
     }
 
-    JsonNode styleRecommendation(java.util.List<WritingStyleProfile> presets) {
+    JsonNode styleRecommendation(List<WritingStyleProfile> presets) {
         ObjectNode root = objectSchema();
         ObjectNode properties = root.putObject("properties");
         string(properties, "summary");

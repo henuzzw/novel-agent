@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.novelagent.project.application.CurrentActorProvider;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Short database leases protect conversation order; model waiting never holds a transaction open. */
 @Repository
@@ -20,7 +22,7 @@ public class HttpConversationStore {
     public HttpConversationStore(JdbcTemplate jdbc, ObjectMapper json, CurrentActorProvider actors, PlatformTransactionManager manager) {
         this.jdbc = jdbc; this.json = json; this.actors = actors;
         this.transactions = new TransactionTemplate(manager);
-        this.transactions.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
     public Lease claim(UUID project, String workflow, String binding, String revision, boolean fresh) {
         return transactions.execute(status -> {
@@ -37,7 +39,7 @@ public class HttpConversationStore {
                         Boolean.class, project, workflow);
                 if (!Boolean.TRUE.equals(expired)) throw new IllegalStateException("该项目会话正在生成，请先等待或停止当前任务");
             }
-            boolean replace = fresh || !binding.equals(stored.get("account_binding")) || !java.util.Objects.equals(revision, stored.get("prompt_revision"));
+            boolean replace = fresh || !binding.equals(stored.get("account_binding")) || !Objects.equals(revision, stored.get("prompt_revision"));
             UUID conversation = replace ? UUID.randomUUID() : (UUID) stored.get("conversation_id");
             ArrayNode history;
             try { history = replace ? json.createArrayNode() : (ArrayNode) json.readTree(stored.get("input_history").toString()); }

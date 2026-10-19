@@ -1,9 +1,14 @@
 package com.novelagent.writing.application;
 
+import com.novelagent.agent.domain.AutomationRun;
+import com.novelagent.agent.domain.AutomationStatus;
+import com.novelagent.agent.infrastructure.AutomationRunRepository;
 import com.novelagent.canon.application.CharacterNameService;
+import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.writing.domain.*;
+import com.novelagent.writing.infrastructure.DraftLoopRecovery;
 import com.novelagent.writing.infrastructure.DraftLoopRunRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import jakarta.persistence.EntityManager;
@@ -24,20 +29,20 @@ public class DraftLoopStore {
     private final DraftLoopContext contexts;
     private final CharacterNameService names;
     private final EntityManager entityManager;
-    private final com.novelagent.writing.infrastructure.DraftLoopRecovery recovery;
-    private final com.novelagent.agent.infrastructure.AutomationRunRepository automations;
+    private final DraftLoopRecovery recovery;
+    private final AutomationRunRepository automations;
 
     public DraftLoopStore(DraftLoopRunRepository runs, ManuscriptVersionRepository manuscripts, ProjectAccessService access,
             DraftLoopContext contexts, CharacterNameService names, EntityManager entityManager,
-            com.novelagent.writing.infrastructure.DraftLoopRecovery recovery,
-            com.novelagent.agent.infrastructure.AutomationRunRepository automations) {
+            DraftLoopRecovery recovery,
+            AutomationRunRepository automations) {
         this.runs = runs; this.manuscripts = manuscripts; this.access = access;
         this.contexts = contexts; this.names = names; this.entityManager = entityManager; this.recovery = recovery;
         this.automations = automations;
     }
 
     @Transactional
-    public DraftLoopRun create(UUID projectId, UUID requestKey, int chapter, com.novelagent.planning.application.ModelProvider provider,
+    public DraftLoopRun create(UUID projectId, UUID requestKey, int chapter, ModelProvider provider,
             boolean writeFirst, int maxRounds, DraftLoopContext.Source frozen) {
         return createLocked(projectId, requestKey, chapter, provider, writeFirst, maxRounds, frozen, null, 0);
     }
@@ -45,18 +50,18 @@ public class DraftLoopStore {
     /** Parent and child are bound under the same project lock; only this exact owner bypasses the range-task exclusion. */
     @Transactional
     public DraftLoopRun createForAutomation(UUID projectId, UUID requestKey, int chapter,
-            com.novelagent.planning.application.ModelProvider provider, boolean writeFirst, int maxRounds,
+            ModelProvider provider, boolean writeFirst, int maxRounds,
             DraftLoopContext.Source frozen, UUID automationId, int attempt) {
         return createLocked(projectId, requestKey, chapter, provider, writeFirst, maxRounds, frozen, automationId, attempt);
     }
 
     private DraftLoopRun createLocked(UUID projectId, UUID requestKey, int chapter,
-            com.novelagent.planning.application.ModelProvider provider, boolean writeFirst, int maxRounds,
+            ModelProvider provider, boolean writeFirst, int maxRounds,
             DraftLoopContext.Source frozen, UUID automationId, int attempt) {
         lockProject(projectId);
         var parent = automationId == null ? null : automations.findLocked(projectId, automationId)
                 .orElseThrow(() -> new IllegalArgumentException("章节推进任务不存在"));
-        if (parent != null && (parent.getStatus() != com.novelagent.agent.domain.AutomationStatus.RUNNING
+        if (parent != null && (parent.getStatus() != AutomationStatus.RUNNING
                 || parent.isCancelRequested() || parent.getAttempt() != attempt || parent.getCurrentChapter() != chapter
                 || parent.getProvider() != provider || parent.getMaxLoopRounds() != maxRounds
                 || !parent.getOutlineId().equals(frozen.basis().writingBasis().outlineId()))) {
@@ -74,8 +79,8 @@ public class DraftLoopStore {
             throw new IllegalStateException("项目已有自动编辑任务，请等待或停止后再开始");
         }
         if (automations.findTop50ByProjectIdOrderByCreatedAtDesc(projectId).stream().anyMatch(value ->
-                !value.getId().equals(automationId) && (value.getStatus() == com.novelagent.agent.domain.AutomationStatus.PENDING
-                        || value.getStatus() == com.novelagent.agent.domain.AutomationStatus.RUNNING))) {
+                !value.getId().equals(automationId) && (value.getStatus() == AutomationStatus.PENDING
+                        || value.getStatus() == AutomationStatus.RUNNING))) {
             throw new IllegalStateException("项目的章节推进任务正在运行，请先停止或等待该任务");
         }
         var current = contexts.capture(projectId, chapter);
@@ -102,7 +107,7 @@ public class DraftLoopStore {
     /** 幂等重发先读取现有任务，不重复检索资料、冻结上下文或触发模型。创建事务仍再次核对竞态。 */
     @Transactional(readOnly = true)
     public Optional<DraftLoopRun> existing(UUID projectId, UUID key, int chapter,
-            com.novelagent.planning.application.ModelProvider provider, boolean writeFirst, int maxRounds) {
+            ModelProvider provider, boolean writeFirst, int maxRounds) {
         access.requireOwnedProject(projectId);
         var existing = runs.findByProjectIdAndRequestKey(projectId, key);
         existing.ifPresent(run -> requireSameRequest(run, chapter, provider, writeFirst, maxRounds));
@@ -110,7 +115,7 @@ public class DraftLoopStore {
     }
 
     private static void requireSameRequest(DraftLoopRun run, int chapter,
-            com.novelagent.planning.application.ModelProvider provider, boolean writeFirst, int maxRounds) {
+            ModelProvider provider, boolean writeFirst, int maxRounds) {
         if (run.getChapterNumber() != chapter || run.getProvider() != provider || run.isWriteFirst() != writeFirst || run.getMaxRounds() != maxRounds) {
             throw new IllegalArgumentException("同一幂等键不能用于不同自动编辑任务");
         }
@@ -133,11 +138,11 @@ public class DraftLoopStore {
 
     /** Resume only the exact parent's failed child; fresh source checks still run before any paid call. */
     @Transactional
-    public Optional<DraftLoopRun> retryForAutomation(com.novelagent.agent.domain.AutomationRun requested) {
+    public Optional<DraftLoopRun> retryForAutomation(AutomationRun requested) {
         lockProject(requested.getProjectId());
         var parent = automations.findLocked(requested.getProjectId(), requested.getId())
                 .orElseThrow(() -> new IllegalArgumentException("章节推进任务不存在"));
-        if (parent.getStatus() != com.novelagent.agent.domain.AutomationStatus.RUNNING || parent.isCancelRequested()
+        if (parent.getStatus() != AutomationStatus.RUNNING || parent.isCancelRequested()
                 || parent.getAttempt() != requested.getAttempt()) throw new IllegalStateException("章节推进执行尝试已变化");
         if (parent.getCurrentLoopId() == null) return Optional.empty();
         var run = locked(parent.getProjectId(), parent.getCurrentLoopId());

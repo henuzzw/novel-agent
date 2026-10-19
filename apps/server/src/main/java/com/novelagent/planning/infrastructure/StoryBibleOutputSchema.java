@@ -3,6 +3,7 @@ package com.novelagent.planning.infrastructure;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -61,7 +62,7 @@ public class StoryBibleOutputSchema {
     public StoryBibleOutputSchema(ObjectMapper objectMapper) {
         try {
             this.value = objectMapper.readTree(SCHEMA);
-            ReaderExperienceSeedSchema.add((com.fasterxml.jackson.databind.node.ObjectNode) value, objectMapper);
+            ReaderExperienceSeedSchema.add((ObjectNode) value, objectMapper);
         }
         catch (JsonProcessingException exception) { throw new IllegalStateException("故事圣经输出 Schema 配置无效", exception); }
     }

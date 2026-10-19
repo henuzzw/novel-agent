@@ -1,12 +1,13 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 final class ReaderExperienceSeedSchema {
     private ReaderExperienceSeedSchema() { }
-    static void add(ObjectNode schema, ObjectMapper mapper) throws com.fasterxml.jackson.core.JsonProcessingException {
+    static void add(ObjectNode schema, ObjectMapper mapper) throws JsonProcessingException {
         var content = (ObjectNode) schema.path("properties").path("content");
         ((ArrayNode) content.path("required")).add("readerExperiencePlans");
         ((ObjectNode) content.path("properties")).set("readerExperiencePlans", mapper.readTree("""

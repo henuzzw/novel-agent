@@ -2,6 +2,7 @@ package com.novelagent.canon.api;
 
 import com.novelagent.canon.application.CanonPublicationService;
 import com.novelagent.canon.application.PublishedMemoryService;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,6 +38,6 @@ public class CanonPublicationController {
         return memory.save(projectId, chapterNumber, commitId, request);
     }
     @GetMapping("/{commitId}/memory/history")
-    public java.util.List<PublishedMemoryService.History> memoryHistory(@PathVariable UUID projectId, @PathVariable int chapterNumber,
+    public List<PublishedMemoryService.History> memoryHistory(@PathVariable UUID projectId, @PathVariable int chapterNumber,
             @PathVariable UUID commitId) { return memory.history(projectId, chapterNumber, commitId); }
 }

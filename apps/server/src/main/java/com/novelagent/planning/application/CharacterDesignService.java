@@ -2,6 +2,7 @@ package com.novelagent.planning.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
@@ -22,7 +23,7 @@ public class CharacterDesignService {
     }
 
     /** Step 7 also projects already designed rules and promises for the data pages. Provider output stays plain text. */
-    public com.novelagent.planning.domain.StoryBibleContent designPlanning(UUID projectId, ModelProvider provider,
+    public StoryBibleContent designPlanning(UUID projectId, ModelProvider provider,
             String prompt, String frozenBoundaries) {
         if (provider == null || provider == ModelProvider.LOCAL_TEMPLATE) {
             throw new IllegalArgumentException("人物设计请选择真实模型");
@@ -42,7 +43,7 @@ public class CharacterDesignService {
             if (root == null || !root.path("materials").isObject()) {
                 throw new IllegalArgumentException("雪花第7步没有返回完整资料");
             }
-            var materials = mapper.treeToValue(root.path("materials"), com.novelagent.planning.domain.StoryBibleContent.class);
+            var materials = mapper.treeToValue(root.path("materials"), StoryBibleContent.class);
             if (materials == null || materials.characterBlueprints().isEmpty()) {
                 throw new IllegalArgumentException("雪花第7步没有返回人物档案");
             }

@@ -1,7 +1,7 @@
 package com.novelagent.writing.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.platform.support.Json;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -60,11 +60,7 @@ public class WritingStylePresetCatalog {
      * @param json 存储中的 JSON 文本，损坏时拒绝恢复为有效对象。
      */
     private WritingStyleProfile read(String json) {
-        try {
-            return mapper.readValue(json, WritingStyleProfile.class);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("数据库风格档案无效", exception);
-        }
+        return Json.call(() -> mapper.readValue(json, WritingStyleProfile.class), "数据库风格档案无效");
     }
 
     /**
@@ -73,10 +69,6 @@ public class WritingStylePresetCatalog {
      * @param profile 候选或已选完整风格档案，包含版本与技法快照。
      */
     private String write(WritingStyleProfile profile) {
-        try {
-            return mapper.writeValueAsString(profile);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("无法编码风格档案", exception);
-        }
+        return Json.call(() -> mapper.writeValueAsString(profile), "无法编码风格档案");
     }
 }

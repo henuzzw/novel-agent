@@ -2,16 +2,18 @@ package com.novelagent.writing.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.prompt.application.AgentPromptDefaults;
 import com.novelagent.writing.application.GeneratedManuscript;
 import com.novelagent.writing.domain.*;
+import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /** 共用网关记录实际 Prompt、响应、错误与用量；B/C 独立会话，处理输出仍处于可追踪任务内。 */
@@ -60,7 +62,7 @@ public class DraftLoopModel {
         if (draft != null) data.set("currentDraft", mapper.valueToTree(draft));
         if (report != null) data.set("suggestionsNotFacts", mapper.valueToTree(report));
         // Project boundaries already live in the frozen basis; do not append current mutable choices.
-        String name = "draft_loop_" + run.getPhase().name().toLowerCase(java.util.Locale.ROOT);
+        String name = "draft_loop_" + run.getPhase().name().toLowerCase(Locale.ROOT);
         if (run.getPhase() == DraftLoopRun.Phase.A) {
             gateway.requestWithBoundaries(run.getProjectId(), stage, run.getProvider(), AgentPromptDefaults.system(stage), data.toString(),
                     schema, name, limit, CodexSessionPolicy.NEW_THREAD, output -> save.accept(parse(output, type)), "");
@@ -79,7 +81,7 @@ public class DraftLoopModel {
             String field = failure instanceof JsonMappingException mapping
                     ? mapping.getPath().stream().map(reference -> reference.getFieldName() != null
                             ? reference.getFieldName() : "[" + reference.getIndex() + "]")
-                            .collect(java.util.stream.Collectors.joining(".")) : "";
+                            .collect(Collectors.joining(".")) : "";
             String detail = failure.getCause() instanceof IllegalArgumentException invalid
                     ? invalid.getMessage() : "字段格式或类型不符合返回协议";
             // Jackson's full message may contain manuscript text; expose field paths and domain errors only.

@@ -1,5 +1,9 @@
 package com.novelagent.planning.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Objects;
+
 /** Chapter content is one opaque writing plan; only routing and freshness metadata are structured. */
 public record ChapterPlan(int number, String title, String content, ChapterPlanStatus status,
         boolean contentNeedsUpdate) {
@@ -13,8 +17,8 @@ public record ChapterPlan(int number, String title, String content, ChapterPlanS
     }
 
     // Read existing JSONB without rewriting published plans or losing any old prose.
-    @com.fasterxml.jackson.annotation.JsonCreator(mode = com.fasterxml.jackson.annotation.JsonCreator.Mode.DELEGATING)
-    public static ChapterPlan read(com.fasterxml.jackson.databind.JsonNode node) {
+    @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
+    public static ChapterPlan read(JsonNode node) {
         ChapterPlanStatus status = ChapterPlanStatus.valueOf(node.path("status").asText("PLANNED"));
         if (node.has("content")) return new ChapterPlan(node.path("number").asInt(), node.path("title").asText(),
                 node.path("content").asText(), status, node.path("contentNeedsUpdate").asBoolean(false));
@@ -32,8 +36,8 @@ public record ChapterPlan(int number, String title, String content, ChapterPlanS
 
     public ChapterPlan reviewContentAgainst(ChapterPlan previous, boolean upstreamChanged) {
         if (previous == null) return new ChapterPlan(number, title, content, status, false);
-        boolean reused = java.util.Objects.equals(content, previous.content);
-        boolean changed = upstreamChanged || !java.util.Objects.equals(title, previous.title) || status != previous.status;
+        boolean reused = Objects.equals(content, previous.content);
+        boolean changed = upstreamChanged || !Objects.equals(title, previous.title) || status != previous.status;
         return new ChapterPlan(number, title, content, status,
                 reused && (previous.contentNeedsUpdate || changed));
     }

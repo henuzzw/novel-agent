@@ -1,6 +1,7 @@
 package com.novelagent.agent.infrastructure;
 
 import com.novelagent.agent.domain.AutomationRun;
+import com.novelagent.agent.domain.AutomationStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -16,7 +17,7 @@ import org.springframework.data.jpa.repository.Query;
  */
 public interface AutomationRunRepository extends JpaRepository<AutomationRun, UUID> {
     List<AutomationRun> findTop50ByWaitingForPublicationTrueAndStatusOrderByUpdatedAtAsc(
-            com.novelagent.agent.domain.AutomationStatus status);
+            AutomationStatus status);
     /**
      * 按项目返回最近 50 个自动任务，按创建时间倒序；未完成任务的业务排他性由服务另行检查。
      *

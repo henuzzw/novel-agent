@@ -11,9 +11,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,7 +129,7 @@ public class CharacterProfileService {
         access.requireOwnedProject(projectId);
         Set<UUID> ids = new LinkedHashSet<>();
         if (relatedCharacterIds != null) {
-            relatedCharacterIds.stream().filter(java.util.Objects::nonNull).forEach(ids::add);
+            relatedCharacterIds.stream().filter(Objects::nonNull).forEach(ids::add);
         }
         List<String> references = new ArrayList<>();
         references.add(pov);
@@ -146,7 +148,7 @@ public class CharacterProfileService {
 
         List<CharacterReference> characters = store.references(projectId);
         Set<UUID> activeIds = characters.stream().map(CharacterReference::id)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
         boolean uncertain = !activeIds.containsAll(ids);
         for (String reference : references) {
             uncertain |= !resolveReference(reference, characters, ids);

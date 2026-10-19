@@ -1,6 +1,5 @@
 package com.novelagent.canon.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -9,9 +8,11 @@ import com.novelagent.canon.api.CharacterNameResponse;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.domain.ManuscriptContent;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -91,7 +92,7 @@ public class CharacterNameService {
         Map<String, String> names = new LinkedHashMap<>();
         for (var blueprint : content.characterBlueprints()) {
             putName(names, "PROTAGONIST".equals(blueprint.role()) ? "PROTAGONIST"
-                    : "BLUEPRINT_" + UUID.nameUUIDFromBytes(blueprint.name().getBytes(java.nio.charset.StandardCharsets.UTF_8)), blueprint.name());
+                    : "BLUEPRINT_" + UUID.nameUUIDFromBytes(blueprint.name().getBytes(StandardCharsets.UTF_8)), blueprint.name());
         }
         if (!names.containsKey("PROTAGONIST")) putName(names, "PROTAGONIST", extractName(content.protagonist()));
         for (int index = 0; index < content.supportingCharacters().size(); index++) {
@@ -119,7 +120,7 @@ public class CharacterNameService {
             Integer occupied = jdbc.queryForObject("SELECT count(*) FROM story_entity WHERE project_id = ? AND role_key = ? AND canon_version_to IS NULL",
                     Integer.class, projectId, role);
             String availableRole = occupied != null && occupied > 0
-                    ? "BLUEPRINT_" + UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)) : role;
+                    ? "BLUEPRINT_" + UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8)) : role;
             jdbc.update("""
                 INSERT INTO story_entity(
                     id, project_id, entity_type, canonical_name, status, canon_version_from,
@@ -256,11 +257,7 @@ public class CharacterNameService {
         JsonNode tree = objectMapper.valueToTree(value);
         List<CharacterNameResponse> characters = rows(projectId);
         renderTextNodes(tree, characters, nameForms(projectId, characters));
-        try {
-            return objectMapper.treeToValue(tree, type);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("人物名称渲染失败", exception);
-        }
+        return Json.call(() -> objectMapper.treeToValue(tree, type), "人物名称渲染失败");
     }
 
     /**

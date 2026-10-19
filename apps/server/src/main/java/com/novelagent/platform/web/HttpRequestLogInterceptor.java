@@ -1,5 +1,6 @@
 package com.novelagent.platform.web;
 
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.LinkedHashMap;
@@ -16,7 +17,7 @@ public class HttpRequestLogInterceptor implements HandlerInterceptor {
 
     @Override public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         var state = HttpRequestLog.from(request);
-        if (state == null || request.getDispatcherType() == jakarta.servlet.DispatcherType.ASYNC) return true;
+        if (state == null || request.getDispatcherType() == DispatcherType.ASYNC) return true;
         Map<String, Object> parameters = new LinkedHashMap<>();
         parameters.put("pathVariables", request.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE));
         parameters.put("parameters", request.getParameterMap());

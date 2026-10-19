@@ -1,6 +1,8 @@
 package com.novelagent.modelaccess.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
+import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.CodexConversationStore;
 import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
@@ -8,6 +10,10 @@ import com.novelagent.modelaccess.infrastructure.OAuthCodexClient;
 import com.novelagent.planning.infrastructure.CodexAppServerClient;
 import java.util.LinkedHashSet;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +23,7 @@ public class CodexProjectGateway {
     private final OAuthCodexClient codex;
     private final CodexConversationStore conversations;
     private final ModelContextProperties context;
-    private final java.util.concurrent.Semaphore runtime = new java.util.concurrent.Semaphore(1);
+    private final Semaphore runtime = new Semaphore(1);
     public CodexProjectGateway(OAuthCodexClient codex, CodexConversationStore conversations, ModelContextProperties context) {
         this.codex = codex; this.conversations = conversations; this.context = context;
     }
@@ -51,15 +57,15 @@ public class CodexProjectGateway {
             return run(system, choice, outputReserve, null, progress);
         }
         public CodexAppServerClient.TurnResult run(String system, EffectiveSettings choice, int outputReserve,
-                com.fasterxml.jackson.databind.JsonNode schema, Consumer<String> progress) {
+                JsonNode schema, Consumer<String> progress) {
             attempted = true;
-            var timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
-            var lostLease = new java.util.concurrent.atomic.AtomicBoolean();
+            var timer = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+            var lostLease = new AtomicBoolean();
             Thread owner = Thread.currentThread();
             var heartbeat = timer.scheduleAtFixedRate(() -> {
                 try { conversations.renew(lease); }
                 catch (RuntimeException error) { lostLease.set(true); owner.interrupt(); }
-            }, 1, 1, java.util.concurrent.TimeUnit.MINUTES);
+            }, 1, 1, TimeUnit.MINUTES);
             try {
                 thread = lease.thread();
                 if (thread == null) {
@@ -69,7 +75,7 @@ public class CodexProjectGateway {
                 codex.openScope(thread, lease, delta.materials().keySet(), binding);
                 var capacity = context.require(choice.provider());
                 long previous = Math.max(lease.contextTokens(), codex.contextTokens(thread));
-                long incoming = com.novelagent.memory.application.MemoryBudgetAllocator.estimateTokens(system + delta.text() + (schema == null ? "" : schema));
+                long incoming = MemoryBudgetAllocator.estimateTokens(system + delta.text() + (schema == null ? "" : schema));
                 if (previous > 0 && previous + incoming + outputReserve + capacity.getSafetyMarginTokens()
                         > capacity.getContextWindowTokens()) codex.compactThread(thread);
                 return codex.runStructuredTurn(thread, lease.project(), delta.text(), schema, choice, progress);

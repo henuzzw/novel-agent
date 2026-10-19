@@ -2,6 +2,7 @@ package com.novelagent.writing.domain;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -52,12 +53,12 @@ public class ChapterContractReviewVersion {
         for (int index = 0; index < content.issues().size(); index++) {
             ReviewIssue original = content.issues().get(index);
             ReviewIssue updated = candidate.issues().get(index);
-            if (!java.util.Objects.equals(original.id(), updated.id())
-                    || !java.util.Objects.equals(original.severity(), updated.severity())
-                    || !java.util.Objects.equals(original.category(), updated.category())
-                    || !java.util.Objects.equals(original.description(), updated.description())
-                    || !java.util.Objects.equals(original.evidence(), updated.evidence())
-                    || !java.util.Objects.equals(original.suggestion(), updated.suggestion())) {
+            if (!Objects.equals(original.id(), updated.id())
+                    || !Objects.equals(original.severity(), updated.severity())
+                    || !Objects.equals(original.category(), updated.category())
+                    || !Objects.equals(original.description(), updated.description())
+                    || !Objects.equals(original.evidence(), updated.evidence())
+                    || !Objects.equals(original.suggestion(), updated.suggestion())) {
                 throw new IllegalArgumentException("合同审阅问题不可改写，只能更新处理状态");
             }
         }

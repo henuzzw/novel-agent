@@ -1,14 +1,22 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.planning.application.SnowflakeStep;
 import com.novelagent.planning.domain.SnowflakePlan;
+import com.novelagent.platform.support.Json;
+import com.novelagent.writing.application.WritingResourceNotFoundException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Each stage is saved independently; no database transaction waits for a model. */
 @Repository
@@ -17,7 +25,7 @@ public class SnowflakePlanStore {
 
     public SnowflakePlanStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public UUID create(UUID projectId, ModelProvider provider, JsonNode input) {
         // Serialize only run creation with author confirmation; never hold this lock during generation.
         jdbc.queryForObject("SELECT id FROM novel_project WHERE id = ? FOR UPDATE", UUID.class, projectId);
@@ -46,9 +54,9 @@ public class SnowflakePlanStore {
     }
 
     /** Author-triggered recovery discards only a failed dependency suffix; raw agent responses remain intact. */
-    public void resumeWithValidPrefix(UUID projectId, UUID id, java.util.Map<String, String> expected,
-            java.util.Map<String, String> retained) {
-        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    public void resumeWithValidPrefix(UUID projectId, UUID id, Map<String, String> expected,
+            Map<String, String> retained) {
+        var json = new ObjectMapper();
         requireUpdated(jdbc.update("""
                 UPDATE snowflake_planning_run SET status = 'RUNNING', error_message = NULL,
                     steps = CAST(? AS jsonb), core = ?, characters = ?, plot = ?,
@@ -63,7 +71,7 @@ public class SnowflakePlanStore {
 
     public void save(UUID projectId, UUID id, String stage, String text) {
         try {
-            com.novelagent.planning.application.SnowflakeStep.valueOf(stage);
+            SnowflakeStep.valueOf(stage);
             requireUpdated(jdbc.update("""
                     UPDATE snowflake_planning_run SET steps = jsonb_set(steps, ARRAY[?]::text[], to_jsonb(?::text)),
                         core = CASE WHEN ? = 'CORE' THEN ? ELSE core END,
@@ -81,12 +89,11 @@ public class SnowflakePlanStore {
     public JsonNode input(UUID projectId, UUID id) {
         String value = jdbc.queryForObject("SELECT input_snapshot::text FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
                 String.class, projectId, id);
-        try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value); }
-        catch (com.fasterxml.jackson.core.JsonProcessingException exception) { throw new IllegalStateException("雪花来源无法读取", exception); }
+        return Json.call(() -> new ObjectMapper().readTree(value), "雪花来源无法读取");
     }
 
     /** Save the human-readable step and machine projection atomically, without another model call. */
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public void saveMaterials(UUID projectId, UUID id, String text, JsonNode materials) {
         save(projectId, id, "CHARACTER_SETTINGS", text);
         requireUpdated(jdbc.update("""
@@ -99,8 +106,7 @@ public class SnowflakePlanStore {
         String value = jdbc.queryForObject("SELECT prepared_materials::text FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
                 String.class, projectId, id);
         if (value == null) throw new IllegalArgumentException("雪花第7步缺少资料投影，请重新生成规划");
-        try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(value); }
-        catch (com.fasterxml.jackson.core.JsonProcessingException exception) { throw new IllegalStateException("雪花资料无法读取", exception); }
+        return Json.call(() -> new ObjectMapper().readTree(value), "雪花资料无法读取");
     }
 
 
@@ -119,7 +125,7 @@ public class SnowflakePlanStore {
     public SnowflakePlan get(UUID projectId, UUID id) {
         return jdbc.query("SELECT * FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
                 this::read, projectId, id).stream().findFirst().orElseThrow(() ->
-                        new com.novelagent.writing.application.WritingResourceNotFoundException("雪花规划", id));
+                        new WritingResourceNotFoundException("雪花规划", id));
     }
 
     private SnowflakePlan read(ResultSet rs, int row) throws SQLException {
@@ -133,18 +139,18 @@ public class SnowflakePlanStore {
 
     private UUID sourceImportId(String value) {
         try {
-            String id = new com.fasterxml.jackson.databind.ObjectMapper().readTree(value).path("sourceImportId").asText("");
+            String id = new ObjectMapper().readTree(value).path("sourceImportId").asText("");
             return id.isBlank() ? null : UUID.fromString(id);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("雪花来源无法读取", exception);
         }
     }
 
-    private static java.util.Map<String, String> steps(String value) {
+    private static Map<String, String> steps(String value) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(value,
-                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() { });
-        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            return new ObjectMapper().readValue(value,
+                    new TypeReference<Map<String, String>>() { });
+        } catch (JsonProcessingException exception) {
             throw new IllegalStateException("雪花步骤记录无法读取", exception);
         }
     }

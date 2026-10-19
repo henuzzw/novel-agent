@@ -1,16 +1,16 @@
 package com.novelagent.canon.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.canon.api.EntityStateResponse;
 import com.novelagent.canon.api.CharacterKnowledgeResponse;
 import com.novelagent.canon.api.EntityAliasResponse;
 import com.novelagent.canon.api.EntityMentionResponse;
+import com.novelagent.canon.api.EntityStateResponse;
 import com.novelagent.canon.api.ForeshadowResponse;
 import com.novelagent.canon.api.StoryEntityResponse;
 import com.novelagent.canon.api.StoryEventResponse;
 import com.novelagent.canon.api.StoryRelationshipResponse;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import java.util.List;
@@ -297,10 +297,6 @@ public class TypedCanonQueryService {
 
 
     private JsonNode json(String value) {
-        try {
-            return mapper.readTree(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("正史状态值损坏", exception);
-        }
+        return Json.call(() -> mapper.readTree(value), "正史状态值损坏");
     }
 }

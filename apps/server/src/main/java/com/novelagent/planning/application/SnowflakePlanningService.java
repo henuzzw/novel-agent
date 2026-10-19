@@ -1,11 +1,20 @@
 package com.novelagent.planning.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.agent.application.GenerationStoppedException;
+import com.novelagent.agent.application.ModelOutputAvailability;
 import com.novelagent.planning.domain.SnowflakePlan;
 import com.novelagent.planning.infrastructure.SnowflakePlanStore;
+import com.novelagent.project.application.CreativeBoundaryGuide;
+import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.project.domain.CreativeBoundaries;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -29,35 +38,35 @@ public class SnowflakePlanningService {
             throw new IllegalArgumentException("雪花规划请选择真实模型，本地模板不能完成创作设计");
         }
         JsonNode frozen = input.deepCopy();
-        String boundaries = com.novelagent.project.application.CreativeBoundaryGuide.render(
-                com.novelagent.project.domain.CreativeBoundaries.from(project));
-        ((com.fasterxml.jackson.databind.node.ObjectNode) frozen).put("creativeBoundarySnapshot", boundaries);
-        String strategy = com.novelagent.project.application.CreativeStrategyGuide.render(
-                com.novelagent.project.domain.CreativeStrategyPolicy.from(project));
-        ((com.fasterxml.jackson.databind.node.ObjectNode) frozen).put("creativeStrategySnapshot", strategy);
+        String boundaries = CreativeBoundaryGuide.render(
+                CreativeBoundaries.from(project));
+        ((ObjectNode) frozen).put("creativeBoundarySnapshot", boundaries);
+        String strategy = CreativeStrategyGuide.render(
+                CreativeStrategyPolicy.from(project));
+        ((ObjectNode) frozen).put("creativeStrategySnapshot", strategy);
         UUID id = store.create(projectId, provider, frozen);
-        return execute(projectId, id, provider, frozen, java.util.Map.of(), boundaries, strategy);
+        return execute(projectId, id, provider, frozen, Map.of(), boundaries, strategy);
     }
 
     /** Resume only a saved prefix; the interrupted response is discarded and requested again. */
     public SnowflakePlan resume(UUID projectId, UUID id) {
         var project = access.requireOwnedProject(projectId);
         var plan = store.get(projectId, id);
-        if (!java.util.Set.of("FAILED", "CANCELLED", "SUCCEEDED").contains(plan.status())) {
+        if (!Set.of("FAILED", "CANCELLED", "SUCCEEDED").contains(plan.status())) {
             throw new IllegalArgumentException("该雪花规划正在生成，不能重复继续");
         }
         var frozen = store.input(projectId, id);
-        String boundaries = com.novelagent.project.application.CreativeBoundaryGuide.render(
-                com.novelagent.project.domain.CreativeBoundaries.from(project));
+        String boundaries = CreativeBoundaryGuide.render(
+                CreativeBoundaries.from(project));
         if (!boundaries.equals(frozen.path("creativeBoundarySnapshot").asText())) {
             throw new IllegalArgumentException("世界设定或改编幅度已改变，请重新生成雪花底稿");
         }
-        String strategy = com.novelagent.project.application.CreativeStrategyGuide.render(
-                com.novelagent.project.domain.CreativeStrategyPolicy.from(project));
+        String strategy = CreativeStrategyGuide.render(
+                CreativeStrategyPolicy.from(project));
         if (frozen.has("creativeStrategySnapshot") && !strategy.equals(frozen.path("creativeStrategySnapshot").asText())) {
             throw new IllegalArgumentException("创作策略已改变，请重新生成雪花底稿");
         }
-        var completed = new java.util.LinkedHashMap<>(plan.steps());
+        var completed = new LinkedHashMap<>(plan.steps());
         var invalid = plan.invalidSteps();
         if (!invalid.isEmpty()) {
             if (plan.status().equals("SUCCEEDED")) throw new IllegalArgumentException("已完成规划包含资料读取失败说明，请重新生成规划，不沿用无效底稿");
@@ -80,7 +89,7 @@ public class SnowflakePlanningService {
     }
 
     private SnowflakePlan execute(UUID projectId, UUID id, ModelProvider provider, JsonNode frozen,
-            java.util.Map<String, String> completed, String boundaries, String strategy) {
+            Map<String, String> completed, String boundaries, String strategy) {
         String prior = "";
         try {
             for (SnowflakeStep step : SnowflakeStep.values()) {
@@ -93,7 +102,7 @@ public class SnowflakePlanningService {
                 }
                 store.start(projectId, id, stage);
                 var result = stages.generate(projectId, provider, step, frozen, prior, boundaries, strategy);
-                com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(result.text());
+                ModelOutputAvailability.requireAvailable(result.text());
                 if (result.materials() != null) {
                     store.saveMaterials(projectId, id, result.text(), result.materials());
                 } else {

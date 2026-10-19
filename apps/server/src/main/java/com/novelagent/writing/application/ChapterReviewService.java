@@ -26,6 +26,7 @@ import com.novelagent.writing.infrastructure.ChapterReviewVersionRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -134,7 +135,7 @@ public class ChapterReviewService {
                 : "依据当前故事圣经、本章大纲计划重写整章，避免以下旧稿问题；本次不是局部修订，修改说明返回空数组：\n");
         for (String id : selected) {
             ReviewIssue issue = review.getContent().issues().stream()
-                    .filter(item -> java.util.Objects.equals(item.id(), id)).findFirst()
+                    .filter(item -> Objects.equals(item.id(), id)).findFirst()
                     .orElseThrow(() -> new IllegalArgumentException("审稿问题不存在：" + id));
             if ((issue.description() == null || issue.description().isBlank())
                     && (issue.suggestion() == null || issue.suggestion().isBlank())) {

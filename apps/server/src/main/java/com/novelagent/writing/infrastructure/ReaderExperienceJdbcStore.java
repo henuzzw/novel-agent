@@ -1,9 +1,9 @@
 package com.novelagent.writing.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.OutlineContent;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.application.ReaderExperienceStore;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
@@ -17,6 +17,7 @@ import com.novelagent.writing.domain.ReaderExperienceSource;
 import com.novelagent.writing.domain.ReaderExperienceState;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -182,7 +183,7 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
                 VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, event.id(), event.projectId(), event.planId(), event.entryVersion(), snapshotJson(event.planSnapshot()), event.state().name(), event.manuscriptId(),
                 event.manuscriptRowVersion(), event.chapterNumber(), event.sourceFingerprint(), event.evidence(), event.evidenceTokenized(), event.authorNote(), event.chapterCanonCommitId(),
-                event.canonAtSubmission(), event.submittedBy(), event.schemaVersion(), java.sql.Timestamp.from(event.createdAt()));
+                event.canonAtSubmission(), event.submittedBy(), event.schemaVersion(), Timestamp.from(event.createdAt()));
     }
 
     private static final String SOURCE_FROM = """
@@ -293,8 +294,7 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
      * @param json 存储中的 JSON 文本，损坏时拒绝恢复为有效对象。
      */
     private OutlineContent outline(String json) {
-        try { return mapper.readValue(json, OutlineContent.class); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("已发布大纲无法读取", exception); }
+        return Json.call(() -> mapper.readValue(json, OutlineContent.class), "已发布大纲无法读取");
     }
 
     private record OutlineSource(UUID id, long version, OutlineContent content) { }
@@ -305,8 +305,7 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
      * @param json 存储中的 JSON 文本，损坏时拒绝恢复为有效对象。
      */
     private ReaderExperiencePlan snapshot(String json) {
-        try { return mapper.readValue(json, ReaderExperiencePlan.class); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("台账计划快照无法读取", exception); }
+        return Json.call(() -> mapper.readValue(json, ReaderExperiencePlan.class), "台账计划快照无法读取");
     }
 
     /**
@@ -315,8 +314,7 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
      * @param plan 本次读取或确认的计划，实际进展仍需原文证据。
      */
     private String snapshotJson(ReaderExperiencePlan plan) {
-        try { return mapper.writeValueAsString(plan); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("台账计划快照无法保存", exception); }
+        return Json.call(() -> mapper.writeValueAsString(plan), "台账计划快照无法保存");
     }
 
     /**

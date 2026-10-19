@@ -1,6 +1,5 @@
 package com.novelagent.planning.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.CharacterBlueprint;
@@ -11,7 +10,9 @@ import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.application.ProjectAccessService;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -148,7 +149,7 @@ public class PlanningMaterialSyncService {
     @Transactional(readOnly = true)
     public List<PlannedRelationship> relationships(UUID projectId, UUID characterId) {
         access.requireOwnedProject(projectId);
-        var result = new java.util.ArrayList<>(jdbc.query("""
+        var result = new ArrayList<>(jdbc.query("""
                 SELECT r.id, r.source_bible_id, r.character_id, r.description
                 FROM planning_relationship r JOIN novel_project p ON p.id = r.project_id
                 WHERE r.project_id = ? AND r.source_bible_id = p.current_bible_version_id
@@ -170,7 +171,7 @@ public class PlanningMaterialSyncService {
     @Transactional(readOnly = true)
     public List<CharacterSnapshot> characters(UUID projectId) {
         access.requireOwnedProject(projectId);
-        var result = new java.util.ArrayList<>(jdbc.query("""
+        var result = new ArrayList<>(jdbc.query("""
                 SELECT s.source_bible_id, s.character_id, s.blueprint::text FROM planning_character_snapshot s
                 JOIN novel_project p ON p.id = s.project_id
                 WHERE s.project_id = ? AND s.source_bible_id = p.current_bible_version_id
@@ -274,12 +275,10 @@ public class PlanningMaterialSyncService {
 
 
     private String json(Object value) {
-        try { return mapper.writeValueAsString(value); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("规划资料无法保存", e); }
+        return Json.call(() -> mapper.writeValueAsString(value), "规划资料无法保存");
     }
     private CharacterBlueprint blueprint(UUID projectId, String value) {
-        try { return names.render(projectId, mapper.readValue(value, CharacterBlueprint.class), CharacterBlueprint.class); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("人物规划无法读取", e); }
+        return Json.call(() -> names.render(projectId, mapper.readValue(value, CharacterBlueprint.class), CharacterBlueprint.class), "人物规划无法读取");
     }
 
     public record PlannedRelationship(UUID id, UUID sourceBibleId, UUID characterId, String description) { }

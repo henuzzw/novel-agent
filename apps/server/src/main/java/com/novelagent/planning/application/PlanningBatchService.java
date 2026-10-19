@@ -1,13 +1,13 @@
 package com.novelagent.planning.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.api.OutlineResponse;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.CreativeIntentSnapshot;
+import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineVersion;
+import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.OutlineWordBudgetPolicy;
 import com.novelagent.planning.domain.PlanningBatch;
 import com.novelagent.planning.domain.PlanningBatchAssembler;
@@ -18,6 +18,8 @@ import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.PlanningBatchJdbcStore;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.platform.support.Json;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
@@ -83,7 +85,7 @@ public class PlanningBatchService {
             UUID outlineVersionId, List<PlanningCheckpoint> checkpoints, Instant createdAt) { }
 
     public record Claim(long batchVersion, PlanningCheckpoint checkpoint,
-            com.novelagent.planning.domain.OutlineWordBudget wordBudget, int chapterCount) { }
+            OutlineWordBudget wordBudget, int chapterCount) { }
 
     private record Basis(String schema, UUID projectId, String title, UUID bibleId, long bibleRowVersion,
             StoryBibleContent bible, CreativeIntentSnapshot intent, long intentVersion,
@@ -352,11 +354,7 @@ public class PlanningBatchService {
                 names.render(project.getId(), bible.getContent(), StoryBibleContent.class), CreativeIntentSnapshot.from(intent),
                 intent.getRowVersion(), CreativeStrategyPolicy.from(project), project.getCurrentOutlineVersionId(),
                 project.getCurrentCanonVersion(), source);
-        try {
-            return Sha256.ofBytes(mapper.writeValueAsBytes(basis));
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("规划批次来源不能生成指纹", exception);
-        }
+        return Json.call(() -> Sha256.ofBytes(mapper.writeValueAsBytes(basis)), "规划批次来源不能生成指纹");
     }
 
     private PlanningBatch batch(UUID projectId, UUID id, boolean lock) {
@@ -376,7 +374,7 @@ public class PlanningBatchService {
 
     private OutlineResponse response(OutlineVersion outline) {
         return OutlineResponse.from(outline,
-                names.render(outline.getProjectId(), outline.getContent(), com.novelagent.planning.domain.OutlineContent.class));
+                names.render(outline.getProjectId(), outline.getContent(), OutlineContent.class));
     }
 
     private void change(PlanningBatch batch, PlanningBatch.Status status, List<UUID> ids, UUID outlineId) {

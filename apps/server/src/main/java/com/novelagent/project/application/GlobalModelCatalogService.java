@@ -1,11 +1,14 @@
 package com.novelagent.project.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.novelagent.planning.infrastructure.CodexAppServerClient;
+import com.novelagent.modelaccess.application.ChatGptTransportService;
+import com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.planning.infrastructure.CodexAppServerClient;
 import com.novelagent.project.domain.GlobalModelSettings;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -16,17 +19,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class GlobalModelCatalogService {
     private final CodexAppServerClient codex;
-    private final com.novelagent.modelaccess.application.ChatGptTransportService transport;
-    private final com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient direct;
+    private final ChatGptTransportService transport;
+    private final ChatGptResponsesClient direct;
 
     public GlobalModelCatalogService(CodexAppServerClient codex) {
         this(codex, null, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public GlobalModelCatalogService(CodexAppServerClient codex,
-            com.novelagent.modelaccess.application.ChatGptTransportService transport,
-            com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient direct) {
+            ChatGptTransportService transport,
+            ChatGptResponsesClient direct) {
         this.codex = codex;
         this.transport = transport;
         this.direct = direct;

@@ -1,18 +1,21 @@
 package com.novelagent.agent.application;
 
+import com.novelagent.agent.api.AgentRunOutputResponse;
+import com.novelagent.agent.api.AgentRunPromptResponse;
+import com.novelagent.agent.api.AgentRunResponse.RequestSnapshotResponse;
 import com.novelagent.agent.api.AgentRunResponse;
 import com.novelagent.agent.api.AgentRunSummary;
 import com.novelagent.agent.api.AgentTokenUsage;
-import com.novelagent.agent.api.AgentRunPromptResponse;
-import com.novelagent.agent.api.AgentRunOutputResponse;
-import org.springframework.beans.factory.annotation.Autowired;
-import com.novelagent.agent.api.AgentRunResponse.RequestSnapshotResponse;
 import com.novelagent.agent.infrastructure.AgentRunQueryRepository;
 import com.novelagent.project.application.ProjectAccessService;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -60,10 +63,10 @@ public class AgentRunQueryService {
     }
 
     /** Include failed/cancelled calls with recorded usage; missing vendor usage stays distinguishable. */
-    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public AgentTokenUsage usage(UUID projectId) {
         access.requireOwnedProject(projectId);
-        return runs.usage(projectId, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
+        return runs.usage(projectId, OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     /**

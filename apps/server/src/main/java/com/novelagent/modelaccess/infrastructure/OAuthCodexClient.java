@@ -3,8 +3,10 @@ package com.novelagent.modelaccess.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.application.ChatGptAccessException;
 import com.novelagent.modelaccess.application.ChatGptOAuthService;
+import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexAppServerClient;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import java.util.ArrayList;
@@ -24,9 +26,9 @@ public class OAuthCodexClient extends CodexAppServerClient {
     private final Map<String, Scope> scopes = new ConcurrentHashMap<>();
     private String accessToken;
     private String binding;
-    private final com.novelagent.memory.application.ModelContextProperties context;
+    private final ModelContextProperties context;
     public OAuthCodexClient(ObjectMapper json, CodexConversationStore materials, ChatGptOAuthService auth,
-            GlobalModelSettingsService settings, com.novelagent.memory.application.ModelContextProperties context,
+            GlobalModelSettingsService settings, ModelContextProperties context,
             @Value("${app.ai.codex.command}") String command,
             @Value("${app.ai.codex.model}") String model,
             @Value("${app.ai.codex.effort}") String effort,
@@ -57,7 +59,7 @@ public class OAuthCodexClient extends CodexAppServerClient {
     @Override protected boolean externalAuthorization() { return true; }
     @Override protected List<String> launchCommand() {
         var args = new ArrayList<>(super.launchCommand());
-        var capacity = context.require(com.novelagent.planning.application.ModelProvider.LOCAL_CODEX);
+        var capacity = context.require(ModelProvider.LOCAL_CODEX);
         args.add("-c"); args.add("model_context_window=" + capacity.getContextWindowTokens());
         args.add("-c"); args.add("model_auto_compact_token_limit=" + Math.max(1,
                 capacity.getContextWindowTokens() - capacity.getSafetyMarginTokens() - 24000));

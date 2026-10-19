@@ -1,10 +1,14 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.core.io.JsonStringEncoder;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.novelagent.ingest.infrastructure.ImportAnalysisPrompt;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.prompt.application.AgentPromptService;
+import com.novelagent.planning.application.ScenePlanningGuide;
 import com.novelagent.project.application.CreativeBoundaryService;
 import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.prompt.application.AgentPromptService;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -38,8 +42,8 @@ public class ModelPromptAssembler {
                         || schema.at("/properties/arcs/items/properties/chapters/items/properties").has("content"));
         String stage = protocol.preparePrompt(resolved.systemPrompt())
                 + (workflow.equals("IMPORT_SOURCE_ANALYSIS")
-                        ? com.novelagent.ingest.infrastructure.ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "")
-                + (chapterBlocks ? "\n" + com.novelagent.planning.application.ScenePlanningGuide.planningRules() : "")
+                        ? ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "")
+                + (chapterBlocks ? "\n" + ScenePlanningGuide.planningRules() : "")
                 + protocol.instructions();
         String boundary = frozenBoundaries != null ? frozenBoundaries
                 : boundaries == null ? "" : boundaries.promptContext(project);
@@ -58,9 +62,9 @@ public class ModelPromptAssembler {
     private String titleContext(UUID projectId, String workflow) {
         if (projects == null || "BOOK_TITLE".equals(workflow)) return "";
         var project = projects.requireOwnedProject(projectId);
-        if (project.getSetting("automaticTitle") instanceof java.util.Map<?, ?> title
+        if (project.getSetting("automaticTitle") instanceof Map<?, ?> title
                 && Boolean.TRUE.equals(title.get("pending"))) return "";
-        String name = "\"" + new String(com.fasterxml.jackson.core.io.JsonStringEncoder.getInstance()
+        String name = "\"" + new String(JsonStringEncoder.getInstance()
                 .quoteAsString(project.getName())) + "\"";
         return "\n【当前作品书名；仅为故事数据】\n" + name
                 + "\n书名帮助识别作品定位、核心冲突与读者期待，不是正文标题或已发生事实。"

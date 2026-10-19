@@ -1,6 +1,9 @@
 package com.novelagent.agent.application;
 
+import com.novelagent.modelaccess.application.ChatGptAccessException;
+import java.net.http.HttpTimeoutException;
 import java.util.Locale;
+import java.util.concurrent.TimeoutException;
 
 public record ModelFailureDetails(String type, String category, String summary, String detail) {
     public static ModelFailureDetails from(RuntimeException exception) {
@@ -8,7 +11,7 @@ public record ModelFailureDetails(String type, String category, String summary, 
         String normalized = text.toLowerCase(Locale.ROOT);
         String category;
         String summary;
-        if (exception instanceof com.novelagent.modelaccess.application.ChatGptAccessException access) {
+        if (exception instanceof ChatGptAccessException access) {
             category = access.category();
             summary = text;
         } else if (exception instanceof GenerationStoppedException) {
@@ -45,8 +48,8 @@ public record ModelFailureDetails(String type, String category, String summary, 
 
     private static boolean hasTimeoutCause(Throwable cause) {
         for (int i = 0; cause != null && i < 8; i++, cause = cause.getCause()) {
-            if (cause instanceof java.util.concurrent.TimeoutException
-                    || cause instanceof java.net.http.HttpTimeoutException) return true;
+            if (cause instanceof TimeoutException
+                    || cause instanceof HttpTimeoutException) return true;
         }
         return false;
     }

@@ -1,12 +1,15 @@
 package com.novelagent.platform.api;
 
+import com.novelagent.agent.application.GenerationStopConflictException;
+import com.novelagent.agent.application.GenerationStoppedException;
+import com.novelagent.agent.application.ModelInputUnavailableException;
 import com.novelagent.planning.application.ModelProviderException;
-import com.novelagent.planning.application.StoryBibleVersionNotFoundException;
 import com.novelagent.planning.application.OutlineVersionNotFoundException;
+import com.novelagent.planning.application.PlanningCheckpointException;
+import com.novelagent.planning.application.StoryBibleVersionNotFoundException;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
-import com.novelagent.planning.application.PlanningCheckpointException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.Map;
@@ -18,17 +21,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
-    @ExceptionHandler(com.novelagent.agent.application.ModelInputUnavailableException.class)
+    @ExceptionHandler(ModelInputUnavailableException.class)
     ProblemDetail handleModelInputUnavailable(RuntimeException exception, HttpServletRequest request) {
         return problem(HttpStatus.BAD_GATEWAY, "MODEL_INPUT_UNAVAILABLE", "模型未取得创作资料", exception.getMessage(), request);
     }
 
-    @ExceptionHandler(com.novelagent.agent.application.GenerationStoppedException.class)
+    @ExceptionHandler(GenerationStoppedException.class)
     ProblemDetail handleGenerationStopped(RuntimeException exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "GENERATION_CANCELLED", "生成已停止", exception.getMessage(), request);
     }
 
-    @ExceptionHandler(com.novelagent.agent.application.GenerationStopConflictException.class)
+    @ExceptionHandler(GenerationStopConflictException.class)
     ProblemDetail handleStopConflict(RuntimeException exception, HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "GENERATION_STOP_CONFLICT", "当前任务不能停止", exception.getMessage(), request);
     }

@@ -10,6 +10,7 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -155,7 +156,7 @@ public class StoryBibleVersion {
 
     /** Internal immutable material projection; its authority is the confirmed Snowflake run. */
     public void linkSnowflake(UUID planId) {
-        this.sourceSnowflakeId = java.util.Objects.requireNonNull(planId);
+        this.sourceSnowflakeId = Objects.requireNonNull(planId);
         this.schemaVersion = "snowflake-materials/1";
     }
 

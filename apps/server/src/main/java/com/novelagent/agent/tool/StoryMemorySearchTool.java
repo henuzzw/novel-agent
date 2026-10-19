@@ -3,6 +3,8 @@ package com.novelagent.agent.tool;
 import com.novelagent.memory.application.MemorySearchTerms;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.memory.application.TextEmbeddingService;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -86,7 +88,7 @@ class StoryMemorySearchTool implements NovelReadTool {
         return result;
     }
 
-    private static Hit hit(java.sql.ResultSet rs, int row) throws java.sql.SQLException {
+    private static Hit hit(ResultSet rs, int row) throws SQLException {
         boolean planning = "PLANNING_NOTES".equals(rs.getString("source_type"));
         String provenance = "来源项目=" + rs.getObject("project_id") + "；资料类型=" + rs.getString("source_type")
                 + "；来源版本=" + rs.getObject("source_id")

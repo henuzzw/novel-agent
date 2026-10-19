@@ -12,6 +12,7 @@ import com.novelagent.writing.domain.DraftLoopRun;
 import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -45,7 +46,7 @@ public class DraftLoopContext {
         var chapterPlan = ChapterWritingBasisService.capture(context).plan();
         data.set("chapterPlan", mapper.valueToTree(chapterPlan));
         data.put("characterProfiles", profiles.promptContext(projectId, chapterPlan.pov(), chapterPlan,
-                java.util.List.of(), java.util.List.of(context.chapter().content())));
+                List.of(), List.of(context.chapter().content())));
         data.put("creativeBoundaries", context.preparationContext());
         data.put("selectedStyle", styles.promptContext(projectId));
         data.put("strategy", CreativeStrategyGuide.render(context.creativeStrategy()));

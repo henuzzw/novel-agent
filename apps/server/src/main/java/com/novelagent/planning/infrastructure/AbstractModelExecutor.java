@@ -1,13 +1,14 @@
 package com.novelagent.planning.infrastructure;
 
-import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.AgentRunRecorder.ContextBudget;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
 import com.novelagent.agent.application.AgentRunRecorder.RequestSnapshot;
+import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.planning.application.ModelProvider;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /** Shared lifecycle; adapters own authentication, context preparation and transport only. */
@@ -35,7 +36,7 @@ public abstract class AbstractModelExecutor {
             var snapshot = RequestSnapshot.capture(settings, call.system(), call.input(), schema,
                     request.protocol().snapshotName(request.schemaName()), request.maxOutputTokens(), call.policy())
                     .withContextBudget(call.contextBudget() == null ? actualBudget : call.contextBudget());
-            var decoded = new java.util.concurrent.atomic.AtomicReference<String>();
+            var decoded = new AtomicReference<String>();
             runs.record(request.projectId(), request.workflow(), request.provider(), call.system(), call.input(), snapshot,
                     () -> call.send(runs.progressSink()), result -> {
                         String output = request.protocol().decode(result.output());

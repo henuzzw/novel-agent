@@ -18,6 +18,7 @@ import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -140,13 +141,13 @@ public class ManuscriptService {
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
         if (contexts.requireOwnedProject(projectId).getCurrentCanonVersion() != sourceCanonVersion)
             throw new IllegalStateException("生成期间前文正史或记忆已变化，请重新生成");
-        if (!java.util.Objects.equals(styleContext, styles.promptContext(projectId))) {
+        if (!Objects.equals(styleContext, styles.promptContext(projectId))) {
             throw new IllegalStateException("生成期间写作风格已变化，请刷新后重试");
         }
         if (base != null) {
             ManuscriptVersion currentBase = manuscripts.findByIdAndProjectIdAndChapterNumber(
                     base.getId(), projectId, chapterNumber).orElseThrow();
-            if (!java.util.Objects.equals(previousContent, currentBase.getContent())) {
+            if (!Objects.equals(previousContent, currentBase.getContent())) {
                 throw new IllegalStateException("生成期间基准正文已变化，请刷新后重试");
             }
         }

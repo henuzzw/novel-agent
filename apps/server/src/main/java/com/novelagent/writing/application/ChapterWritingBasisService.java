@@ -6,6 +6,7 @@ import com.novelagent.writing.domain.ManuscriptBasis;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import java.util.List;
+import java.util.Objects;
 
 
 /** Resolves the published chapter plan once; old contracts are read only for legacy provenance. */
@@ -22,7 +23,7 @@ public final class ChapterWritingBasisService {
                 "以已确认圣经、大纲与前文为准；未知时间不得编成事实", List.of(),
                 List.of("【本章完整规划；未来计划不是正史】\n" + chapter.content()), List.of(), List.of(),
                 "本章行动的后果按已发布大纲落实，不提前兑现未来计划", context.outline().getContent().readerExperiencePlans().stream()
-                        .filter(seed -> java.util.Objects.equals(seed.plannedChapter(), chapter.number()))
+                        .filter(seed -> Objects.equals(seed.plannedChapter(), chapter.number()))
                         .map(seed -> seed.title() + "；承诺：" + seed.promise() + "；埋设：" + seed.setup()
                                 + "；预期回收（未来计划，不是已发生）：" + seed.payoff()).toList(), "按本章规划文字块的结果与章末期待",
                 Math.max(1, context.arc().suggestedMinWords() / count),

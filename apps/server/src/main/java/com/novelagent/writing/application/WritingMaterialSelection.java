@@ -4,7 +4,9 @@ import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.StoryBibleContent;
+import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /** Request-only selection. Versioned planning remains intact and global constraints are never top-K filtered. */
 public final class WritingMaterialSelection {
@@ -14,9 +16,9 @@ public final class WritingMaterialSelection {
         if (source == null) return null;
         String text = reference == null ? "" : reference;
         var characters = source.characterBlueprints();
-        var participants = java.util.regex.Pattern.compile("(?m)^\\s*(?:核心人物|出场人物)[：:]\\s*(.+)$").matcher(text);
+        var participants = Pattern.compile("(?m)^\\s*(?:核心人物|出场人物)[：:]\\s*(.+)$").matcher(text);
         if (participants.find()) {
-            var names = java.util.Arrays.stream(participants.group(1).split("[,，、;；\\s]+"))
+            var names = Arrays.stream(participants.group(1).split("[,，、;；\\s]+"))
                     .filter(value -> !value.isBlank()).toList();
             // Only a complete, uniquely resolved roster permits exclusion. Aliases/free prose remain conservative.
             if (!names.isEmpty() && names.stream().allMatch(name -> source.characterBlueprints().stream()

@@ -2,13 +2,15 @@ package com.novelagent.planning.application;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.planning.domain.ChapterPlanStatus;
+import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
-import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.OutlineOutputSchema;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.project.application.CreativeStrategyGuide;
+import com.novelagent.prompt.application.AgentPromptDefaults;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -77,11 +79,11 @@ public class PlanningCheckpointRunner {
             input.set("precedingPlans", mapper.valueToTree(claim.precedingPlans().stream()
                     .map(value -> value.result()).toList()));
             String raw = models.request(projectId, "PLANNING_CHECKPOINT", source.source().provider(),
-                    com.novelagent.prompt.application.AgentPromptDefaults.system("PLANNING_CHECKPOINT"),
+                    AgentPromptDefaults.system("PLANNING_CHECKPOINT"),
                     input.toString(), schema, "planning_checkpoint_v1", 10000, CodexSessionPolicy.NEW_THREAD);
             PlanningCheckpointResult result = mapper.readValue(raw, PlanningCheckpointResult.class);
             if (result.arcs().stream().flatMap(arc -> arc.chapters().stream())
-                    .anyMatch(chapter -> chapter.status() != com.novelagent.planning.domain.ChapterPlanStatus.PLANNED)) {
+                    .anyMatch(chapter -> chapter.status() != ChapterPlanStatus.PLANNED)) {
                 throw new IllegalArgumentException("新规划分块不能包含已发生章节");
             }
             return checkpoints.succeed(projectId, id, source.attempt(), result);

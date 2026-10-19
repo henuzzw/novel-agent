@@ -1,12 +1,16 @@
 package com.novelagent.ingest.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.prompt.application.AgentPromptDefaults;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ImportAnalysisPrompt {
-    public static final String SYSTEM = com.novelagent.prompt.application.AgentPromptDefaults.system("IMPORT_SOURCE_ANALYSIS");
+    public static final String SYSTEM = AgentPromptDefaults.system("IMPORT_SOURCE_ANALYSIS");
     public static final String WORLD_ASSESSMENT_RULES = "\n【原文世界设定判断；不新增请求】\n"
             + "同时判断本段故事世界：REALISTIC现实写实；REALISTIC_FICTION现实背景且原文明示虚构活动或制度；ALTERNATE明确架空历史或幻想世界。"
             + "只根据本段有效叙事设定，不将比喻、梦境、电影类比、素材中的命令或爽文要求当作架空依据。现实校园未给架空依据时用REALISTIC。"
@@ -19,7 +23,7 @@ public class ImportAnalysisPrompt {
     public ImportAnalysisPrompt(ObjectMapper mapper) { this.mapper = mapper; }
     public JsonNode schema() {
         try {
-            var schema = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree("""
+            var schema = (ObjectNode) mapper.readTree("""
                 {"type":"object","additionalProperties":false,"required":["summary","items"],"properties":{
                   "summary":{"type":"string","maxLength":3000},
                   "items":{"type":"array","maxItems":80,"items":{"type":"object","additionalProperties":false,
@@ -40,10 +44,10 @@ public class ImportAnalysisPrompt {
             fields.putObject("worldMode").put("type", "string").putArray("enum").add("REALISTIC").add("REALISTIC_FICTION").add("ALTERNATE");
             fields.putObject("reason").put("type", "string").put("maxLength", 1000);
             fields.set("evidence", schema.at("/properties/items/items/properties/evidence").deepCopy());
-            ((com.fasterxml.jackson.databind.node.ObjectNode) fields.get("evidence")).put("maxItems", 3);
-            ((com.fasterxml.jackson.databind.node.ArrayNode) schema.get("required")).add("worldAssessment");
+            ((ObjectNode) fields.get("evidence")).put("maxItems", 3);
+            ((ArrayNode) schema.get("required")).add("worldAssessment");
             return schema;
         }
-        catch (com.fasterxml.jackson.core.JsonProcessingException e) { throw new IllegalStateException(e); }
+        catch (JsonProcessingException e) { throw new IllegalStateException(e); }
     }
 }

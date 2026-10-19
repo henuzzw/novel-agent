@@ -3,9 +3,9 @@ package com.novelagent.canon.infrastructure;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.hasText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CanonFactProjector;
+import com.novelagent.platform.support.Json;
 import com.novelagent.writing.domain.FactProposal;
 import com.novelagent.writing.domain.TypedFactPayload;
 import java.util.Map;
@@ -90,11 +90,7 @@ public class StateFactProjector implements CanonFactProjector {
     }
 
     private String json(String value) {
-        try {
-            return mapper.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("正史状态值无法序列化", exception);
-        }
+        return Json.call(() -> mapper.writeValueAsString(value), "正史状态值无法序列化", IllegalArgumentException::new);
     }
 
     @Override

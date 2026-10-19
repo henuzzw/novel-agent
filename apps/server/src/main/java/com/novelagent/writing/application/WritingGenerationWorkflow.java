@@ -8,23 +8,24 @@ import com.alibaba.cloud.ai.graph.CompiledGraph;
 import com.alibaba.cloud.ai.graph.KeyStrategyFactoryBuilder;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.StateGraph;
+import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.canon.application.EntityCatalogContext;
+import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.platform.support.Json;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.QualityReviewContent;
+import com.novelagent.writing.domain.StylePreviewSource;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import com.novelagent.writing.domain.WritingStyleRecommendationContent;
-import com.novelagent.writing.domain.StylePreviewSource;
 import com.novelagent.writing.infrastructure.WritingGenerationGateway;
 import java.util.Map;
 import java.util.UUID;
@@ -81,42 +82,42 @@ public class WritingGenerationWorkflow {
             ChapterPlan chapter, StylePreviewSource source) {
         var result = invoke(stylePreviewReviewGraph, Map.of(PROJECT_ID, projectId.toString(), BIBLE, write(bible),
                 ARC, write(arc), CHAPTER, write(chapter), PREVIEW_SOURCE, write(source), PROVIDER, source.provider()));
-        return read(required(result, GENERATED), QualityReviewContent.class);
+        return read(result, GENERATED, QualityReviewContent.class);
     }
 
     public WritingStylePreviewContent reviseStylePreview(UUID projectId, StoryBibleContent bible, OutlineArc arc,
             ChapterPlan chapter, StylePreviewSource source, ModelProvider provider, String feedback) {
         var result = invoke(stylePreviewRevisionGraph, Map.of(PROJECT_ID, projectId.toString(), BIBLE, write(bible),
                 ARC, write(arc), CHAPTER, write(chapter), PREVIEW_SOURCE, write(source), PROVIDER, provider.name(), INSTRUCTION, value(feedback)));
-        return read(required(result, GENERATED), WritingStylePreviewContent.class);
+        return read(result, GENERATED, WritingStylePreviewContent.class);
     }
 
     private Map<String, Object> validatePreviewEditingInput(OverAllState state) {
         validateCommonInput(state);
-        read(required(state, ARC), OutlineArc.class);
-        if (read(required(state, CHAPTER), ChapterPlan.class).number() != 1) {
+        read(state, ARC, OutlineArc.class);
+        if (read(state, CHAPTER, ChapterPlan.class).number() != 1) {
             throw new IllegalArgumentException("试写编辑仅支持第一章样例");
         }
-        read(required(state, PREVIEW_SOURCE), StylePreviewSource.class);
+        read(state, PREVIEW_SOURCE, StylePreviewSource.class);
         return Map.of();
     }
 
     private Map<String, Object> reviewStylePreviewNode(OverAllState state) {
-        return Map.of(GENERATED, write(gateway.reviewStylePreview(UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class), read(required(state, ARC), OutlineArc.class),
-                read(required(state, CHAPTER), ChapterPlan.class), read(required(state, PREVIEW_SOURCE), StylePreviewSource.class))));
+        return Map.of(GENERATED, write(gateway.reviewStylePreview(projectId(state),
+                read(state, BIBLE, StoryBibleContent.class), read(state, ARC, OutlineArc.class),
+                read(state, CHAPTER, ChapterPlan.class), read(state, PREVIEW_SOURCE, StylePreviewSource.class))));
     }
 
     private Map<String, Object> reviseStylePreviewNode(OverAllState state) {
-        return Map.of(GENERATED, write(gateway.reviseStylePreview(UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class), read(required(state, ARC), OutlineArc.class),
-                read(required(state, CHAPTER), ChapterPlan.class), read(required(state, PREVIEW_SOURCE), StylePreviewSource.class),
+        return Map.of(GENERATED, write(gateway.reviseStylePreview(projectId(state),
+                read(state, BIBLE, StoryBibleContent.class), read(state, ARC, OutlineArc.class),
+                read(state, CHAPTER, ChapterPlan.class), read(state, PREVIEW_SOURCE, StylePreviewSource.class),
                 ModelProvider.valueOf(required(state, PROVIDER)), optional(state, INSTRUCTION))));
     }
 
     private Map<String, Object> validatePreviewReviewOutput(OverAllState state) {
-        var report = read(required(state, GENERATED), QualityReviewContent.class);
-        report.requireEvidenceIn(read(required(state, PREVIEW_SOURCE), StylePreviewSource.class).content().body());
+        var report = read(state, GENERATED, QualityReviewContent.class);
+        report.requireEvidenceIn(read(state, PREVIEW_SOURCE, StylePreviewSource.class).content().body());
         return Map.of();
     }
 
@@ -128,7 +129,7 @@ public class WritingGenerationWorkflow {
                 CONTRACT, write(contract), MEMORY, write(memory), PROVIDER, provider.name(),
                 PREVIOUS_MANUSCRIPT, previousManuscript == null ? "" : write(previousManuscript),
                 INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), GeneratedManuscript.class);
+        return read(result, GENERATED, GeneratedManuscript.class);
     }
 
     public ChapterReviewContent generateReview(UUID projectId, StoryBibleContent bible,
@@ -139,7 +140,7 @@ public class WritingGenerationWorkflow {
                 MANUSCRIPT, write(manuscript), MEMORY, write(memory), ENTITY_CATALOG, write(entityCatalog),
                 PROVIDER, provider.name(),
                 INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), ChapterReviewContent.class);
+        return read(result, GENERATED, ChapterReviewContent.class);
     }
 
     public QualityReviewContent generateQualityReview(UUID projectId, StoryBibleContent bible,
@@ -149,7 +150,7 @@ public class WritingGenerationWorkflow {
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), CONTRACT, write(contract),
                 MANUSCRIPT, write(manuscript), MEMORY, write(memory), PROVIDER, provider.name(),
                 INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), QualityReviewContent.class);
+        return read(result, GENERATED, QualityReviewContent.class);
     }
 
     public WritingStylePreviewContent generateStylePreview(UUID projectId, StoryBibleContent bible, OutlineArc arc,
@@ -159,7 +160,7 @@ public class WritingGenerationWorkflow {
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), ARC, write(arc), CHAPTER, write(chapter),
                 STYLE, write(profile), PROVIDER, provider.name(), TARGET_WORDS, Integer.toString(targetWords),
                 INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), WritingStylePreviewContent.class);
+        return read(result, GENERATED, WritingStylePreviewContent.class);
     }
 
     public WritingStyleRecommendationContent recommendStyle(UUID projectId, StoryBibleContent bible,
@@ -167,25 +168,25 @@ public class WritingGenerationWorkflow {
         OverAllState result = invoke(styleRecommendationGraph, Map.of(
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), PROVIDER, provider.name(),
                 INSTRUCTION, value(instruction)));
-        return read(required(result, GENERATED), WritingStyleRecommendationContent.class);
+        return read(result, GENERATED, WritingStyleRecommendationContent.class);
     }
 
     private Map<String, Object> validateCommonInput(OverAllState state) {
-        UUID.fromString(required(state, PROJECT_ID));
-        read(required(state, BIBLE), StoryBibleContent.class);
+        projectId(state);
+        read(state, BIBLE, StoryBibleContent.class);
         ModelProvider.valueOf(required(state, PROVIDER));
         return Map.of();
     }
 
     private Map<String, Object> generateStyleRecommendationNode(OverAllState state) {
-        return Map.of(GENERATED, write(gateway.recommendStyle(UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class), ModelProvider.valueOf(required(state, PROVIDER)),
+        return Map.of(GENERATED, write(gateway.recommendStyle(projectId(state),
+                read(state, BIBLE, StoryBibleContent.class), ModelProvider.valueOf(required(state, PROVIDER)),
                 optional(state, INSTRUCTION))));
     }
 
     private Map<String, Object> validateStyleRecommendationOutput(OverAllState state) {
-        WritingStyleRecommendationContent content = read(required(state, GENERATED), WritingStyleRecommendationContent.class);
-        content.requireEvidenceIn(read(required(state, BIBLE), StoryBibleContent.class));
+        WritingStyleRecommendationContent content = read(state, GENERATED, WritingStyleRecommendationContent.class);
+        content.requireEvidenceIn(read(state, BIBLE, StoryBibleContent.class));
         if (ModelProvider.valueOf(required(state, PROVIDER)) != ModelProvider.LOCAL_TEMPLATE
                 && content.recommendations().isEmpty()) {
             throw new IllegalArgumentException("模型未返回风格推荐");
@@ -194,15 +195,15 @@ public class WritingGenerationWorkflow {
     }
 
     private CompiledGraph compile(String name,
-            com.alibaba.cloud.ai.graph.action.NodeAction generate,
-            com.alibaba.cloud.ai.graph.action.NodeAction validateOutput) {
+            NodeAction generate,
+            NodeAction validateOutput) {
         return compile(name, this::validateInput, generate, validateOutput);
     }
 
     private CompiledGraph compile(String name,
-            com.alibaba.cloud.ai.graph.action.NodeAction validateInput,
-            com.alibaba.cloud.ai.graph.action.NodeAction generate,
-            com.alibaba.cloud.ai.graph.action.NodeAction validateOutput) {
+            NodeAction validateInput,
+            NodeAction generate,
+            NodeAction validateOutput) {
         try {
             return new StateGraph(name, new KeyStrategyFactoryBuilder().build())
                     .addNode("validate_input", node_async(validateInput))
@@ -220,15 +221,15 @@ public class WritingGenerationWorkflow {
 
     private Map<String, Object> validateInput(OverAllState state) {
         validateCommonInput(state);
-        read(required(state, MEMORY), NovelMemoryContext.class);
+        read(state, MEMORY, NovelMemoryContext.class);
         return Map.of();
     }
 
     private Map<String, Object> validateStylePreviewInput(OverAllState state) {
         validateCommonInput(state);
-        read(required(state, ARC), OutlineArc.class);
-        ChapterPlan chapter = read(required(state, CHAPTER), ChapterPlan.class);
-        read(required(state, STYLE), WritingStyleProfile.class);
+        read(state, ARC, OutlineArc.class);
+        ChapterPlan chapter = read(state, CHAPTER, ChapterPlan.class);
+        read(state, STYLE, WritingStyleProfile.class);
         int words = Integer.parseInt(required(state, TARGET_WORDS));
         if (chapter.number() != 1 || words < 300 || words > 1500) {
             throw new IllegalArgumentException("风格试写仅支持第一章，目标字数需要在 300 至 1500 之间");
@@ -237,16 +238,16 @@ public class WritingGenerationWorkflow {
     }
 
     private Map<String, Object> generateStylePreviewNode(OverAllState state) {
-        WritingStylePreviewContent generated = gateway.stylePreview(UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class), read(required(state, ARC), OutlineArc.class),
-                read(required(state, CHAPTER), ChapterPlan.class), read(required(state, STYLE), WritingStyleProfile.class),
+        WritingStylePreviewContent generated = gateway.stylePreview(projectId(state),
+                read(state, BIBLE, StoryBibleContent.class), read(state, ARC, OutlineArc.class),
+                read(state, CHAPTER, ChapterPlan.class), read(state, STYLE, WritingStyleProfile.class),
                 ModelProvider.valueOf(required(state, PROVIDER)), Integer.parseInt(required(state, TARGET_WORDS)),
                 optional(state, INSTRUCTION));
         return Map.of(GENERATED, write(generated));
     }
 
     private Map<String, Object> validateStylePreviewOutput(OverAllState state) {
-        read(required(state, GENERATED), WritingStylePreviewContent.class);
+        read(state, GENERATED, WritingStylePreviewContent.class);
         return Map.of();
     }
 
@@ -254,12 +255,12 @@ public class WritingGenerationWorkflow {
         String previousJson = state.value(PREVIOUS_MANUSCRIPT, "");
         ManuscriptContent previous = previousJson.isBlank() ? null : read(previousJson, ManuscriptContent.class);
         GeneratedManuscript generated = gateway.manuscript(
-                UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class),
-                read(required(state, ARC), OutlineArc.class),
-                read(required(state, CHAPTER), ChapterPlan.class),
-                read(required(state, CONTRACT), ChapterContractContent.class),
-                read(required(state, MEMORY), NovelMemoryContext.class),
+                projectId(state),
+                read(state, BIBLE, StoryBibleContent.class),
+                read(state, ARC, OutlineArc.class),
+                read(state, CHAPTER, ChapterPlan.class),
+                read(state, CONTRACT, ChapterContractContent.class),
+                read(state, MEMORY, NovelMemoryContext.class),
                 previous,
                 ModelProvider.valueOf(required(state, PROVIDER)),
                 optional(state, INSTRUCTION));
@@ -268,35 +269,35 @@ public class WritingGenerationWorkflow {
 
     private Map<String, Object> generateReviewNode(OverAllState state) {
         ChapterReviewContent generated = gateway.review(
-                UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class),
-                read(required(state, CONTRACT), ChapterContractContent.class),
-                read(required(state, MANUSCRIPT), ManuscriptContent.class),
-                read(required(state, MEMORY), NovelMemoryContext.class),
-                read(required(state, ENTITY_CATALOG), EntityCatalogContext.class),
+                projectId(state),
+                read(state, BIBLE, StoryBibleContent.class),
+                read(state, CONTRACT, ChapterContractContent.class),
+                read(state, MANUSCRIPT, ManuscriptContent.class),
+                read(state, MEMORY, NovelMemoryContext.class),
+                read(state, ENTITY_CATALOG, EntityCatalogContext.class),
                 ModelProvider.valueOf(required(state, PROVIDER)),
                 optional(state, INSTRUCTION));
         return Map.of(GENERATED, write(generated));
     }
 
     private Map<String, Object> generateQualityReviewNode(OverAllState state) {
-        QualityReviewContent generated = gateway.qualityReview(UUID.fromString(required(state, PROJECT_ID)),
-                read(required(state, BIBLE), StoryBibleContent.class),
-                read(required(state, CONTRACT), ChapterContractContent.class),
-                read(required(state, MANUSCRIPT), ManuscriptContent.class),
-                read(required(state, MEMORY), NovelMemoryContext.class),
+        QualityReviewContent generated = gateway.qualityReview(projectId(state),
+                read(state, BIBLE, StoryBibleContent.class),
+                read(state, CONTRACT, ChapterContractContent.class),
+                read(state, MANUSCRIPT, ManuscriptContent.class),
+                read(state, MEMORY, NovelMemoryContext.class),
                 ModelProvider.valueOf(required(state, PROVIDER)), optional(state, INSTRUCTION));
         return Map.of(GENERATED, write(generated));
     }
 
     private Map<String, Object> validateQualityReviewOutput(OverAllState state) {
-        QualityReviewContent content = read(required(state, GENERATED), QualityReviewContent.class);
-        content.requireEvidenceIn(read(required(state, MANUSCRIPT), ManuscriptContent.class).body());
+        QualityReviewContent content = read(state, GENERATED, QualityReviewContent.class);
+        content.requireEvidenceIn(read(state, MANUSCRIPT, ManuscriptContent.class).body());
         return Map.of();
     }
 
     private Map<String, Object> validateManuscriptOutput(OverAllState state) {
-        GeneratedManuscript generated = read(required(state, GENERATED), GeneratedManuscript.class);
+        GeneratedManuscript generated = read(state, GENERATED, GeneratedManuscript.class);
         ManuscriptContent content = generated.content();
         if (content == null || generated.changeSummary() == null) {
             throw new IllegalStateException("模型未返回完整正文或修改说明");
@@ -308,7 +309,7 @@ public class WritingGenerationWorkflow {
     }
 
     private Map<String, Object> validateReviewOutput(OverAllState state) {
-        ChapterReviewContent content = read(required(state, GENERATED), ChapterReviewContent.class);
+        ChapterReviewContent content = read(state, GENERATED, ChapterReviewContent.class);
         requireText(content.summary(), "审稿摘要");
         if (content.issues() == null || content.factProposals() == null) {
             throw new IllegalStateException("审稿结果缺少问题或候选事实列表");
@@ -341,18 +342,18 @@ public class WritingGenerationWorkflow {
     }
 
     private String write(Object value) {
-        try {
-            return mapper.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("写作 Agent Graph 状态序列化失败", exception);
-        }
+        return Json.call(() -> mapper.writeValueAsString(value), "写作 Agent Graph 状态序列化失败");
+    }
+
+    private <T> T read(OverAllState state, String key, Class<T> type) {
+        return read(required(state, key), type);
+    }
+
+    private static UUID projectId(OverAllState state) {
+        return UUID.fromString(required(state, PROJECT_ID));
     }
 
     private <T> T read(String value, Class<T> type) {
-        try {
-            return mapper.readValue(value, type);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("写作 Agent Graph 状态反序列化失败", exception);
-        }
+        return Json.call(() -> mapper.readValue(value, type), "写作 Agent Graph 状态反序列化失败");
     }
 }

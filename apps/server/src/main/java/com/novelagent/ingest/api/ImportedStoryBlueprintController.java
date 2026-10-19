@@ -3,6 +3,7 @@ package com.novelagent.ingest.api;
 import com.novelagent.ingest.application.ImportedStoryBlueprintService;
 import com.novelagent.planning.domain.SnowflakePlan;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +18,7 @@ public class ImportedStoryBlueprintController {
         return service.generate(projectId, importId, input);
     }
 
-    public record ResumeRequest(@jakarta.validation.constraints.NotNull UUID planId) { }
+    public record ResumeRequest(@NotNull UUID planId) { }
 
     @PostMapping("/resume-snowflake")
     public SnowflakePlan resume(@PathVariable UUID projectId, @PathVariable UUID importId,
