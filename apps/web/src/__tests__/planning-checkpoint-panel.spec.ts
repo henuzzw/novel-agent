@@ -88,7 +88,7 @@ describe('planning batch panel', () => {
     vi.mocked(api.getCurrentPlanningBible).mockResolvedValue({ ...bible, id: 'b2' })
     const wrapper = render()
     await flushPromises()
-    expect(wrapper.text()).toContain('当前已发布圣经已变化')
+    expect(wrapper.text()).toContain('当前已发布规划资料已变化')
     expect(button(wrapper, '生成下一块').attributes('disabled')).toBeDefined()
     expect(api.actOnPlanningBatch).not.toHaveBeenCalled()
   })

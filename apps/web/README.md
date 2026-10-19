@@ -10,6 +10,8 @@ Vue 3 + TypeScript frontend for the novel planning and writing workspace.
 - `src/components/` and `src/views/`: workspace panels and route views.
 - `src/__tests__/` and `e2e/`: unit and browser regression tests.
 
+Server state uses Vue Query; shared local state uses Vue composables. Unused Pinia registration and dependency have been removed. API modules expose operations consumed by the current UI; unused legacy review, canon submission, project model settings and standalone checkpoint request wrappers have been removed. Backend compatibility endpoints are retained.
+
 From this directory, run `npm run test:unit` for the lightweight unit suite and `npm run type-check` for TypeScript validation. Use `npm run test:unit:full` for all unit tests, or select affected files with `npx vitest run --config vitest.full.config.ts src/__tests__/<name>.spec.ts`.
 
 ## Prompt Settings

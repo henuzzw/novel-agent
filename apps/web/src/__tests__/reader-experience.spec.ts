@@ -66,7 +66,7 @@ describe('reader experience panel', () => {
       plannedResolveChapter: 3, canonVersionFrom: 1, evidence: '林安把纸条交给我。' }])
     const wrapper = render()
     await flushPromises()
-    expect(wrapper.text()).toContain('故事圣经规划 · 来源已替换')
+    expect(wrapper.text()).toContain('已确认雪花资料规划 · 来源已替换')
     expect(wrapper.get('.entry').text()).toContain('计划中')
     expect(wrapper.get('.canon-foreshadows').text()).toContain('已埋设 · 正史 V1')
     expect(api.submitReaderExperience).not.toHaveBeenCalled()

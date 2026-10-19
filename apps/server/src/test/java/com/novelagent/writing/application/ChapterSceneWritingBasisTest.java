@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 class ChapterSceneWritingBasisTest {
     @Test
     void writingReusesTheSavedTextWithoutRegeneration() {
-        var context = context(chapter().withSceneOutline("先停止传阅，再逐页返工。"));
+        var context = context(chapterWithScenes());
         var basis = ChapterWritingBasisService.capture(context);
         assertThat(basis.plan().requiredBeats()).containsExactly("【本章完整规划；未来计划不是正史】\n" + context.chapter().content());
         assertThat(ChapterWritingBasisService.capture(context)).isEqualTo(basis);
@@ -25,7 +25,7 @@ class ChapterSceneWritingBasisTest {
 
     @Test
     void staleScenesAreNotMandatoryBeatsAndStillAffectTheFingerprint() {
-        var original = chapter().withSceneOutline("先停止传阅，再逐页返工。");
+        var original = chapterWithScenes();
         var stale = original.reviewContentAgainst(original, true);
         var context = context(original);
         var changed = new WritingContextService.Context(context.outline(), context.bible(), context.arc(), stale);
@@ -38,6 +38,12 @@ class ChapterSceneWritingBasisTest {
     void emptyScenesDoNotBlockWritingOrCreateExtraPreparation() {
         assertThat(ChapterWritingBasisService.capture(context(chapter())).plan().requiredBeats())
                 .containsExactly("【本章完整规划；未来计划不是正史】\n" + chapter().content());
+    }
+
+    private static ChapterPlan chapterWithScenes() {
+        var chapter = chapter();
+        return new ChapterPlan(chapter.number(), chapter.title(),
+                chapter.content() + "\n场景清单与关键场景展开：\n先停止传阅，再逐页返工。", chapter.status());
     }
 
     private static ChapterPlan chapter() {

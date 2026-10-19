@@ -63,10 +63,6 @@ export async function listWorkImports(projectId: string): Promise<WorkImport[]> 
   return apiRequest(`/api/v1/projects/${projectId}/imports`)
 }
 
-export async function confirmWorkImport(projectId: string, importId: string): Promise<WorkImport> {
-  return apiRequest(`/api/v1/projects/${projectId}/imports/${importId}/actions/confirm`, { method: 'POST' })
-}
-
 export function workImportSourceUrl(projectId: string, importId: string) {
   return `/api/v1/projects/${projectId}/imports/${importId}/source`
 }

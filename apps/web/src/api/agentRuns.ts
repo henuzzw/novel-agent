@@ -69,10 +69,6 @@ export function getAgentRunPrompt(projectId: string, runId: string) {
   return apiRequest<AgentRunPrompt>(`/api/v1/projects/${projectId}/agent-runs/${runId}/prompt`)
 }
 
-export function getAgentRunSummary(projectId: string) {
-  return apiRequest<AgentRunSummary>(`/api/v1/projects/${projectId}/agent-runs/summary`)
-}
-
 export interface AgentRunRequestSnapshot {
   id: string
   tokenSource: AgentRun['tokenSource']

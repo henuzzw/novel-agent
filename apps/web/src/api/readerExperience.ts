@@ -45,7 +45,6 @@ export interface ReaderExperienceMemory {
 const base = (project: string) => `/api/v1/projects/${encodeURIComponent(project)}/reader-experiences`
 const item = (project: string, id: string) => `${base(project)}/${encodeURIComponent(id)}`
 export const listReaderExperiences = (project: string) => apiRequest<ReaderExperienceEntry[]>(base(project))
-export const getReaderExperience = (project: string, id: string) => apiRequest<ReaderExperienceEntry>(item(project, id))
 export const listReaderExperienceSources = (project: string) => apiRequest<ReaderExperienceManuscript[]>(`${base(project)}/sources`)
 export const getReaderExperienceSource = (project: string, id: string) => apiRequest<ReaderExperienceSource>(`${base(project)}/sources/${encodeURIComponent(id)}`)
 export const getReaderExperienceMemory = (project: string) => apiRequest<ReaderExperienceMemory>(`${base(project)}/memory`)

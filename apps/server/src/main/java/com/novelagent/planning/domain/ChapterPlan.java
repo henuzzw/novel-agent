@@ -57,8 +57,4 @@ public record ChapterPlan(int number, String title, String content, ChapterPlanS
             String reveal, String endingHook, int minWords, int maxWords) {
         this(number, title, pov, objective, coreEvent, reveal, endingHook, minWords, maxWords, ChapterPlanStatus.PLANNED);
     }
-
-    public ChapterPlan withSceneOutline(String text) {
-        return new ChapterPlan(number, title, content + "\n场景清单与关键场景展开：\n" + text, status, false);
-    }
 }

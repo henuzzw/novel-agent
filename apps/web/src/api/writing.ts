@@ -193,12 +193,6 @@ export interface CharacterKnowledge {
   canonVersionFrom: number
   evidence: string | null
 }
-export interface ChapterReviewContent { summary: string; issues: ReviewIssue[]; factProposals: FactProposal[] }
-export interface ChapterReviewVersion {
-  id: string; projectId: string; chapterNumber: number; sourceManuscriptVersionId: string
-  versionNumber: number; schemaVersion: string; status: 'DRAFT' | 'APPROVED' | 'RETURNED'; generatorType: string
-  authorInstruction: string | null; content: ChapterReviewContent; version: number; createdAt: string; updatedAt: string
-}
 export interface CanonCommit {
   id: string; projectId: string; chapterNumber: number; manuscriptVersionId: string
   reviewVersionId: string | null; canonVersion: number; acceptedFacts: FactProposal[]; createdAt: string
@@ -288,39 +282,6 @@ export const createManuscriptRevision = (projectId: string, value: ManuscriptVer
   apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/manuscripts/${value.id}/actions/create-revision`, {
     method: 'POST', headers: { 'If-Match': `"${value.version}"` },
   })
-export const acceptManuscript = (projectId: string, value: ManuscriptVersion) =>
-  apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/manuscripts/${value.id}/actions/accept`, {
-    method: 'POST', headers: { 'If-Match': `"${value.version}"` },
-  })
-export const getLatestReview = (projectId: string, chapter: number) =>
-  apiRequest<ChapterReviewVersion | null>(`${root(projectId, chapter)}/reviews/latest`)
-export const generateReview = (projectId: string, chapter: number, provider: ModelProvider, instruction: string) =>
-  apiRequest<ChapterReviewVersion>(`${root(projectId, chapter)}/reviews/actions/generate`, {
-    method: 'POST', body: JSON.stringify({ provider, instruction: instruction.trim() || null }),
-  })
-export const updateReview = (projectId: string, value: ChapterReviewVersion, content: ChapterReviewContent) =>
-  apiRequest<ChapterReviewVersion>(`${root(projectId, value.chapterNumber)}/reviews/${value.id}`, {
-    method: 'PUT', headers: { 'If-Match': `"${value.version}"` }, body: JSON.stringify({ content }),
-  })
-export const approveReview = (projectId: string, value: ChapterReviewVersion, content: ChapterReviewContent) =>
-  apiRequest<ChapterReviewVersion>(`${root(projectId, value.chapterNumber)}/reviews/${value.id}/actions/approve`, {
-    method: 'POST', headers: { 'If-Match': `"${value.version}"` }, body: JSON.stringify({ content }),
-  })
-export const returnReviewToWriting = (projectId: string, value: ChapterReviewVersion,
-  provider: ModelProvider, mode: GenerationMode, issueIds: string[], instruction: string) =>
-  apiRequest<ManuscriptVersion>(`${root(projectId, value.chapterNumber)}/reviews/${value.id}/actions/return-to-writing`, {
-    method: 'POST', headers: { 'If-Match': `"${value.version}"` },
-    body: JSON.stringify({ provider, mode, issueIds, instruction: instruction.trim() || null }),
-  })
-export const commitCanon = (projectId: string, chapter: number, reviewVersionId: string, expectedCanonVersion: number) =>
-  apiRequest<CanonCommit>(`${root(projectId, chapter)}/canon-commits`, {
-    method: 'POST', body: JSON.stringify({ reviewVersionId, expectedCanonVersion }),
-  })
-export const replaceCanon = (projectId: string, chapter: number, reviewVersionId: string,
-  expectedActiveCommitId: string, expectedCanonVersion: number) =>
-  apiRequest<CanonCommit>(`${root(projectId, chapter)}/canon-commits/actions/replace`, {
-    method: 'POST', body: JSON.stringify({ reviewVersionId, expectedActiveCommitId, expectedCanonVersion }),
-  })
 export const getCanonCommitStatus = (projectId: string, chapter: number) =>
   apiRequest<{ committed: boolean; activeCommitId: string | null; activeManuscriptVersionId: string | null;
     canonVersion: number }>(`${root(projectId, chapter)}/canon-commits/status`)
@@ -343,10 +304,6 @@ export const getPublishedMemory = (projectId: string, chapter: number) =>
 export const retryPublishedMemory = (projectId: string, chapter: number, value: PublishedMemory) =>
   apiRequest<PublishedMemory>(`${root(projectId, chapter)}/canon-commits/${value.commitId}/memory/actions/retry`, {
     method: 'POST', body: JSON.stringify({ version: value.version }),
-  })
-export const confirmPublishedMemory = (projectId: string, chapter: number, value: PublishedMemory, candidates: FactProposal[]) =>
-  apiRequest<PublishedMemory>(`${root(projectId, chapter)}/canon-commits/${value.commitId}/memory/actions/confirm`, {
-    method: 'POST', body: JSON.stringify({ version: value.version, candidates }),
   })
 export const savePublishedMemory = (projectId: string, chapter: number, value: PublishedMemory, candidates: FactProposal[]) =>
   apiRequest<PublishedMemory>(`${root(projectId, chapter)}/canon-commits/${value.commitId}/memory`, {

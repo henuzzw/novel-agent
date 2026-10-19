@@ -77,30 +77,6 @@ export interface ProjectSummary {
   creativeIntent: (CreativeIntentInput & { version: number }) | null
 }
 
-export interface CodexModelChoice {
-  model: string
-  effort: string
-}
-
-export function getCodexModelChoice(projectId: string): Promise<CodexModelChoice> {
-  return apiRequest(`/api/v1/projects/${projectId}/settings/codex-model`)
-}
-
-export function updateCodexModelChoice(projectId: string, choice: CodexModelChoice): Promise<CodexModelChoice> {
-  return apiRequest(`/api/v1/projects/${projectId}/settings/codex-model`, {
-    method: 'PUT', body: JSON.stringify(choice),
-  })
-}
-
-export interface CreateProjectInput {
-  name: string
-  entryMode: EntryMode
-  creativeStrategy?: CreativeStrategy
-  worldMode?: WorldMode
-  adaptationScope?: AdaptationScope
-  creativeIntent?: CreativeIntentInput
-}
-
 export function createProjectFromStory(input: { name?: string; creativeStrategy: CreativeStrategy; worldMode?: WorldMode; adaptationScope?: AdaptationScope; file?: File | null; text?: string }): Promise<ProjectSummary> {
   const body = new FormData()
   if (input.name) body.append('name', input.name)
@@ -130,15 +106,5 @@ export function updateCreativeIntent(
       'If-Match': `"${project.creativeIntent?.version ?? 0}"`,
     },
     body: JSON.stringify(creativeIntent),
-  })
-}
-
-export function createProject(input: CreateProjectInput): Promise<ProjectSummary> {
-  return apiRequest('/api/v1/projects', {
-    method: 'POST',
-    headers: {
-      'Idempotency-Key': createUuid(),
-    },
-    body: JSON.stringify(input),
   })
 }

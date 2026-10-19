@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createUuid } from '@/lib/uuid'
-import { createProject } from '@/api/projects'
+import { createProjectFromStory } from '@/api/projects'
 import { beginGenerationRequest, generationRequests } from '@/lib/generation-activity'
 
 const browserCrypto = globalThis.crypto
@@ -60,9 +60,9 @@ describe('createUuid', () => {
     withoutNativeUuid()
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ id: 'project' }) })
     vi.stubGlobal('fetch', fetchMock)
-    await createProject({ name: '校园小说', entryMode: 'MATERIALS' })
+    await createProjectFromStory({ name: '校园小说', creativeStrategy: 'STANDARD', text: '校园故事' })
     const [url, request] = fetchMock.mock.calls[0]! as [string, RequestInit]
-    expect(url).toBe('/api/v1/projects')
+    expect(url).toBe('/api/v1/projects/from-story')
     expect(new Headers(request.headers).get('Idempotency-Key')).toMatch(uuidV4)
   })
 
