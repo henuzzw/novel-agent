@@ -32,7 +32,10 @@ public class AgentRunQueryService {
     }
 
     @Autowired
-    public AgentRunQueryService(ProjectAccessService access, AgentRunQueryRepository runs, AgentRunOutputBuffer outputs) {
+    public AgentRunQueryService(
+            ProjectAccessService access,
+            AgentRunQueryRepository runs,
+            AgentRunOutputBuffer outputs) {
         this.access = access;
         this.runs = runs;
         this.outputs = outputs;
@@ -59,8 +62,10 @@ public class AgentRunQueryService {
         return runs.summary(projectId);
     }
 
-    /** Include failed/cancelled calls with recorded usage; missing vendor usage stays distinguishable. */
-    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    /** 累计已记录的成功、失败和停止调用用量；供应商未报告的用量保持未知，不混入实际统计。 */
+    @Transactional(
+            readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public AgentTokenUsage usage(UUID projectId) {
         access.requireOwnedProject(projectId);
         return runs.usage(projectId, java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC));
@@ -99,11 +104,20 @@ public class AgentRunQueryService {
      */
     public Optional<AgentRunOutputResponse> output(UUID projectId, UUID runId) {
         access.requireOwnedProject(projectId);
-        return runs.output(projectId, runId).map(saved -> {
-            var live = outputs.get(projectId, runId);
-            if (live == null || !"RUNNING".equals(saved.status())) return saved;
-            return new AgentRunOutputResponse(saved.id(), saved.status(), live.text(), live.truncated(),
-                    saved.errorType(), saved.errorCategory(), saved.errorDetail(), saved.durationMs());
-        });
+        return runs.output(projectId, runId)
+                .map(
+                        saved -> {
+                            var live = outputs.get(projectId, runId);
+                            if (live == null || !"RUNNING".equals(saved.status())) return saved;
+                            return new AgentRunOutputResponse(
+                                    saved.id(),
+                                    saved.status(),
+                                    live.text(),
+                                    live.truncated(),
+                                    saved.errorType(),
+                                    saved.errorCategory(),
+                                    saved.errorDetail(),
+                                    saved.durationMs());
+                        });
     }
 }

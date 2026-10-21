@@ -21,7 +21,8 @@ public class CreativeStrategyService {
     private final NovelProjectRepository projects;
     private final EntityManager entities;
 
-    public CreativeStrategyService(ProjectAccessService access, NovelProjectRepository projects, EntityManager entities) {
+    public CreativeStrategyService(
+            ProjectAccessService access, NovelProjectRepository projects, EntityManager entities) {
         this.access = access;
         this.projects = projects;
         this.entities = entities;

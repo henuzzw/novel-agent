@@ -26,7 +26,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/outlines")
 public class OutlineController {
     private final OutlineService service;
-    public OutlineController(OutlineService service) { this.service = service; }
+
+    public OutlineController(OutlineService service) {
+        this.service = service;
+    }
 
     /**
      * 读取最新保存结果；“最新”不自动表示已发布、已确认或已进入正史。
@@ -35,9 +38,11 @@ public class OutlineController {
      */
     @GetMapping("/latest")
     public ResponseEntity<OutlineResponse> latest(@PathVariable UUID projectId) {
-        return service.latest(projectId).map(value -> ResponseEntity.ok().eTag(Long.toString(value.version())).body(value))
+        return service.latest(projectId)
+                .map(value -> ResponseEntity.ok().eTag(Long.toString(value.version())).body(value))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
+
     /**
      * 读取项目当前已发布规划指针对应的版本，不能用最新草稿替代正式创作依据。
      *
@@ -49,6 +54,7 @@ public class OutlineController {
                 .map(value -> ResponseEntity.ok().eTag(Long.toString(value.version())).body(value))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
+
     /**
      * 按生成顺序返回历史版本摘要，供作者显式选择基准，不修改当前发布指针。
      *
@@ -59,6 +65,7 @@ public class OutlineController {
     public List<OutlineVersionSummaryResponse> versions(@PathVariable UUID projectId) {
         return service.versions(projectId);
     }
+
     /**
      * 读取指定版本并限定所属项目；版本 ID 与用于并发编辑的行版本是不同概念。
      *
@@ -69,6 +76,7 @@ public class OutlineController {
     public OutlineResponse version(@PathVariable UUID projectId, @PathVariable UUID outlineId) {
         return service.version(projectId, outlineId);
     }
+
     /**
      * 读取项目当前发布圣经及字数预算、策略，按重新规划或指定基准模式调用模型；保存完整新大纲草稿，不自动替换发布指针。
      *
@@ -76,12 +84,15 @@ public class OutlineController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/actions/generate")
-    public ResponseEntity<OutlineResponse> generate(@PathVariable UUID projectId,
-            @Valid @RequestBody GenerateOutlineRequest request) {
+    public ResponseEntity<OutlineResponse> generate(
+            @PathVariable UUID projectId, @Valid @RequestBody GenerateOutlineRequest request) {
         OutlineResponse value = service.generate(projectId, request);
-        return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/outlines/" + value.id()))
-                .eTag(Long.toString(value.version())).body(value);
+        return ResponseEntity.created(
+                        URI.create("/api/v1/projects/" + projectId + "/outlines/" + value.id()))
+                .eTag(Long.toString(value.version()))
+                .body(value);
     }
+
     /**
      * 保存作者提交的编辑内容，并遵循当前业务状态及预期版本约束；不隐式触发模型重新生成。
      *
@@ -91,12 +102,16 @@ public class OutlineController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PutMapping("/{outlineId}")
-    public ResponseEntity<OutlineResponse> update(@PathVariable UUID projectId, @PathVariable UUID outlineId,
+    public ResponseEntity<OutlineResponse> update(
+            @PathVariable UUID projectId,
+            @PathVariable UUID outlineId,
             @RequestHeader("If-Match") String ifMatch,
             @Valid @RequestBody ContentUpdateRequest<OutlineContent> request) {
-        OutlineResponse value = service.update(projectId, outlineId, parse(ifMatch), request.content());
+        OutlineResponse value =
+                service.update(projectId, outlineId, parse(ifMatch), request.content());
         return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
     }
+
     /**
      * 由作者显式发布指定规划版本，更新项目当前依据并执行该规划对应的资料同步；不提交正文正史。
      *
@@ -105,10 +120,15 @@ public class OutlineController {
      * @param ifMatch If-Match 请求头中的预期编辑行版本。
      */
     @PostMapping("/{outlineId}/actions/publish")
-    public ResponseEntity<OutlineResponse> publish(@PathVariable UUID projectId, @PathVariable UUID outlineId,
+    public ResponseEntity<OutlineResponse> publish(
+            @PathVariable UUID projectId,
+            @PathVariable UUID outlineId,
             @RequestHeader("If-Match") String ifMatch) {
         OutlineResponse value = service.publish(projectId, outlineId, parse(ifMatch));
         return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
     }
-    private static long parse(String value) { return Long.parseLong(value.replace("\"", "").trim()); }
+
+    private static long parse(String value) {
+        return Long.parseLong(value.replace("\"", "").trim());
+    }
 }

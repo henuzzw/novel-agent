@@ -30,8 +30,8 @@ public class StylePreviewEditingController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/actions/check-preview")
-    public StylePreviewReviewResponse check(@PathVariable UUID projectId,
-            @Valid @RequestBody CheckStylePreviewRequest request) {
+    public StylePreviewReviewResponse check(
+            @PathVariable UUID projectId, @Valid @RequestBody CheckStylePreviewRequest request) {
         return editing.check(projectId, request);
     }
 
@@ -43,7 +43,9 @@ public class StylePreviewEditingController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/preview-reviews/{id}/actions/revise")
-    public WritingStylePreviewResponse revise(@PathVariable UUID projectId, @PathVariable UUID id,
+    public WritingStylePreviewResponse revise(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
             @Valid @RequestBody ReviseStylePreviewRequest request) {
         return editing.revise(projectId, id, request);
     }

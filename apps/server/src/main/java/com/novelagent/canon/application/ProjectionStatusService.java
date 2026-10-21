@@ -18,7 +18,8 @@ public class ProjectionStatusService {
     private final ProjectAccessService access;
     private final ProjectionStatusRepository projections;
 
-    public ProjectionStatusService(ProjectAccessService access, ProjectionStatusRepository projections) {
+    public ProjectionStatusService(
+            ProjectAccessService access, ProjectionStatusRepository projections) {
         this.access = access;
         this.projections = projections;
     }
@@ -30,7 +31,9 @@ public class ProjectionStatusService {
      */
     public ProjectionStatus status(UUID projectId) {
         long canon = access.requireOwnedProject(projectId).getCurrentCanonVersion();
-        return new ProjectionStatus(canon, projections.isPublished(projectId, canon),
+        return new ProjectionStatus(
+                canon,
+                projections.isPublished(projectId, canon),
                 projections.isProjected(projectId, canon, "PGVECTOR"),
                 projections.isProjected(projectId, canon, "NEO4J"));
     }

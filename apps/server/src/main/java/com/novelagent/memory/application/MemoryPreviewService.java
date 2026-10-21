@@ -17,7 +17,10 @@ public class MemoryPreviewService {
     private final NovelMemoryService memory;
     private final ContextBudgetPlanner budgetPlanner;
 
-    public MemoryPreviewService(ProjectAccessService access, NovelMemoryService memory, ContextBudgetPlanner budgetPlanner) {
+    public MemoryPreviewService(
+            ProjectAccessService access,
+            NovelMemoryService memory,
+            ContextBudgetPlanner budgetPlanner) {
         this.access = access;
         this.memory = memory;
         this.budgetPlanner = budgetPlanner;
@@ -32,10 +35,22 @@ public class MemoryPreviewService {
      * @param stage 本次记忆或生成所处阶段，用于选择工具与预算。
      * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
      */
-    public NovelMemoryContext preview(UUID projectId, int chapterNumber, String query, AgentStage stage, ModelProvider provider) {
+    public NovelMemoryContext preview(
+            UUID projectId,
+            int chapterNumber,
+            String query,
+            AgentStage stage,
+            ModelProvider provider) {
         var project = access.requireOwnedProject(projectId);
         var budget = budgetPlanner.plan(stage, provider, query);
-        return memory.recall(stage, projectId, chapterNumber, project.getCurrentCanonVersion(), query, budget,
-                project.getCurrentBibleVersionId(), java.util.List.of());
+        return memory.recall(
+                stage,
+                projectId,
+                chapterNumber,
+                project.getCurrentCanonVersion(),
+                query,
+                budget,
+                project.getCurrentBibleVersionId(),
+                java.util.List.of());
     }
 }

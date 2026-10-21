@@ -24,17 +24,17 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class CharacterProfileService {
-    private static final Pattern ENTITY_REFERENCE = Pattern.compile(
-            "\\{\\{entity:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):(CANONICAL|NICKNAME|TITLE)}}");
-    private static final String KNOWLEDGE_BOUNDARY = "人物档案是作者侧设定参考，不代表视角人物已知信息；"
-            + "秘密、内在动机和人物弧光不得直接当作本章已发生事实或允许揭示的信息。"
-            + "叙述、对白与检查结论仍须遵守本章视角、正文证据及已提供的知识边界。\n";
+    private static final Pattern ENTITY_REFERENCE =
+            Pattern.compile(
+                    "\\{\\{entity:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):(CANONICAL|NICKNAME|TITLE)}}");
+    private static final String KNOWLEDGE_BOUNDARY =
+            "人物档案是作者侧设定参考，不代表视角人物已知信息；"
+                    + "秘密、内在动机和人物弧光不得直接当作本章已发生事实或允许揭示的信息。"
+                    + "叙述、对白与检查结论仍须遵守本章视角、正文证据及已提供的知识边界。\n";
     private final ProjectAccessService access;
     private final CharacterProfileStore store;
 
-    public CharacterProfileService(
-            ProjectAccessService access,
-            CharacterProfileStore store) {
+    public CharacterProfileService(ProjectAccessService access, CharacterProfileStore store) {
         this.access = access;
         this.store = store;
     }
@@ -61,7 +61,10 @@ public class CharacterProfileService {
      * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
      */
     @Transactional
-    public CharacterProfileResponse update(UUID projectId, UUID characterId, long expectedVersion,
+    public CharacterProfileResponse update(
+            UUID projectId,
+            UUID characterId,
+            long expectedVersion,
             UpdateCharacterProfileRequest value) {
         access.requireOwnedProject(projectId);
         if (!store.containsActiveCharacter(projectId, characterId)) {
@@ -70,7 +73,8 @@ public class CharacterProfileService {
         store.ensureProfile(projectId, characterId);
         int changed = store.update(projectId, characterId, expectedVersion, value);
         if (changed != 1) {
-            throw new ResourceVersionConflictException(expectedVersion, requireProfile(projectId, characterId).version());
+            throw new ResourceVersionConflictException(
+                    expectedVersion, requireProfile(projectId, characterId).version());
         }
         return requireProfile(projectId, characterId);
     }
@@ -82,7 +86,8 @@ public class CharacterProfileService {
      */
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId) {
-        List<CharacterProfileResponse> profiles = store.profiles(projectId).stream().filter(this::hasDetails).toList();
+        List<CharacterProfileResponse> profiles =
+                store.profiles(projectId).stream().filter(this::hasDetails).toList();
         return renderProfiles(profiles);
     }
 
@@ -107,7 +112,10 @@ public class CharacterProfileService {
      * @param relatedCharacterIds 本章明确关联的人物稳定 ID 集合。
      */
     @Transactional(readOnly = true)
-    public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
+    public String promptContext(
+            UUID projectId,
+            String pov,
+            ChapterContractContent contract,
             Collection<UUID> relatedCharacterIds) {
         return promptContext(projectId, pov, contract, relatedCharacterIds, List.of());
     }
@@ -122,8 +130,12 @@ public class CharacterProfileService {
      * @param relatedReferences 可核对的完整人物引用，模糊叙述不可用于子串猜测。
      */
     @Transactional(readOnly = true)
-    public String promptContext(UUID projectId, String pov, ChapterContractContent contract,
-            Collection<UUID> relatedCharacterIds, Collection<String> relatedReferences) {
+    public String promptContext(
+            UUID projectId,
+            String pov,
+            ChapterContractContent contract,
+            Collection<UUID> relatedCharacterIds,
+            Collection<String> relatedReferences) {
         access.requireOwnedProject(projectId);
         Set<UUID> ids = new LinkedHashSet<>();
         if (relatedCharacterIds != null) {
@@ -141,20 +153,26 @@ public class CharacterProfileService {
             references.add(contract.hook());
         }
         addReferences(references, relatedReferences);
-        references = references.stream().filter(CharacterProfileService::hasText).distinct().toList();
+        references =
+                references.stream().filter(CharacterProfileService::hasText).distinct().toList();
         if (references.isEmpty() && ids.isEmpty()) return "暂无本章相关人物档案";
 
         List<CharacterReference> characters = store.references(projectId);
-        Set<UUID> activeIds = characters.stream().map(CharacterReference::id)
-                .collect(java.util.stream.Collectors.toSet());
+        Set<UUID> activeIds =
+                characters.stream()
+                        .map(CharacterReference::id)
+                        .collect(java.util.stream.Collectors.toSet());
         boolean uncertain = !activeIds.containsAll(ids);
         for (String reference : references) {
             uncertain |= !resolveReference(reference, characters, ids);
         }
         if (uncertain) {
-            // Free prose has no authoritative participant list; guessing a partial list can drop key actors.
-            return KNOWLEDGE_BOUNDARY + "人物来源未能完全确定，回退到完整人物档案供核对；不表示所有人物都参与本章。\n"
-                    + renderProfiles(store.profiles(projectId).stream().filter(this::hasDetails).toList());
+            // Free prose has no authoritative participant list; guessing a partial list can drop
+            // key actors.
+            return KNOWLEDGE_BOUNDARY
+                    + "人物来源未能完全确定，回退到完整人物档案供核对；不表示所有人物都参与本章。\n"
+                    + renderProfiles(
+                            store.profiles(projectId).stream().filter(this::hasDetails).toList());
         }
         ids.retainAll(activeIds);
         if (ids.isEmpty()) return "暂无本章相关人物档案";
@@ -173,7 +191,8 @@ public class CharacterProfileService {
      * @param characters 本次读取的人物命名快照，所有文本转换使用同一映射。
      * @param ids 作者显式选定的三章正文版本 ID。
      */
-    private boolean resolveReference(String reference, List<CharacterReference> characters, Set<UUID> ids) {
+    private boolean resolveReference(
+            String reference, List<CharacterReference> characters, Set<UUID> ids) {
         String remaining = reference.trim();
         var matcher = ENTITY_REFERENCE.matcher(remaining);
         boolean resolved = false;
@@ -184,12 +203,18 @@ public class CharacterProfileService {
             resolved = true;
         }
         remaining = matcher.replaceAll(" ").trim();
-        // Only whole, delimited references are names. Unsegmented narrative requires the conservative fallback.
+        // Only whole, delimited references are names. Unsegmented narrative requires the
+        // conservative fallback.
         for (String part : remaining.split("[\\s,，、;；/()（）\\[\\]【】]+")) {
             if (part.isBlank()) continue;
-            List<CharacterReference> matches = characters.stream().filter(character ->
-                    part.equals(character.id().toString()) || part.equals(character.roleKey())
-                            || character.names().contains(part)).toList();
+            List<CharacterReference> matches =
+                    characters.stream()
+                            .filter(
+                                    character ->
+                                            part.equals(character.id().toString())
+                                                    || part.equals(character.roleKey())
+                                                    || character.names().contains(part))
+                            .toList();
             if (matches.size() != 1) return false;
             ids.add(matches.getFirst().id());
             resolved = true;
@@ -225,10 +250,26 @@ public class CharacterProfileService {
     }
 
     private boolean hasDetails(CharacterProfileResponse value) {
-        return Arrays.asList(value.gender(), value.ageDescription(), value.identity(), value.appearance(), value.background(),
-                value.externalPersonality(), value.internalPersonality(), value.coreDesire(), value.fear(), value.flaw(),
-                value.values(), value.speechStyle(), value.behaviorHabits(), value.secret(), value.characterArc(),
-                value.behaviorBoundaries(), value.notes()).stream().anyMatch(CharacterProfileService::hasText);
+        return Arrays.asList(
+                        value.gender(),
+                        value.ageDescription(),
+                        value.identity(),
+                        value.appearance(),
+                        value.background(),
+                        value.externalPersonality(),
+                        value.internalPersonality(),
+                        value.coreDesire(),
+                        value.fear(),
+                        value.flaw(),
+                        value.values(),
+                        value.speechStyle(),
+                        value.behaviorHabits(),
+                        value.secret(),
+                        value.characterArc(),
+                        value.behaviorBoundaries(),
+                        value.notes())
+                .stream()
+                .anyMatch(CharacterProfileService::hasText);
     }
 
     private CharacterProfileResponse requireProfile(UUID projectId, UUID characterId) {
@@ -243,5 +284,4 @@ public class CharacterProfileService {
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
     }
-
 }

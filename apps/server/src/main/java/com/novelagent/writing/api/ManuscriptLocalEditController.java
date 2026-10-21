@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>接收准确选区、源版本和修订授权，返回新正文候选及差异。冲突响应帮助作者刷新来源；不修改选区外文本或直接提交正史。</p>
  */
 @RestController
-@RequestMapping("/api/v1/projects/{projectId}/chapters/{chapterNumber}/manuscripts/actions/local-edit")
+@RequestMapping(
+        "/api/v1/projects/{projectId}/chapters/{chapterNumber}/manuscripts/actions/local-edit")
 public class ManuscriptLocalEditController {
     private final ManuscriptLocalEditService service;
 
@@ -36,8 +37,10 @@ public class ManuscriptLocalEditController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping
-    public ResponseEntity<ManuscriptLocalEditResponse> edit(@PathVariable UUID projectId,
-            @PathVariable int chapterNumber, @Valid @RequestBody ManuscriptLocalEditRequest request) {
+    public ResponseEntity<ManuscriptLocalEditResponse> edit(
+            @PathVariable UUID projectId,
+            @PathVariable int chapterNumber,
+            @Valid @RequestBody ManuscriptLocalEditRequest request) {
         ManuscriptLocalEditResponse result = service.edit(projectId, chapterNumber, request);
         return ResponseEntity.status(result.manuscript() == null ? 200 : 201).body(result);
     }
@@ -49,7 +52,8 @@ public class ManuscriptLocalEditController {
      */
     @ExceptionHandler(ManuscriptLocalEditConflictException.class)
     public ProblemDetail conflict(ManuscriptLocalEditConflictException failure) {
-        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, failure.getMessage());
+        ProblemDetail detail =
+                ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, failure.getMessage());
         detail.setProperty("code", "MANUSCRIPT_LOCAL_EDIT_STALE");
         return detail;
     }

@@ -27,7 +27,8 @@ public class CreativeStrategyController {
         this.service = service;
     }
 
-    public record UpdateRequest(@NotNull CreativeStrategy strategy, @NotNull @PositiveOrZero Long version) {}
+    public record UpdateRequest(
+            @NotNull CreativeStrategy strategy, @NotNull @PositiveOrZero Long version) {}
 
     /**
      * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
@@ -46,7 +47,8 @@ public class CreativeStrategyController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PutMapping
-    public CreativeStrategyService.State update(@PathVariable UUID projectId, @Valid @RequestBody UpdateRequest request) {
+    public CreativeStrategyService.State update(
+            @PathVariable UUID projectId, @Valid @RequestBody UpdateRequest request) {
         return service.update(projectId, request.strategy(), request.version());
     }
 }

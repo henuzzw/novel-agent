@@ -41,7 +41,8 @@ public class ProjectCodexModelController {
      * @param choice 作者选择的 Codex 模型与强度组合。
      */
     @PutMapping
-    public CodexModelChoice update(@PathVariable UUID projectId, @RequestBody CodexModelChoice choice) {
+    public CodexModelChoice update(
+            @PathVariable UUID projectId, @RequestBody CodexModelChoice choice) {
         return service.update(projectId, choice);
     }
 }

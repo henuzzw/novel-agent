@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/projects/{projectId}/planning-materials")
 public class PlanningMaterialController {
     private final PlanningMaterialSyncService service;
-    public PlanningMaterialController(PlanningMaterialSyncService service) { this.service = service; }
+
+    public PlanningMaterialController(PlanningMaterialSyncService service) {
+        this.service = service;
+    }
 
     /**
      * 同步当前有效规划的明确资料，保留作者编辑和来源；同步不会生成正文事实。
@@ -28,6 +31,7 @@ public class PlanningMaterialController {
         service.syncCurrent(projectId);
         return ResponseEntity.noContent().build();
     }
+
     /**
      * 查询当前来源保存的人物规划快照；完整蓝图与独立可编辑档案各有来源和用途。
      *
@@ -35,9 +39,13 @@ public class PlanningMaterialController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping("/characters")
-    public ResponseEntity<List<PlanningMaterialSyncService.CharacterSnapshot>> characters(@PathVariable UUID projectId) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.characters(projectId));
+    public ResponseEntity<List<PlanningMaterialSyncService.CharacterSnapshot>> characters(
+            @PathVariable UUID projectId) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.characters(projectId));
     }
+
     /**
      * 返回查询范围内的人物关系，并保留规划与已发生事实各自的来源，不自动生成新关系。
      *
@@ -46,10 +54,13 @@ public class PlanningMaterialController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping("/relationships")
-    public ResponseEntity<List<PlanningMaterialSyncService.PlannedRelationship>> relationships(@PathVariable UUID projectId,
-            @RequestParam(required = false) UUID characterId) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.relationships(projectId, characterId));
+    public ResponseEntity<List<PlanningMaterialSyncService.PlannedRelationship>> relationships(
+            @PathVariable UUID projectId, @RequestParam(required = false) UUID characterId) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.relationships(projectId, characterId));
     }
+
     /**
      * 查询规划资料及台账的来源版本、有效性和关联信息，供作者判断是否需要重新同步。
      *
@@ -57,7 +68,10 @@ public class PlanningMaterialController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping("/plan-origins")
-    public ResponseEntity<List<PlanningMaterialSyncService.PlanOrigin>> origins(@PathVariable UUID projectId) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.origins(projectId));
+    public ResponseEntity<List<PlanningMaterialSyncService.PlanOrigin>> origins(
+            @PathVariable UUID projectId) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.origins(projectId));
     }
 }

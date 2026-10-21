@@ -17,14 +17,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/canon-commits")
 public class PublishedManuscriptExportController {
     private final PublishedManuscriptExportService service;
-    public PublishedManuscriptExportController(PublishedManuscriptExportService service) { this.service = service; }
 
+    public PublishedManuscriptExportController(PublishedManuscriptExportService service) {
+        this.service = service;
+    }
+
+    /**
+     * 下载当前有效发布且记忆整理成功的章节 Markdown；响应禁止缓存，不包含草稿或记忆失败章节。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     */
     @GetMapping("/export")
     public ResponseEntity<byte[]> export(@PathVariable UUID projectId) {
-        return ResponseEntity.ok().contentType(new MediaType("text", "markdown", StandardCharsets.UTF_8))
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "markdown", StandardCharsets.UTF_8))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename("已完成正文.md", StandardCharsets.UTF_8).build().toString())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename("已完成正文.md", StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
                 .body(service.export(projectId).getBytes(StandardCharsets.UTF_8));
     }
 }

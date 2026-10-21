@@ -24,7 +24,8 @@ public class AgentRunOutputController {
     private final AgentRunStreamService streams;
 
     public AgentRunOutputController(AgentRunQueryService queries, AgentRunStreamService streams) {
-        this.queries = queries; this.streams = streams;
+        this.queries = queries;
+        this.streams = streams;
     }
 
     /**
@@ -34,9 +35,11 @@ public class AgentRunOutputController {
      * @param runId 模型调用记录 ID，不是供应商线程 ID。
      */
     @GetMapping("/response")
-    public ResponseEntity<AgentRunOutputResponse> response(@PathVariable UUID projectId, @PathVariable UUID runId) {
-        return queries.output(projectId, runId).map(value -> ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore()).body(value)).orElseGet(() -> ResponseEntity.notFound().build());
+    public ResponseEntity<AgentRunOutputResponse> response(
+            @PathVariable UUID projectId, @PathVariable UUID runId) {
+        return queries.output(projectId, runId)
+                .map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /**
@@ -46,8 +49,15 @@ public class AgentRunOutputController {
      * @param runId 模型调用记录 ID，不是供应商线程 ID。
      */
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public ResponseEntity<SseEmitter> events(@PathVariable UUID projectId, @PathVariable UUID runId) {
-        return streams.open(projectId, runId).map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .header("X-Accel-Buffering", "no").body(value)).orElseGet(() -> ResponseEntity.notFound().build());
+    public ResponseEntity<SseEmitter> events(
+            @PathVariable UUID projectId, @PathVariable UUID runId) {
+        return streams.open(projectId, runId)
+                .map(
+                        value ->
+                                ResponseEntity.ok()
+                                        .cacheControl(CacheControl.noStore())
+                                        .header("X-Accel-Buffering", "no")
+                                        .body(value))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

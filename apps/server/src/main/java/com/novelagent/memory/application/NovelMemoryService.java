@@ -21,29 +21,57 @@ public class NovelMemoryService {
     }
 
     /**
-     * 按阶段、项目、章节与预算召回只读记忆，分别标记有效事实、前文参考和未来计划。
+     * 按阶段白名单、章节范围及正史水位召回历史资料，再按预算去重裁剪；规划版本与人物关键词用于限定相关资料。
      *
-     * @param stage 本次记忆或生成所处阶段，用于选择工具与预算。
-     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
-     * @param canonVersion 有效正史版本水位，与记录行版本不同。
-     * @param query 记忆检索语句或关键词，不作为新事实写入。
-     * @param budget 本次上下文或检查预算，约束输入范围但不是实际费用。
+     * @param stage 召回阶段，决定允许使用的工具及预算
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     * @param chapterNumber 目标章节号，从 1 开始
+     * @param canonVersion 本次可见的正史版本水位
+     * @param query 章节计划及作者要求组成的检索文字
+     * @param budget 召回内容的上下文预算
      */
-    public NovelMemoryContext recall(AgentStage stage, UUID projectId, int chapterNumber,
-            long canonVersion, String query, MemoryBudgetPlan budget) {
-        return recall(stage, projectId, chapterNumber, canonVersion, query, budget, null, List.of());
+    public NovelMemoryContext recall(
+            AgentStage stage,
+            UUID projectId,
+            int chapterNumber,
+            long canonVersion,
+            String query,
+            MemoryBudgetPlan budget) {
+        return recall(
+                stage, projectId, chapterNumber, canonVersion, query, budget, null, List.of());
     }
 
-    public NovelMemoryContext recall(AgentStage stage, UUID projectId, int chapterNumber,
-            long canonVersion, String query, MemoryBudgetPlan budget, UUID planningVersionId, List<String> keywords) {
-        NovelToolRequest request = new NovelToolRequest(
-                projectId,
-                chapterNumber,
-                canonVersion,
-                query,
-                Math.min(30, budget.maxSemanticMemories() * 2),
-                Math.min(40, budget.maxGraphFacts() * 2), planningVersionId, keywords);
+    /**
+     * 按阶段白名单、章节范围及正史水位召回历史资料，再按预算去重裁剪；规划版本与人物关键词用于限定相关资料。
+     *
+     * @param stage 召回阶段，决定允许使用的工具及预算
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     * @param chapterNumber 目标章节号，从 1 开始
+     * @param canonVersion 本次可见的正史版本水位
+     * @param query 章节计划及作者要求组成的检索文字
+     * @param budget 召回内容的上下文预算
+     * @param planningVersionId 检索所关联的确切规划资料版本
+     * @param keywords 用于资料匹配的人物等关键词
+     */
+    public NovelMemoryContext recall(
+            AgentStage stage,
+            UUID projectId,
+            int chapterNumber,
+            long canonVersion,
+            String query,
+            MemoryBudgetPlan budget,
+            UUID planningVersionId,
+            List<String> keywords) {
+        NovelToolRequest request =
+                new NovelToolRequest(
+                        projectId,
+                        chapterNumber,
+                        canonVersion,
+                        query,
+                        Math.min(30, budget.maxSemanticMemories() * 2),
+                        Math.min(40, budget.maxGraphFacts() * 2),
+                        planningVersionId,
+                        keywords);
         return tools.gather(stage, request, budget);
     }
 }

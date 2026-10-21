@@ -30,7 +30,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReaderExperienceController {
     private final ReaderExperienceService service;
 
-    public ReaderExperienceController(ReaderExperienceService service) { this.service = service; }
+    public ReaderExperienceController(ReaderExperienceService service) {
+        this.service = service;
+    }
 
     /**
      * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
@@ -39,7 +41,9 @@ public class ReaderExperienceController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping
-    public List<ReaderExperienceEntry> list(@PathVariable UUID projectId) { return service.list(projectId); }
+    public List<ReaderExperienceEntry> list(@PathVariable UUID projectId) {
+        return service.list(projectId);
+    }
 
     /**
      * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
@@ -48,7 +52,9 @@ public class ReaderExperienceController {
      * @param id 当前方法所操作记录的稳定 ID。
      */
     @GetMapping("/{id}")
-    public ReaderExperienceEntry get(@PathVariable UUID projectId, @PathVariable UUID id) { return service.get(projectId, id); }
+    public ReaderExperienceEntry get(@PathVariable UUID projectId, @PathVariable UUID id) {
+        return service.get(projectId, id);
+    }
 
     /**
      * 列出可引用的作者已确认正文来源，并保留是否已提交正史及是否被替换的区别。
@@ -57,7 +63,9 @@ public class ReaderExperienceController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping("/sources")
-    public List<ReaderExperienceManuscript> sources(@PathVariable UUID projectId) { return service.sources(projectId); }
+    public List<ReaderExperienceManuscript> sources(@PathVariable UUID projectId) {
+        return service.sources(projectId);
+    }
 
     /**
      * 读取原始或已确认来源资料并保留来源版本，供下载、证据引用或后续业务复核。
@@ -66,7 +74,8 @@ public class ReaderExperienceController {
      * @param manuscriptId 作为来源或证据引用的正文版本 ID。
      */
     @GetMapping("/sources/{manuscriptId}")
-    public ReaderExperienceSource source(@PathVariable UUID projectId, @PathVariable UUID manuscriptId) {
+    public ReaderExperienceSource source(
+            @PathVariable UUID projectId, @PathVariable UUID manuscriptId) {
         return service.source(projectId, manuscriptId);
     }
 
@@ -76,7 +85,9 @@ public class ReaderExperienceController {
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      */
     @GetMapping("/memory")
-    public ReaderExperienceMemory memory(@PathVariable UUID projectId) { return service.memory(projectId); }
+    public ReaderExperienceMemory memory(@PathVariable UUID projectId) {
+        return service.memory(projectId);
+    }
 
     /**
      * 创建本模块业务记录或任务；是否继续执行、发布或确认由该模块后续动作决定。
@@ -85,7 +96,8 @@ public class ReaderExperienceController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping
-    public ResponseEntity<ReaderExperienceEntry> create(@PathVariable UUID projectId, @RequestBody ReaderExperiencePlanInput input) {
+    public ResponseEntity<ReaderExperienceEntry> create(
+            @PathVariable UUID projectId, @RequestBody ReaderExperiencePlanInput input) {
         return ResponseEntity.status(201).body(service.create(projectId, input));
     }
 
@@ -97,7 +109,10 @@ public class ReaderExperienceController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PutMapping("/{id}")
-    public ReaderExperienceEntry update(@PathVariable UUID projectId, @PathVariable UUID id, @RequestBody ReaderExperiencePlanInput input) {
+    public ReaderExperienceEntry update(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
+            @RequestBody ReaderExperiencePlanInput input) {
         return service.update(projectId, id, input);
     }
 
@@ -110,8 +125,11 @@ public class ReaderExperienceController {
      * @param requestId 客户端请求关联或幂等 ID，具体用途见方法说明。
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID projectId, @PathVariable UUID id,
-            @RequestParam long expectedVersion, @RequestParam UUID requestId) {
+    public ResponseEntity<Void> delete(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
+            @RequestParam long expectedVersion,
+            @RequestParam UUID requestId) {
         service.delete(projectId, id, expectedVersion, requestId);
         return ResponseEntity.noContent().build();
     }
@@ -124,7 +142,10 @@ public class ReaderExperienceController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping("/{id}/events")
-    public ReaderExperienceEntry submit(@PathVariable UUID projectId, @PathVariable UUID id, @RequestBody ReaderExperienceSubmission input) {
+    public ReaderExperienceEntry submit(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
+            @RequestBody ReaderExperienceSubmission input) {
         return service.submit(projectId, id, input);
     }
 }

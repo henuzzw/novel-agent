@@ -21,7 +21,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class MemoryController {
     private final MemoryPreviewService service;
 
-    public MemoryController(MemoryPreviewService service) { this.service = service; }
+    public MemoryController(MemoryPreviewService service) {
+        this.service = service;
+    }
 
     /**
      * 按章节、阶段、供应商和查询语句展示预算内召回内容，不生成合同或正文。
@@ -33,7 +35,9 @@ public class MemoryController {
      * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
      */
     @GetMapping("/preview")
-    public NovelMemoryContext preview(@PathVariable UUID projectId, @RequestParam int chapterNumber,
+    public NovelMemoryContext preview(
+            @PathVariable UUID projectId,
+            @RequestParam int chapterNumber,
             @RequestParam String query,
             @RequestParam(defaultValue = "MANUSCRIPT") AgentStage stage,
             @RequestParam(defaultValue = "LOCAL_CODEX") ModelProvider provider) {

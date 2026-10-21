@@ -48,17 +48,21 @@ public class ProjectService {
         validateIdeaRequest(request.entryMode(), request.creativeIntent());
 
         UUID projectId = UUID.randomUUID();
-        NovelProject project = NovelProject.create(
-                projectId,
-                actorProvider.currentUserId(),
-                request.name() == null || request.name().isBlank() ? "待生成书名" : request.name(),
-                request.entryMode());
+        NovelProject project =
+                NovelProject.create(
+                        projectId,
+                        actorProvider.currentUserId(),
+                        request.name() == null || request.name().isBlank()
+                                ? "待生成书名"
+                                : request.name(),
+                        request.entryMode());
         if (request.name() == null || request.name().isBlank()) {
             project.setSetting("automaticTitle", java.util.Map.of("pending", true));
         }
         CreativeStrategyPolicy.of(request.creativeStrategy()).applyTo(project);
         com.novelagent.project.domain.CreativeBoundaries.defaults()
-                .choose(request.worldMode(), request.adaptationScope(), false).applyTo(project);
+                .choose(request.worldMode(), request.adaptationScope(), false)
+                .applyTo(project);
         projectRepository.saveAndFlush(project);
 
         CreativeIntent intent = null;
@@ -80,9 +84,13 @@ public class ProjectService {
     public List<ProjectResponse> list() {
         UUID ownerId = actorProvider.currentUserId();
         return projectRepository.findAllByOwnerIdOrderByUpdatedAtDesc(ownerId).stream()
-                .map(project -> ProjectResponse.from(
-                        project,
-                        creativeIntentRepository.findById(project.getId()).orElse(null)))
+                .map(
+                        project ->
+                                ProjectResponse.from(
+                                        project,
+                                        creativeIntentRepository
+                                                .findById(project.getId())
+                                                .orElse(null)))
                 .toList();
     }
 
@@ -106,12 +114,16 @@ public class ProjectService {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @Transactional
-    public ProjectResponse updateCreativeIntent(UUID projectId, long expectedVersion, CreativeIntentRequest request) {
+    public ProjectResponse updateCreativeIntent(
+            UUID projectId, long expectedVersion, CreativeIntentRequest request) {
         NovelProject project = access.requireOwnedProject(projectId);
-        CreativeIntent intent = creativeIntentRepository.findById(projectId)
-                .orElseGet(() -> new CreativeIntent(projectId));
+        CreativeIntent intent =
+                creativeIntentRepository
+                        .findById(projectId)
+                        .orElseGet(() -> new CreativeIntent(projectId));
 
-        if (creativeIntentRepository.existsById(projectId) && intent.getRowVersion() != expectedVersion) {
+        if (creativeIntentRepository.existsById(projectId)
+                && intent.getRowVersion() != expectedVersion) {
             throw new ResourceVersionConflictException(expectedVersion, intent.getRowVersion());
         }
 

@@ -20,7 +20,9 @@ public class AgentRunStreamService {
     private final AgentRunQueryService queries;
     private final Map<UUID, Subscription> subscriptions = new ConcurrentHashMap<>();
 
-    public AgentRunStreamService(AgentRunQueryService queries) { this.queries = queries; }
+    public AgentRunStreamService(AgentRunQueryService queries) {
+        this.queries = queries;
+    }
 
     /**
      * 为已有模型任务创建 SSE 订阅，注册断开和超时清理；找不到任务时不创建连接。
@@ -36,7 +38,11 @@ public class AgentRunStreamService {
         UUID id = UUID.randomUUID();
         var subscription = new Subscription(projectId, runId, emitter);
         emitter.onCompletion(() -> subscriptions.remove(id));
-        emitter.onTimeout(() -> { subscriptions.remove(id); emitter.complete(); });
+        emitter.onTimeout(
+                () -> {
+                    subscriptions.remove(id);
+                    emitter.complete();
+                });
         emitter.onError(error -> subscriptions.remove(id));
         subscriptions.put(id, subscription);
         send(id, subscription, initial.get());
@@ -48,16 +54,19 @@ public class AgentRunStreamService {
      */
     @Scheduled(fixedDelay = 1000)
     public void tick() {
-        subscriptions.forEach((id, subscription) -> {
-            try {
-                var value = queries.output(subscription.projectId, subscription.runId);
-                if (value.isEmpty()) { subscriptions.remove(id); subscription.emitter.complete(); }
-                else send(id, subscription, value.get());
-            } catch (RuntimeException exception) {
-                subscriptions.remove(id);
-                subscription.emitter.completeWithError(exception);
-            }
-        });
+        subscriptions.forEach(
+                (id, subscription) -> {
+                    try {
+                        var value = queries.output(subscription.projectId, subscription.runId);
+                        if (value.isEmpty()) {
+                            subscriptions.remove(id);
+                            subscription.emitter.complete();
+                        } else send(id, subscription, value.get());
+                    } catch (RuntimeException exception) {
+                        subscriptions.remove(id);
+                        subscription.emitter.completeWithError(exception);
+                    }
+                });
     }
 
     private void send(UUID id, Subscription subscription, AgentRunOutputResponse value) {
@@ -86,8 +95,11 @@ public class AgentRunStreamService {
         private final SseEmitter emitter;
         private AgentRunOutputResponse last;
         private int idleTicks;
+
         private Subscription(UUID projectId, UUID runId, SseEmitter emitter) {
-            this.projectId = projectId; this.runId = runId; this.emitter = emitter;
+            this.projectId = projectId;
+            this.runId = runId;
+            this.emitter = emitter;
         }
     }
 }

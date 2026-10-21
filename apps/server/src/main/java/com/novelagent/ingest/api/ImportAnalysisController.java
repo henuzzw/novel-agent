@@ -21,8 +21,14 @@ import org.springframework.web.bind.annotation.*;
 public class ImportAnalysisController {
     private final ImportAnalysisStore store;
     private final ImportAnalysisRunner runner;
-    public ImportAnalysisController(ImportAnalysisStore store, ImportAnalysisRunner runner) { this.store = store; this.runner = runner; }
-    public record Version(@NotNull @PositiveOrZero Long version) { }
+
+    public ImportAnalysisController(ImportAnalysisStore store, ImportAnalysisRunner runner) {
+        this.store = store;
+        this.runner = runner;
+    }
+
+    public record Version(@NotNull @PositiveOrZero Long version) {}
+
     /**
      * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
      *
@@ -31,7 +37,11 @@ public class ImportAnalysisController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping
-    public ResponseEntity<List<ImportAnalysisStore.View>> list(@PathVariable UUID projectId, @PathVariable UUID importId) { return response(store.list(projectId, importId)); }
+    public ResponseEntity<List<ImportAnalysisStore.View>> list(
+            @PathVariable UUID projectId, @PathVariable UUID importId) {
+        return response(store.list(projectId, importId));
+    }
+
     /**
      * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
      *
@@ -40,7 +50,11 @@ public class ImportAnalysisController {
      * @param id 当前方法所操作记录的稳定 ID。
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ImportAnalysisStore.View> get(@PathVariable UUID projectId, @PathVariable UUID importId, @PathVariable UUID id) { return response(store.get(projectId, importId, id)); }
+    public ResponseEntity<ImportAnalysisStore.View> get(
+            @PathVariable UUID projectId, @PathVariable UUID importId, @PathVariable UUID id) {
+        return response(store.get(projectId, importId, id));
+    }
+
     /**
      * 创建本模块业务记录或任务；是否继续执行、发布或确认由该模块后续动作决定。
      *
@@ -49,7 +63,15 @@ public class ImportAnalysisController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping
-    public ResponseEntity<ImportAnalysisStore.View> create(@PathVariable UUID projectId, @PathVariable UUID importId, @RequestBody ImportAnalysisStore.Create input) { return ResponseEntity.status(201).cacheControl(CacheControl.noStore()).body(store.create(projectId, importId, input)); }
+    public ResponseEntity<ImportAnalysisStore.View> create(
+            @PathVariable UUID projectId,
+            @PathVariable UUID importId,
+            @RequestBody ImportAnalysisStore.Create input) {
+        return ResponseEntity.status(201)
+                .cacheControl(CacheControl.noStore())
+                .body(store.create(projectId, importId, input));
+    }
+
     /**
      * 执行当前任务的下一个待处理阶段或分段；认领、来源复核及结果保存由专责存储服务控制。
      *
@@ -59,7 +81,14 @@ public class ImportAnalysisController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping("/{id}/actions/run-next")
-    public ResponseEntity<ImportAnalysisStore.View> next(@PathVariable UUID projectId, @PathVariable UUID importId, @PathVariable UUID id, @Valid @RequestBody Version input) { return response(runner.next(projectId, importId, id, input.version())); }
+    public ResponseEntity<ImportAnalysisStore.View> next(
+            @PathVariable UUID projectId,
+            @PathVariable UUID importId,
+            @PathVariable UUID id,
+            @Valid @RequestBody Version input) {
+        return response(runner.next(projectId, importId, id, input.version()));
+    }
+
     /**
      * 按当前来源与状态恢复任务；恢复不是绕过版本校验，也不是无限自动重试授权。
      *
@@ -69,7 +98,14 @@ public class ImportAnalysisController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping("/{id}/actions/resume")
-    public ResponseEntity<ImportAnalysisStore.View> resume(@PathVariable UUID projectId, @PathVariable UUID importId, @PathVariable UUID id, @Valid @RequestBody Version input) { return response(store.action(projectId, importId, id, input.version(), "resume")); }
+    public ResponseEntity<ImportAnalysisStore.View> resume(
+            @PathVariable UUID projectId,
+            @PathVariable UUID importId,
+            @PathVariable UUID id,
+            @Valid @RequestBody Version input) {
+        return response(store.action(projectId, importId, id, input.version(), "resume"));
+    }
+
     /**
      * 请求取消当前任务并按状态约束阻止继续推进；已完成的业务结果不会因此回滚。
      *
@@ -79,7 +115,14 @@ public class ImportAnalysisController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping("/{id}/actions/cancel")
-    public ResponseEntity<ImportAnalysisStore.View> cancel(@PathVariable UUID projectId, @PathVariable UUID importId, @PathVariable UUID id, @Valid @RequestBody Version input) { return response(store.action(projectId, importId, id, input.version(), "cancel")); }
+    public ResponseEntity<ImportAnalysisStore.View> cancel(
+            @PathVariable UUID projectId,
+            @PathVariable UUID importId,
+            @PathVariable UUID id,
+            @Valid @RequestBody Version input) {
+        return response(store.action(projectId, importId, id, input.version(), "cancel"));
+    }
+
     /**
      * 要求完整段覆盖及逐项作者决定后确认解析模式；续写禁止 REWORK，来源变化或缺少决定时拒绝。
      *
@@ -89,6 +132,15 @@ public class ImportAnalysisController {
      * @param input 本次结构化业务输入或确认命令。
      */
     @PostMapping("/{id}/actions/confirm")
-    public ResponseEntity<ImportAnalysisStore.View> confirm(@PathVariable UUID projectId, @PathVariable UUID importId, @PathVariable UUID id, @RequestBody ImportAnalysisStore.Confirm input) { return response(store.confirm(projectId, importId, id, input)); }
-    private static <T> ResponseEntity<T> response(T value) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value); }
+    public ResponseEntity<ImportAnalysisStore.View> confirm(
+            @PathVariable UUID projectId,
+            @PathVariable UUID importId,
+            @PathVariable UUID id,
+            @RequestBody ImportAnalysisStore.Confirm input) {
+        return response(store.confirm(projectId, importId, id, input));
+    }
+
+    private static <T> ResponseEntity<T> response(T value) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value);
+    }
 }

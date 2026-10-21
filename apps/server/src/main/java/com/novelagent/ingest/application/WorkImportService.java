@@ -35,26 +35,63 @@ import org.xml.sax.ContentHandler;
 @Service
 public class WorkImportService {
     private static final String PARSER_VERSION = "tika-2.9.2+chapter-v1";
-    private static final Pattern CHAPTER_HEADING = Pattern.compile(
-            "(?m)^[\\t ]*((?:第[零一二三四五六七八九十百千万0-9]{1,12}[章节卷回部篇][^\\r\\n]{0,80})|(?:Chapter\\s+\\d+[^\\r\\n]{0,80}))[\\t ]*$",
-            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern CHAPTER_HEADING =
+            Pattern.compile(
+                    "(?m)^[\\t ]*((?:第[零一二三四五六七八九十百千万0-9]{1,12}[章节卷回部篇][^\\r\\n]{0,80})|(?:Chapter\\s+\\d+[^\\r\\n]{0,80}))[\\t ]*$",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final List<String> ALLOWED_EXTENSIONS = List.of("txt", "md", "docx", "pdf");
 
+    /**
+     * 将非空粘贴文本封装为 UTF-8 导入文件，复用上传流程的大小限制、解析及持久化校验。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     * @param text 粘贴的原文，与上传文件二选一
+     */
     @Transactional
     public WorkImportResponse paste(UUID projectId, String text) {
         if (text == null || text.isBlank()) throw new IllegalArgumentException("请粘贴故事文字");
-        return upload(projectId, new PastedStory(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        return upload(
+                projectId, new PastedStory(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private record PastedStory(byte[] bytes) implements MultipartFile {
-        @Override public String getName() { return "file"; }
-        @Override public String getOriginalFilename() { return "粘贴故事.txt"; }
-        @Override public String getContentType() { return "text/plain; charset=UTF-8"; }
-        @Override public boolean isEmpty() { return bytes.length == 0; }
-        @Override public long getSize() { return bytes.length; }
-        @Override public byte[] getBytes() { return bytes; }
-        @Override public java.io.InputStream getInputStream() { return new ByteArrayInputStream(bytes); }
-        @Override public void transferTo(java.io.File dest) throws IOException {
+        @Override
+        public String getName() {
+            return "file";
+        }
+
+        @Override
+        public String getOriginalFilename() {
+            return "粘贴故事.txt";
+        }
+
+        @Override
+        public String getContentType() {
+            return "text/plain; charset=UTF-8";
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return bytes.length == 0;
+        }
+
+        @Override
+        public long getSize() {
+            return bytes.length;
+        }
+
+        @Override
+        public byte[] getBytes() {
+            return bytes;
+        }
+
+        @Override
+        public java.io.InputStream getInputStream() {
+            return new ByteArrayInputStream(bytes);
+        }
+
+        @Override
+        public void transferTo(java.io.File dest) throws IOException {
             java.nio.file.Files.write(dest.toPath(), bytes);
         }
     }
@@ -94,8 +131,12 @@ public class WorkImportService {
         try {
             byte[] source = file.getBytes();
             String hash = sha256(source);
-            UUID existing = jdbc.query("SELECT id FROM work_import WHERE project_id = ? AND sha256 = ?",
-                    rs -> rs.next() ? rs.getObject(1, UUID.class) : null, projectId, hash);
+            UUID existing =
+                    jdbc.query(
+                            "SELECT id FROM work_import WHERE project_id = ? AND sha256 = ?",
+                            rs -> rs.next() ? rs.getObject(1, UUID.class) : null,
+                            projectId,
+                            hash);
             if (existing != null) return get(projectId, existing);
 
             ParsedText parsed = parse(source, filename);
@@ -106,19 +147,38 @@ public class WorkImportService {
             List<ChapterPart> chapters = splitChapters(parsed.text(), filename, warnings);
             String contentType = detectContentType(filename, parsed.text());
             UUID importId = UUID.randomUUID();
-            jdbc.update("""
+            jdbc.update(
+                    """
                     INSERT INTO work_import(id, project_id, original_filename, media_type, size_bytes, sha256,
                         parser_version, detected_content_type, status, original_content, extracted_text, warnings)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PARSED', ?, ?, CAST(? AS jsonb))
-                    """, importId, projectId, filename, parsed.mediaType(), source.length, hash,
-                    PARSER_VERSION, contentType, source, parsed.text(), mapper.writeValueAsString(warnings));
+                    """,
+                    importId,
+                    projectId,
+                    filename,
+                    parsed.mediaType(),
+                    source.length,
+                    hash,
+                    PARSER_VERSION,
+                    contentType,
+                    source,
+                    parsed.text(),
+                    mapper.writeValueAsString(warnings));
             for (ChapterPart chapter : chapters) {
-                jdbc.update("""
+                jdbc.update(
+                        """
                         INSERT INTO imported_chapter(id, import_id, project_id, ordinal, title, content,
                             character_count, content_type, selected)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)
-                        """, UUID.randomUUID(), importId, projectId, chapter.ordinal(), chapter.title(),
-                        chapter.content(), chapter.content().codePointCount(0, chapter.content().length()), contentType);
+                        """,
+                        UUID.randomUUID(),
+                        importId,
+                        projectId,
+                        chapter.ordinal(),
+                        chapter.title(),
+                        chapter.content(),
+                        chapter.content().codePointCount(0, chapter.content().length()),
+                        contentType);
             }
             return get(projectId, importId);
         } catch (IOException exception) {
@@ -135,8 +195,10 @@ public class WorkImportService {
     @Transactional(readOnly = true)
     public List<WorkImportResponse> list(UUID projectId) {
         access.requireOwnedProject(projectId);
-        return jdbc.query("SELECT id FROM work_import WHERE project_id = ? ORDER BY created_at DESC",
-                (rs, row) -> get(projectId, rs.getObject("id", UUID.class)), projectId);
+        return jdbc.query(
+                "SELECT id FROM work_import WHERE project_id = ? ORDER BY created_at DESC",
+                (rs, row) -> get(projectId, rs.getObject("id", UUID.class)),
+                projectId);
     }
 
     /**
@@ -148,20 +210,35 @@ public class WorkImportService {
     @Transactional(readOnly = true)
     public WorkImportResponse get(UUID projectId, UUID importId) {
         access.requireOwnedProject(projectId);
-        return jdbc.queryForObject("""
+        return jdbc.queryForObject(
+                """
                 SELECT id, project_id, original_filename, media_type, size_bytes, sha256, parser_version,
                        detected_content_type, status, planning_status, planning_mode, generated_bible_version_id,
                        generated_outline_version_id, planning_error, warnings, created_at, confirmed_at
                 FROM work_import WHERE id = ? AND project_id = ?
-                """, (rs, row) -> new WorkImportResponse(
-                rs.getObject("id", UUID.class), rs.getObject("project_id", UUID.class),
-                rs.getString("original_filename"), rs.getString("media_type"), rs.getLong("size_bytes"),
-                rs.getString("sha256"), rs.getString("parser_version"), rs.getString("detected_content_type"),
-                rs.getString("status"), rs.getString("planning_status"), rs.getString("planning_mode"),
-                rs.getObject("generated_bible_version_id", UUID.class),
-                rs.getObject("generated_outline_version_id", UUID.class), rs.getString("planning_error"),
-                warnings(rs.getString("warnings")), chapters(importId),
-                rs.getTimestamp("created_at").toInstant(), instant(rs.getTimestamp("confirmed_at"))), importId, projectId);
+                """,
+                (rs, row) ->
+                        new WorkImportResponse(
+                                rs.getObject("id", UUID.class),
+                                rs.getObject("project_id", UUID.class),
+                                rs.getString("original_filename"),
+                                rs.getString("media_type"),
+                                rs.getLong("size_bytes"),
+                                rs.getString("sha256"),
+                                rs.getString("parser_version"),
+                                rs.getString("detected_content_type"),
+                                rs.getString("status"),
+                                rs.getString("planning_status"),
+                                rs.getString("planning_mode"),
+                                rs.getObject("generated_bible_version_id", UUID.class),
+                                rs.getObject("generated_outline_version_id", UUID.class),
+                                rs.getString("planning_error"),
+                                warnings(rs.getString("warnings")),
+                                chapters(importId),
+                                rs.getTimestamp("created_at").toInstant(),
+                                instant(rs.getTimestamp("confirmed_at"))),
+                importId,
+                projectId);
     }
 
     /**
@@ -173,10 +250,14 @@ public class WorkImportService {
     @Transactional
     public WorkImportResponse confirm(UUID projectId, UUID importId) {
         access.requireOwnedProject(projectId);
-        int updated = jdbc.update("""
+        int updated =
+                jdbc.update(
+                        """
                 UPDATE work_import SET status = 'CONFIRMED', confirmed_at = COALESCE(confirmed_at, now())
                 WHERE id = ? AND project_id = ?
-                """, importId, projectId);
+                """,
+                        importId,
+                        projectId);
         if (updated == 0) throw new IllegalArgumentException("导入记录不存在");
         return get(projectId, importId);
     }
@@ -190,11 +271,18 @@ public class WorkImportService {
     @Transactional(readOnly = true)
     public SourceFile source(UUID projectId, UUID importId) {
         access.requireOwnedProject(projectId);
-        return jdbc.queryForObject("""
+        return jdbc.queryForObject(
+                """
                 SELECT original_filename, COALESCE(media_type, 'application/octet-stream') AS media_type, original_content
                 FROM work_import WHERE id = ? AND project_id = ?
-                """, (rs, row) -> new SourceFile(rs.getString("original_filename"), rs.getString("media_type"),
-                rs.getBytes("original_content")), importId, projectId);
+                """,
+                (rs, row) ->
+                        new SourceFile(
+                                rs.getString("original_filename"),
+                                rs.getString("media_type"),
+                                rs.getBytes("original_content")),
+                importId,
+                projectId);
     }
 
     /**
@@ -206,23 +294,46 @@ public class WorkImportService {
     @Transactional(readOnly = true)
     public PlanningSource planningSource(UUID projectId, UUID importId) {
         access.requireOwnedProject(projectId);
-        String status = jdbc.queryForObject(
-                "SELECT status FROM work_import WHERE id = ? AND project_id = ?", String.class, importId, projectId);
+        String status =
+                jdbc.queryForObject(
+                        "SELECT status FROM work_import WHERE id = ? AND project_id = ?",
+                        String.class,
+                        importId,
+                        projectId);
         if (!"CONFIRMED".equals(status)) throw new IllegalArgumentException("请先确认导入结果，再反推规划");
-        List<ImportedChapterResponse> selected = jdbc.query("""
+        List<ImportedChapterResponse> selected =
+                jdbc.query(
+                        """
                 SELECT id, ordinal, title, content, character_count, content_type, selected
                   FROM imported_chapter WHERE import_id = ? AND selected = TRUE ORDER BY ordinal
-                """, (rs, row) -> new ImportedChapterResponse(rs.getObject("id", UUID.class),
-                rs.getInt("ordinal"), rs.getString("title"), rs.getString("content"),
-                rs.getInt("character_count"), rs.getString("content_type"), rs.getBoolean("selected")), importId);
+                """,
+                        (rs, row) ->
+                                new ImportedChapterResponse(
+                                        rs.getObject("id", UUID.class),
+                                        rs.getInt("ordinal"),
+                                        rs.getString("title"),
+                                        rs.getString("content"),
+                                        rs.getInt("character_count"),
+                                        rs.getString("content_type"),
+                                        rs.getBoolean("selected")),
+                        importId);
         if (selected.isEmpty()) throw new IllegalArgumentException("没有选中可用于反推规划的章节");
         StringBuilder text = new StringBuilder();
         for (ImportedChapterResponse chapter : selected) {
-            String block = "\n\n## 已写第 " + chapter.ordinal() + " 章：" + chapter.title() + "\n" + chapter.content();
+            String block =
+                    "\n\n## 已写第 "
+                            + chapter.ordinal()
+                            + " 章："
+                            + chapter.title()
+                            + "\n"
+                            + chapter.content();
             text.append(block);
         }
-        return new PlanningSource(text.toString().strip(), selected.size(),
-                selected.stream().mapToInt(ImportedChapterResponse::characterCount).sum(), false);
+        return new PlanningSource(
+                text.toString().strip(),
+                selected.size(),
+                selected.stream().mapToInt(ImportedChapterResponse::characterCount).sum(),
+                false);
     }
 
     private ParsedText parse(byte[] source, String filename) {
@@ -233,7 +344,9 @@ public class WorkImportService {
             metadata.set("resourceName", filename);
             parser.parse(input, handler, metadata);
             String mediaType = metadata.get(Metadata.CONTENT_TYPE);
-            return new ParsedText(normalize(handler.toString()), mediaType == null ? "application/octet-stream" : mediaType);
+            return new ParsedText(
+                    normalize(handler.toString()),
+                    mediaType == null ? "application/octet-stream" : mediaType);
         } catch (Exception exception) {
             throw new IllegalArgumentException("文件解析失败，请确认文件未损坏且不是扫描版 PDF", exception);
         }
@@ -247,10 +360,12 @@ public class WorkImportService {
      * @param warnings 本次校验或消歧过程中累积的警告。
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
-    private static List<ChapterPart> splitChapters(String text, String filename, List<String> warnings) {
+    private static List<ChapterPart> splitChapters(
+            String text, String filename, List<String> warnings) {
         Matcher matcher = CHAPTER_HEADING.matcher(text);
         List<Heading> headings = new ArrayList<>();
-        while (matcher.find()) headings.add(new Heading(matcher.start(), matcher.end(), matcher.group(1).trim()));
+        while (matcher.find())
+            headings.add(new Heading(matcher.start(), matcher.end(), matcher.group(1).trim()));
         if (headings.isEmpty()) {
             warnings.add("未识别到章节标题，已将全文作为一个章节。可在后续导入编辑器中拆分。");
             return List.of(new ChapterPart(1, baseName(filename), text.strip()));
@@ -262,7 +377,8 @@ public class WorkImportService {
             Heading heading = headings.get(index);
             int end = index + 1 < headings.size() ? headings.get(index + 1).start() : text.length();
             String content = text.substring(heading.end(), end).strip();
-            if (!content.isBlank()) chapters.add(new ChapterPart(chapters.size() + 1, heading.title(), content));
+            if (!content.isBlank())
+                chapters.add(new ChapterPart(chapters.size() + 1, heading.title(), content));
         }
         if (chapters.isEmpty()) {
             warnings.add("识别到章节标题，但章节正文为空。");
@@ -272,21 +388,33 @@ public class WorkImportService {
     }
 
     private static String detectContentType(String filename, String text) {
-        String sample = (filename + "\n" + text.substring(0, Math.min(2000, text.length()))).toLowerCase(Locale.ROOT);
-        if (sample.contains("人物设定") || sample.contains("世界观") || sample.contains("角色设定")) return "MATERIALS";
-        if (sample.contains("大纲") || sample.contains("章节规划") || sample.contains("剧情梗概")) return "OUTLINE";
+        String sample =
+                (filename + "\n" + text.substring(0, Math.min(2000, text.length())))
+                        .toLowerCase(Locale.ROOT);
+        if (sample.contains("人物设定") || sample.contains("世界观") || sample.contains("角色设定"))
+            return "MATERIALS";
+        if (sample.contains("大纲") || sample.contains("章节规划") || sample.contains("剧情梗概"))
+            return "OUTLINE";
         return "MANUSCRIPT";
     }
 
     private List<ImportedChapterResponse> chapters(UUID importId) {
-        return jdbc.query("""
+        return jdbc.query(
+                """
                 SELECT id, ordinal, title, content, character_count, content_type, selected
                 FROM imported_chapter WHERE import_id = ? ORDER BY ordinal
-                """, (rs, row) -> new ImportedChapterResponse(rs.getObject("id", UUID.class),
-                rs.getInt("ordinal"), rs.getString("title"), rs.getString("content"),
-                rs.getInt("character_count"), rs.getString("content_type"), rs.getBoolean("selected")), importId);
+                """,
+                (rs, row) ->
+                        new ImportedChapterResponse(
+                                rs.getObject("id", UUID.class),
+                                rs.getInt("ordinal"),
+                                rs.getString("title"),
+                                rs.getString("content"),
+                                rs.getInt("character_count"),
+                                rs.getString("content_type"),
+                                rs.getBoolean("selected")),
+                importId);
     }
-
 
     private List<String> warnings(String json) {
         try {
@@ -313,8 +441,11 @@ public class WorkImportService {
     }
 
     private static String normalize(String text) {
-        return text.replace("\r\n", "\n").replace('\r', '\n')
-                .replaceAll("[\\t ]+\\n", "\n").replaceAll("\\n{4,}", "\n\n\n").strip();
+        return text.replace("\r\n", "\n")
+                .replace('\r', '\n')
+                .replaceAll("[\\t ]+\\n", "\n")
+                .replaceAll("\\n{4,}", "\n\n\n")
+                .strip();
     }
 
     private static String sha256(byte[] content) {
@@ -325,18 +456,14 @@ public class WorkImportService {
         return value == null ? null : value.toInstant();
     }
 
-    public record SourceFile(String filename, String mediaType, byte[] content) {
-    }
+    public record SourceFile(String filename, String mediaType, byte[] content) {}
 
-    public record PlanningSource(String text, int chapterCount, int characterCount, boolean truncated) {
-    }
+    public record PlanningSource(
+            String text, int chapterCount, int characterCount, boolean truncated) {}
 
-    private record ParsedText(String text, String mediaType) {
-    }
+    private record ParsedText(String text, String mediaType) {}
 
-    private record Heading(int start, int end, String title) {
-    }
+    private record Heading(int start, int end, String title) {}
 
-    private record ChapterPart(int ordinal, String title, String content) {
-    }
+    private record ChapterPart(int ordinal, String title, String content) {}
 }

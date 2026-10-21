@@ -37,9 +37,15 @@ public class ReaderExperienceService {
     private final ReaderExperienceStore store;
     private final ObjectMapper mapper;
 
-    public ReaderExperienceService(ProjectAccessService access, CurrentActorProvider actor,
-            ReaderExperienceStore store, ObjectMapper mapper) {
-        this.access = access; this.actor = actor; this.store = store; this.mapper = mapper;
+    public ReaderExperienceService(
+            ProjectAccessService access,
+            CurrentActorProvider actor,
+            ReaderExperienceStore store,
+            ObjectMapper mapper) {
+        this.access = access;
+        this.actor = actor;
+        this.store = store;
+        this.mapper = mapper;
     }
 
     /**
@@ -87,7 +93,8 @@ public class ReaderExperienceService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ReaderExperienceSource source(UUID projectId, UUID manuscriptId) {
         access.requireOwnedProject(projectId);
-        return store.source(projectId, manuscriptId).filter(source -> source.status() == ManuscriptStatus.AUTHOR_ACCEPTED)
+        return store.source(projectId, manuscriptId)
+                .filter(source -> source.status() == ManuscriptStatus.AUTHOR_ACCEPTED)
                 .orElseThrow(() -> new WritingResourceNotFoundException("已确认正文", manuscriptId));
     }
 
@@ -152,7 +159,8 @@ public class ReaderExperienceService {
      */
     @Transactional
     public void delete(UUID projectId, UUID id, long expectedVersion, UUID requestId) {
-        if (requestId == null || expectedVersion < 0) throw new IllegalArgumentException("缺少请求标识或有效版本");
+        if (requestId == null || expectedVersion < 0)
+            throw new IllegalArgumentException("缺少请求标识或有效版本");
         ownAndLock(projectId);
         String hash = hash("delete", id, expectedVersion);
         if (replay(projectId, requestId, hash) != null) return;
@@ -182,16 +190,36 @@ public class ReaderExperienceService {
         before.state().requireTransition(input.state(), before.stale());
         store.lockManuscript(projectId, input.manuscriptId());
         store.lockNames(projectId);
-        ReaderExperienceSource source = store.source(projectId, input.manuscriptId())
-                .orElseThrow(() -> new WritingResourceNotFoundException("来源正文", input.manuscriptId()));
+        ReaderExperienceSource source =
+                store.source(projectId, input.manuscriptId())
+                        .orElseThrow(
+                                () ->
+                                        new WritingResourceNotFoundException(
+                                                "来源正文", input.manuscriptId()));
         source.requireEvidence(projectId, input.manuscriptRowVersion(), input.evidence());
-        if (!source.fingerprint().equals(input.sourceFingerprint())) throw new IllegalArgumentException("正文显示或人物姓名已变化，请重新读取来源");
+        if (!source.fingerprint().equals(input.sourceFingerprint()))
+            throw new IllegalArgumentException("正文显示或人物姓名已变化，请重新读取来源");
         store.advance(projectId, id, input.expectedVersion(), false);
-        store.append(new ReaderExperienceEvent(UUID.randomUUID(), projectId, id, plan.version() + 1, plan,
-                input.state(), source.id(), source.rowVersion(), source.chapterNumber(), source.fingerprint(), input.evidence(),
-                store.tokenizeEvidence(projectId, input.evidence()),
-                input.authorNote() == null ? "" : input.authorNote(), source.chapterCanonCommitId(), source.canon(),
-                actor.currentUserId(), "reader-experience-event/1", Instant.now()));
+        store.append(
+                new ReaderExperienceEvent(
+                        UUID.randomUUID(),
+                        projectId,
+                        id,
+                        plan.version() + 1,
+                        plan,
+                        input.state(),
+                        source.id(),
+                        source.rowVersion(),
+                        source.chapterNumber(),
+                        source.fingerprint(),
+                        input.evidence(),
+                        store.tokenizeEvidence(projectId, input.evidence()),
+                        input.authorNote() == null ? "" : input.authorNote(),
+                        source.chapterCanonCommitId(),
+                        source.canon(),
+                        actor.currentUserId(),
+                        "reader-experience-event/1",
+                        Instant.now()));
         store.remember(projectId, input.requestId(), id, hash, actor.currentUserId());
         return entry(requirePlan(projectId, id));
     }
@@ -200,19 +228,34 @@ public class ReaderExperienceService {
         List<ReaderExperienceEntry.Evidence> history = new ArrayList<>();
         for (ReaderExperienceEvent event : store.events(plan.projectId(), plan.id())) {
             var source = store.source(plan.projectId(), event.manuscriptId());
-            String reason = source.isEmpty() ? "来源正文不存在" : source.get().staleReason(event.manuscriptRowVersion(),
-                    event.chapterCanonCommitId(), event.canonAtSubmission(), event.evidence());
-            if (source.isPresent() && !source.get().fingerprint().equals(event.sourceFingerprint())) reason = "正文显示或人物姓名已变化";
-            history.add(new ReaderExperienceEntry.Evidence(event, reason != null, reason,
-                    reason == null && source.isPresent() && source.get().canon()));
+            String reason =
+                    source.isEmpty()
+                            ? "来源正文不存在"
+                            : source.get()
+                                    .staleReason(
+                                            event.manuscriptRowVersion(),
+                                            event.chapterCanonCommitId(),
+                                            event.canonAtSubmission(),
+                                            event.evidence());
+            if (source.isPresent() && !source.get().fingerprint().equals(event.sourceFingerprint()))
+                reason = "正文显示或人物姓名已变化";
+            history.add(
+                    new ReaderExperienceEntry.Evidence(
+                            event,
+                            reason != null,
+                            reason,
+                            reason == null && source.isPresent() && source.get().canon()));
         }
         var latest = history.isEmpty() ? null : history.getLast();
         if (latest != null && latest.event().entryVersion() < plan.version()) {
             latest = new ReaderExperienceEntry.Evidence(latest.event(), true, "计划已修改，需作者复核", false);
             history.set(history.size() - 1, latest);
         }
-        return new ReaderExperienceEntry(plan, latest == null ? ReaderExperienceState.PLANNED : latest.event().state(),
-                latest != null && latest.stale(), List.copyOf(history));
+        return new ReaderExperienceEntry(
+                plan,
+                latest == null ? ReaderExperienceState.PLANNED : latest.event().state(),
+                latest != null && latest.stale(),
+                List.copyOf(history));
     }
 
     private void ownAndLock(UUID projectId) {
@@ -221,20 +264,27 @@ public class ReaderExperienceService {
     }
 
     private ReaderExperiencePlan requirePlan(UUID projectId, UUID id) {
-        return store.plan(projectId, id).filter(plan -> !plan.deleted())
+        return store.plan(projectId, id)
+                .filter(plan -> !plan.deleted())
                 .orElseThrow(() -> new WritingResourceNotFoundException("读者体验计划", id));
     }
 
     private void requireVersion(ReaderExperiencePlan plan, long expected) {
-        if (plan.version() != expected) throw new ResourceVersionConflictException(expected, plan.version());
+        if (plan.version() != expected)
+            throw new ResourceVersionConflictException(expected, plan.version());
     }
 
     private ReaderExperienceEntry replay(UUID projectId, UUID requestId, String hash) {
         var mutation = store.mutation(projectId, requestId);
         if (mutation.isEmpty()) return null;
-        if (!Objects.equals(mutation.get().hash(), hash)) throw new IllegalArgumentException("幂等请求标识已用于不同操作或内容");
-        return entry(store.plan(projectId, mutation.get().planId())
-                .orElseThrow(() -> new WritingResourceNotFoundException("读者体验计划", mutation.get().planId())));
+        if (!Objects.equals(mutation.get().hash(), hash))
+            throw new IllegalArgumentException("幂等请求标识已用于不同操作或内容");
+        return entry(
+                store.plan(projectId, mutation.get().planId())
+                        .orElseThrow(
+                                () ->
+                                        new WritingResourceNotFoundException(
+                                                "读者体验计划", mutation.get().planId())));
     }
 
     private String hash(String operation, UUID resourceId, Object input) {

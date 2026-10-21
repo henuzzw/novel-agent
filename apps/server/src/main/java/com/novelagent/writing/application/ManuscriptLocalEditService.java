@@ -19,7 +19,8 @@ public class ManuscriptLocalEditService {
     private final ManuscriptLocalEditStore store;
     private final ManuscriptLocalEditModel model;
 
-    public ManuscriptLocalEditService(ManuscriptLocalEditStore store, ManuscriptLocalEditModel model) {
+    public ManuscriptLocalEditService(
+            ManuscriptLocalEditStore store, ManuscriptLocalEditModel model) {
         this.store = store;
         this.model = model;
     }
@@ -31,24 +32,57 @@ public class ManuscriptLocalEditService {
      * @param chapter 当前处理章号，从 1 开始。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public ManuscriptLocalEditResponse edit(UUID projectId, int chapter, ManuscriptLocalEditRequest request) {
-        if (chapter < 1 || !request.authorized() || request.provider() == null || request.sourceRowVersion() == null
-                || request.sourceRowVersion() < 0 || request.sourceManuscriptId() == null
-                || request.instruction() == null || request.instruction().isBlank() || request.instruction().length() > 2000) {
+    public ManuscriptLocalEditResponse edit(
+            UUID projectId, int chapter, ManuscriptLocalEditRequest request) {
+        if (chapter < 1
+                || !request.authorized()
+                || request.provider() == null
+                || request.sourceRowVersion() == null
+                || request.sourceRowVersion() < 0
+                || request.sourceManuscriptId() == null
+                || request.instruction() == null
+                || request.instruction().isBlank()
+                || request.instruction().length() > 2000) {
             throw new IllegalArgumentException("请明确授权局部编辑并填写修改要求");
         }
-        var source = store.snapshot(projectId, chapter, request.sourceManuscriptId(), request.sourceRowVersion());
-        ManuscriptLocalEditSelection selection = ManuscriptLocalEditSelection.resolve(source.rendered().body(),
-                request.selection(), request.offset(), request.occurrence());
+        var source =
+                store.snapshot(
+                        projectId,
+                        chapter,
+                        request.sourceManuscriptId(),
+                        request.sourceRowVersion());
+        ManuscriptLocalEditSelection selection =
+                ManuscriptLocalEditSelection.resolve(
+                        source.rendered().body(),
+                        request.selection(),
+                        request.offset(),
+                        request.occurrence());
         if (request.provider() == ModelProvider.LOCAL_TEMPLATE) {
-            return new ManuscriptLocalEditResponse("NOT_ASSESSED", "本地模板不支持局部改写，未创建正文版本。",
-                    source.sourceId(), source.sourceRowVersion(), selection.text(), selection.occurrence(),
-                    selection.offset(), null, null);
+            return new ManuscriptLocalEditResponse(
+                    "NOT_ASSESSED",
+                    "本地模板不支持局部改写，未创建正文版本。",
+                    source.sourceId(),
+                    source.sourceRowVersion(),
+                    selection.text(),
+                    selection.occurrence(),
+                    selection.offset(),
+                    null,
+                    null);
         }
-        String replacement = model.replace(projectId, source, selection, request.provider(), request.instruction());
+        String replacement =
+                model.replace(
+                        projectId, source, selection, request.provider(), request.instruction());
         selection.replace(source.rendered().body(), replacement);
         ManuscriptResponse draft = store.save(source, selection, replacement, request);
-        return new ManuscriptLocalEditResponse("DRAFT_CREATED", "局部编辑草稿已保存", source.sourceId(),
-                source.sourceRowVersion(), selection.text(), selection.occurrence(), selection.offset(), replacement, draft);
+        return new ManuscriptLocalEditResponse(
+                "DRAFT_CREATED",
+                "局部编辑草稿已保存",
+                source.sourceId(),
+                source.sourceRowVersion(),
+                selection.text(),
+                selection.occurrence(),
+                selection.offset(),
+                replacement,
+                draft);
     }
 }

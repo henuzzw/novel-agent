@@ -19,7 +19,8 @@ public class GenerationControlController {
     private final ProjectAccessService access;
     private final GenerationControlRegistry controls;
 
-    public GenerationControlController(ProjectAccessService access, GenerationControlRegistry controls) {
+    public GenerationControlController(
+            ProjectAccessService access, GenerationControlRegistry controls) {
         this.access = access;
         this.controls = controls;
     }
@@ -50,5 +51,5 @@ public class GenerationControlController {
         return new StopResponse("STOP_REQUESTED");
     }
 
-    public record StopResponse(String status) { }
+    public record StopResponse(String status) {}
 }

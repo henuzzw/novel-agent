@@ -6,48 +6,113 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Explicit, user-scoped transport choice. Never silently falls back to another account/provider. */
+/**
+ * 管理用户级 ChatGPT 接入方式。显式选择 App Server 或独立 OAuth 通道，切换前核对运行任务与租约，不自动降级到其他账号。
+ */
 @Service
 public class ChatGptTransportService {
-    public enum Transport { APP_SERVER, SIWC_HTTP, SIWC_CODEX }
-    public record Choice(Transport transport, long version) { }
+    public enum Transport {
+        APP_SERVER,
+        SIWC_HTTP,
+        SIWC_CODEX
+    }
+
+    public record Choice(Transport transport, long version) {}
+
     private final JdbcTemplate jdbc;
     private final CurrentActorProvider actors;
     private final ChatGptOAuthService auth;
-    private final java.sql.Timestamp instanceStarted = new java.sql.Timestamp(java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime());
-    public ChatGptTransportService(JdbcTemplate jdbc, CurrentActorProvider actors, ChatGptOAuthService auth) {
-        this.jdbc = jdbc; this.actors = actors; this.auth = auth;
+    private final java.sql.Timestamp instanceStarted =
+            new java.sql.Timestamp(
+                    java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime());
+
+    public ChatGptTransportService(
+            JdbcTemplate jdbc, CurrentActorProvider actors, ChatGptOAuthService auth) {
+        this.jdbc = jdbc;
+        this.actors = actors;
+        this.auth = auth;
     }
+
+    /**
+     * 读取当前用户的接入方式及行版本；未保存时返回 APP_SERVER 和版本 0。
+     */
     public Choice get() {
-        return jdbc.query("SELECT transport, row_version FROM user_chatgpt_transport WHERE user_id = ?",
-                (rs, row) -> new Choice(Transport.valueOf(rs.getString(1)), rs.getLong(2)), actors.currentUserId())
-                .stream().findFirst().orElse(new Choice(Transport.APP_SERVER, 0));
+        return jdbc
+                .query(
+                        "SELECT transport, row_version FROM user_chatgpt_transport WHERE user_id = ?",
+                        (rs, row) -> new Choice(Transport.valueOf(rs.getString(1)), rs.getLong(2)),
+                        actors.currentUserId())
+                .stream()
+                .findFirst()
+                .orElse(new Choice(Transport.APP_SERVER, 0));
     }
-    public boolean direct() { return get().transport() == Transport.SIWC_HTTP; }
-    public boolean oauth() { return get().transport() != Transport.APP_SERVER; }
+
+    /**
+     * 判断当前选择是否为 SIWC_HTTP 直连通道。
+     */
+    public boolean direct() {
+        return get().transport() == Transport.SIWC_HTTP;
+    }
+
+    /**
+     * 判断当前选择是否使用独立 OAuth 授权，包括 SIWC_HTTP 与 SIWC_CODEX。
+     */
+    public boolean oauth() {
+        return get().transport() != Transport.APP_SERVER;
+    }
+
+    /**
+     * 检查当前用户本实例运行中的模型任务及有效 HTTP、Codex 会话租约，发现占用时拒绝连接变更。
+     */
     public void requireIdle() {
-        Boolean running = jdbc.queryForObject("""
+        Boolean running =
+                jdbc.queryForObject(
+                        """
                 SELECT EXISTS (SELECT 1 FROM agent_run a JOIN novel_project p ON p.id = a.project_id
                     WHERE p.owner_id = ? AND a.status = 'RUNNING' AND a.started_at >= ?)
                     OR EXISTS (SELECT 1 FROM model_http_conversation c JOIN novel_project p ON p.id=c.project_id
                         WHERE p.owner_id=? AND c.lease_id IS NOT NULL AND c.lease_until > now())
                     OR EXISTS (SELECT 1 FROM model_codex_conversation c JOIN novel_project p ON p.id=c.project_id
                         WHERE p.owner_id=? AND c.lease_id IS NOT NULL AND c.lease_until > now())
-                """, Boolean.class, actors.currentUserId(), instanceStarted, actors.currentUserId(), actors.currentUserId());
-        if (Boolean.TRUE.equals(running)) throw new IllegalStateException("有进行中的模型任务，请先结束任务再切换入口或断开账号");
+                """,
+                        Boolean.class,
+                        actors.currentUserId(),
+                        instanceStarted,
+                        actors.currentUserId(),
+                        actors.currentUserId());
+        if (Boolean.TRUE.equals(running))
+            throw new IllegalStateException("有进行中的模型任务，请先结束任务再切换入口或断开账号");
     }
+
+    /**
+     * 确认任务空闲及目标通道授权有效后，按预期行版本保存接入方式；版本冲突时拒绝覆盖。
+     *
+     * @param choice 目标接入方式及预期配置行版本
+     */
     @Transactional
     public Choice update(Choice choice) {
-        if (choice == null || choice.transport() == null || choice.version() < 0) throw new IllegalArgumentException("请选择 ChatGPT 接入方式");
+        if (choice == null || choice.transport() == null || choice.version() < 0)
+            throw new IllegalArgumentException("请选择 ChatGPT 接入方式");
         requireIdle();
         if (choice.transport() != Transport.APP_SERVER) auth.authorization();
-        int changed = choice.version() == 0 ? jdbc.update("""
+        int changed =
+                choice.version() == 0
+                        ? jdbc.update(
+                                """
                 INSERT INTO user_chatgpt_transport(user_id, transport) VALUES (?, ?) ON CONFLICT DO NOTHING
-                """, actors.currentUserId(), choice.transport().name()) : jdbc.update("""
+                """,
+                                actors.currentUserId(),
+                                choice.transport().name())
+                        : jdbc.update(
+                                """
                 UPDATE user_chatgpt_transport SET transport = ?, row_version = row_version + 1, updated_at = now()
                     WHERE user_id = ? AND row_version = ?
-                """, choice.transport().name(), actors.currentUserId(), choice.version());
-        if (changed != 1) throw new ResourceVersionConflictException(choice.version(), get().version());
+                """,
+                                choice.transport().name(),
+                                actors.currentUserId(),
+                                choice.version());
+        if (changed != 1)
+            throw new ResourceVersionConflictException(choice.version(), get().version());
         return new Choice(choice.transport(), choice.version() + 1);
     }
 }

@@ -20,7 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class AgentRunController {
     private final AgentRunQueryService service;
 
-    public AgentRunController(AgentRunQueryService service) { this.service = service; }
+    public AgentRunController(AgentRunQueryService service) {
+        this.service = service;
+    }
 
     /**
      * 返回本项目最近 100 次模型任务摘要；完整响应与提示词通过独立接口读取。
@@ -43,10 +45,12 @@ public class AgentRunController {
         return service.summary(projectId);
     }
 
-    /** Current project's lifetime and rolling five-hour usage, without the task-list limit. */
+    /** 读取项目累计与滚动最近五小时的用量统计，不受任务列表条数限制。 */
     @GetMapping("/usage")
     public ResponseEntity<AgentTokenUsage> usage(@PathVariable UUID projectId) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.usage(projectId));
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(service.usage(projectId));
     }
 
     /**
@@ -56,7 +60,8 @@ public class AgentRunController {
      * @param runId 模型调用记录 ID，不是供应商线程 ID。
      */
     @GetMapping("/{runId}/prompt")
-    public ResponseEntity<AgentRunPromptResponse> prompt(@PathVariable UUID projectId, @PathVariable UUID runId) {
+    public ResponseEntity<AgentRunPromptResponse> prompt(
+            @PathVariable UUID projectId, @PathVariable UUID runId) {
         return service.prompt(projectId, runId)
                 .map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value))
                 .orElseGet(() -> ResponseEntity.notFound().build());

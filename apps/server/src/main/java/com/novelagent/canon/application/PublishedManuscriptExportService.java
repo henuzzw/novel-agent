@@ -23,12 +23,24 @@ public class PublishedManuscriptExportService {
     private final CharacterNameService names;
     private final ObjectMapper mapper;
 
-    public PublishedManuscriptExportService(ProjectAccessService access, PublishedManuscriptExportRepository chapters,
-            OutlineVersionRepository outlines, CharacterNameService names, ObjectMapper mapper) {
-        this.access = access; this.chapters = chapters; this.outlines = outlines;
-        this.names = names; this.mapper = mapper;
+    public PublishedManuscriptExportService(
+            ProjectAccessService access,
+            PublishedManuscriptExportRepository chapters,
+            OutlineVersionRepository outlines,
+            CharacterNameService names,
+            ObjectMapper mapper) {
+        this.access = access;
+        this.chapters = chapters;
+        this.outlines = outlines;
+        this.names = names;
+        this.mapper = mapper;
     }
 
+    /**
+     * 在只读一致性快照中导出有效发布且记忆成功的正文，统一渲染人物姓名；无合格章节时拒绝生成空文件。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public String export(UUID projectId) {
         var project = access.requireOwnedProject(projectId);
@@ -40,30 +52,56 @@ public class PublishedManuscriptExportService {
         for (var chapter : completed) {
             String volume = "未分卷";
             if (chapter.outlineId() != null) {
-                var outline = sourceOutlines.computeIfAbsent(chapter.outlineId(), id -> outlines.findByIdAndProjectId(id, projectId)
-                        .orElseThrow(() -> new IllegalStateException("已发布正文的来源大纲不存在，无法导出卷名")).getContent());
-                volume = outline.arcs().stream().filter(arc -> arc.chapters().stream()
-                        .anyMatch(plan -> plan.number() == chapter.number())).findFirst()
-                        .map(arc -> heading(arc.title())).orElse("未分卷");
+                var outline =
+                        sourceOutlines.computeIfAbsent(
+                                chapter.outlineId(),
+                                id ->
+                                        outlines.findByIdAndProjectId(id, projectId)
+                                                .orElseThrow(
+                                                        () ->
+                                                                new IllegalStateException(
+                                                                        "已发布正文的来源大纲不存在，无法导出卷名"))
+                                                .getContent());
+                volume =
+                        outline.arcs().stream()
+                                .filter(
+                                        arc ->
+                                                arc.chapters().stream()
+                                                        .anyMatch(
+                                                                plan ->
+                                                                        plan.number()
+                                                                                == chapter
+                                                                                        .number()))
+                                .findFirst()
+                                .map(arc -> heading(arc.title()))
+                                .orElse("未分卷");
             }
             if (!Objects.equals(previousVolume, volume)) {
                 result.append("## ").append(volume).append("\n\n");
                 previousVolume = volume;
             }
             var content = readContent(chapter.content());
-            result.append("### 第 ").append(chapter.number()).append(" 章 · ").append(heading(content.title()))
-                    .append("\n\n").append(content.body()).append("\n\n");
+            result.append("### 第 ")
+                    .append(chapter.number())
+                    .append(" 章 · ")
+                    .append(heading(content.title()))
+                    .append("\n\n")
+                    .append(content.body())
+                    .append("\n\n");
         }
         // One name-map read keeps all chapters consistent and avoids per-chapter lookup queries.
         return names.render(projectId, result.toString());
     }
 
     private ManuscriptContent readContent(String value) {
-        try { return mapper.readValue(value, ManuscriptContent.class); }
-        catch (JsonProcessingException failure) {
+        try {
+            return mapper.readValue(value, ManuscriptContent.class);
+        } catch (JsonProcessingException failure) {
             throw new IllegalStateException("已发布正文存储格式异常，无法导出");
         }
     }
 
-    private static String heading(String value) { return value.replace('\r', ' ').replace('\n', ' ').trim(); }
+    private static String heading(String value) {
+        return value.replace('\r', ' ').replace('\n', ' ').trim();
+    }
 }

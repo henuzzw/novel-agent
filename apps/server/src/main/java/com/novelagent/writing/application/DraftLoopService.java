@@ -13,7 +13,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
-/** 串行 A→B→C→B 闭环，无轮间人工操作；失败保留已完成轮次，不自动重试付费调用。 */
+/**
+ * 单章自动编辑编排。串行执行 A 写作、B 检查、C 裁决及复检，按来源和轮次限制停止；失败保留进度，不自动重复付费调用。
+ */
 @Service
 public class DraftLoopService {
     private static final Logger log = LoggerFactory.getLogger(DraftLoopService.class);
@@ -23,65 +25,145 @@ public class DraftLoopService {
     private final GenerationControlRegistry controls;
     private final TaskExecutor executor;
 
-    public DraftLoopService(DraftLoopStore store, DraftLoopContext contexts, DraftLoopModel model,
-            GenerationControlRegistry controls, @Qualifier("automationExecutor") TaskExecutor executor) {
-        this.store = store; this.contexts = contexts; this.model = model; this.controls = controls; this.executor = executor;
+    public DraftLoopService(
+            DraftLoopStore store,
+            DraftLoopContext contexts,
+            DraftLoopModel model,
+            GenerationControlRegistry controls,
+            @Qualifier("automationExecutor") TaskExecutor executor) {
+        this.store = store;
+        this.contexts = contexts;
+        this.model = model;
+        this.controls = controls;
+        this.executor = executor;
     }
 
-    public DraftLoopRun create(UUID projectId, UUID key, int chapter, ModelProvider provider, boolean writeFirst, int maxRounds) {
-        if (provider == null || provider == ModelProvider.LOCAL_TEMPLATE || maxRounds < 1 || maxRounds > 10) {
+    /**
+     * 校验真实供应商及轮次上限，按幂等键复用任务；冻结来源并成功认领后才派发后台编辑。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     * @param key 单章编辑任务的创建幂等键
+     * @param chapter 目标章节号，从 1 开始
+     * @param provider 本次请求使用的模型供应商
+     * @param writeFirst 是否先执行 A 阶段生成正文，否则从当前草稿检查开始
+     * @param maxRounds 检查与裁决的轮次上限，取值 1 至 10
+     */
+    public DraftLoopRun create(
+            UUID projectId,
+            UUID key,
+            int chapter,
+            ModelProvider provider,
+            boolean writeFirst,
+            int maxRounds) {
+        if (provider == null
+                || provider == ModelProvider.LOCAL_TEMPLATE
+                || maxRounds < 1
+                || maxRounds > 10) {
             throw new IllegalArgumentException("自动编辑请选择真实模型，轮次上限1至10");
         }
-        var run = store.existing(projectId, key, chapter, provider, writeFirst, maxRounds)
-                .orElseGet(() -> {
-                    if (writeFirst) contexts.requireReadyForWriting(projectId, chapter);
-                    return store.create(projectId, key, chapter, provider, writeFirst, maxRounds, contexts.freeze(projectId, chapter, provider));
-                });
+        var run =
+                store.existing(projectId, key, chapter, provider, writeFirst, maxRounds)
+                        .orElseGet(
+                                () -> {
+                                    if (writeFirst)
+                                        contexts.requireReadyForWriting(projectId, chapter);
+                                    return store.create(
+                                            projectId,
+                                            key,
+                                            chapter,
+                                            provider,
+                                            writeFirst,
+                                            maxRounds,
+                                            contexts.freeze(projectId, chapter, provider));
+                                });
         if (store.claim(projectId, run.getId())) {
-            try { executor.execute(() -> execute(projectId, run.getId())); }
-            catch (RuntimeException failure) { store.fail(projectId, run.getId(), "后台执行器不可用，请稍后重试"); }
+            try {
+                executor.execute(() -> execute(projectId, run.getId()));
+            } catch (RuntimeException failure) {
+                store.fail(projectId, run.getId(), "后台执行器不可用，请稍后重试");
+            }
         }
         return store.get(projectId, run.getId());
     }
 
+    /**
+     * 持久化取消状态并尝试停止当前模型请求，阻止后续阶段及迟到结果保存。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     * @param id 目标记录或任务的稳定 ID
+     */
     public DraftLoopRun cancel(UUID projectId, UUID id) {
         var run = store.cancel(projectId, id);
-        try { controls.stopRequest(projectId, id); }
-        catch (GenerationStopConflictException ignored) { /* 阶段间没有模型调用；数据库状态仍阻止下一阶段和迟到保存。 */ }
+        try {
+            controls.stopRequest(projectId, id);
+        } catch (GenerationStopConflictException ignored) {
+            /* 阶段间没有模型调用；数据库状态仍阻止下一阶段和迟到保存。 */
+        }
         return run;
     }
 
     void execute(UUID projectId, UUID id) {
-        execute(projectId, id, new Progress() { });
+        execute(projectId, id, new Progress() {});
     }
 
     public interface Progress {
-        default boolean before(DraftLoopRun run) { return true; }
-        default void after(DraftLoopRun run) { }
+        default boolean before(DraftLoopRun run) {
+            return true;
+        }
+
+        default void after(DraftLoopRun run) {}
     }
 
-    /** Execute the owned child on the caller's worker, avoiding nested executor queues and a second implementation of A/B/C. */
-    public DraftLoopRun runForAutomation(com.novelagent.agent.domain.AutomationRun parent, boolean writeFirst, Progress progress) {
+    /**
+     * 在范围任务当前工作线程中执行绑定的单章循环，复用可重试子任务，并通过回调计入父任务额度与进度。
+     *
+     * @param parent 拥有当前章节及额度的范围任务
+     * @param writeFirst 是否先执行 A 阶段生成正文，否则从当前草稿检查开始
+     * @param progress 每阶段执行前后的父任务状态与额度回调
+     */
+    public DraftLoopRun runForAutomation(
+            com.novelagent.agent.domain.AutomationRun parent,
+            boolean writeFirst,
+            Progress progress) {
         UUID projectId = parent.getProjectId();
         int chapter = parent.getCurrentChapter();
         var retry = store.retryForAutomation(parent);
         if (retry.isPresent()) {
             var run = retry.get();
-            if (run.getStatus() == DraftLoopRun.Status.RUNNING) execute(projectId, run.getId(), progress);
+            if (run.getStatus() == DraftLoopRun.Status.RUNNING)
+                execute(projectId, run.getId(), progress);
             return store.get(projectId, run.getId());
         }
         if (writeFirst) contexts.requireReadyForWriting(projectId, chapter);
         var frozen = contexts.freeze(projectId, chapter, parent.getProvider());
         if (parent.getInstruction() != null && !parent.getInstruction().isBlank()) {
             var basis = frozen.basis();
-            frozen = new DraftLoopContext.Source(new DraftLoopRun.Basis(basis.fingerprint(),
-                    basis.prompt() + "\n【作者授权的本次章节推进要求；不覆盖已确认事实及硬约束】\n" + parent.getInstruction(),
-                    basis.writingBasis()), frozen.context(), frozen.latest());
+            frozen =
+                    new DraftLoopContext.Source(
+                            new DraftLoopRun.Basis(
+                                    basis.fingerprint(),
+                                    basis.prompt()
+                                            + "\n【作者授权的本次章节推进要求；不覆盖已确认事实及硬约束】\n"
+                                            + parent.getInstruction(),
+                                    basis.writingBasis()),
+                            frozen.context(),
+                            frozen.latest());
         }
-        UUID key = UUID.nameUUIDFromBytes((parent.getId() + ":" + parent.getAttempt() + ":" + chapter)
-                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        var run = store.createForAutomation(projectId, key, chapter, parent.getProvider(), writeFirst,
-                parent.getMaxLoopRounds(), frozen, parent.getId(), parent.getAttempt());
+        UUID key =
+                UUID.nameUUIDFromBytes(
+                        (parent.getId() + ":" + parent.getAttempt() + ":" + chapter)
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var run =
+                store.createForAutomation(
+                        projectId,
+                        key,
+                        chapter,
+                        parent.getProvider(),
+                        writeFirst,
+                        parent.getMaxLoopRounds(),
+                        frozen,
+                        parent.getId(),
+                        parent.getAttempt());
         if (store.claim(projectId, run.getId())) execute(projectId, run.getId(), progress);
         return store.get(projectId, run.getId());
     }
@@ -90,8 +172,16 @@ public class DraftLoopService {
         try (var ignored = controls.background(id, () -> !store.get(projectId, id).active())) {
             while (store.ready(projectId, id)) {
                 var run = store.get(projectId, id);
-                if (!progress.before(run)) { store.cancel(projectId, id); break; }
-                log.info("Draft loop stage projectId={} runId={} phase={} round={}", projectId, id, run.getPhase(), run.getRounds().size());
+                if (!progress.before(run)) {
+                    store.cancel(projectId, id);
+                    break;
+                }
+                log.info(
+                        "Draft loop stage projectId={} runId={} phase={} round={}",
+                        projectId,
+                        id,
+                        run.getPhase(),
+                        run.getRounds().size());
                 switch (run.getPhase()) {
                     case A -> {
                         contexts.requireReadyForWriting(projectId, run.getChapterNumber());
@@ -99,16 +189,26 @@ public class DraftLoopService {
                     }
                     case B -> {
                         var draft = store.body(run);
-                        model.check(run, draft, report -> store.checked(projectId, id, draft, report));
+                        model.check(
+                                run, draft, report -> store.checked(projectId, id, draft, report));
                     }
-                    case C -> model.judge(run, store.body(run), run.getRounds().getLast().check(), output -> store.judged(projectId, id, output));
+                    case C ->
+                            model.judge(
+                                    run,
+                                    store.body(run),
+                                    run.getRounds().getLast().check(),
+                                    output -> store.judged(projectId, id, output));
                 }
                 progress.after(store.get(projectId, id));
             }
         } catch (GenerationStoppedException failure) {
             store.cancel(projectId, id);
         } catch (Exception failure) {
-            log.warn("Draft loop failed projectId={} runId={} exceptionType={}", projectId, id, failure.getClass().getSimpleName());
+            log.warn(
+                    "Draft loop failed projectId={} runId={} exceptionType={}",
+                    projectId,
+                    id,
+                    failure.getClass().getSimpleName());
             store.fail(projectId, id, failure.getMessage());
         }
     }

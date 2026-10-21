@@ -18,14 +18,19 @@ public class GlobalModelSettingsService {
     private final CurrentActorProvider actors;
     private final GlobalModelSettings defaults;
 
-    public GlobalModelSettingsService(GlobalModelSettingsRepository repository, CurrentActorProvider actors,
+    public GlobalModelSettingsService(
+            GlobalModelSettingsRepository repository,
+            CurrentActorProvider actors,
             @Value("${app.ai.codex.model}") String codexModel,
             @Value("${app.ai.codex.effort}") String codexEffort,
             @Value("${app.ai.deepseek.model}") String deepSeekModel) {
         this.repository = repository;
         this.actors = actors;
-        String normalized = "deepseek-v4-flash".equals(deepSeekModel) ? "deepseek-flash" : deepSeekModel;
-        this.defaults = new GlobalModelSettings(ModelProvider.LOCAL_CODEX, codexModel, codexEffort, normalized, 0);
+        String normalized =
+                "deepseek-v4-flash".equals(deepSeekModel) ? "deepseek-flash" : deepSeekModel;
+        this.defaults =
+                new GlobalModelSettings(
+                        ModelProvider.LOCAL_CODEX, codexModel, codexEffort, normalized, 0);
     }
 
     /**
@@ -44,10 +49,18 @@ public class GlobalModelSettingsService {
     @Transactional
     public GlobalModelSettings update(GlobalModelSettings value) {
         if (!repository.save(actors.currentUserId(), value)) {
-            long actual = repository.find(actors.currentUserId()).map(GlobalModelSettings::version).orElse(0L);
+            long actual =
+                    repository
+                            .find(actors.currentUserId())
+                            .map(GlobalModelSettings::version)
+                            .orElse(0L);
             throw new ResourceVersionConflictException(value.version(), actual);
         }
-        return new GlobalModelSettings(value.provider(), value.codexModel(), value.codexEffort(),
-                value.deepSeekModel(), value.version() + 1);
+        return new GlobalModelSettings(
+                value.provider(),
+                value.codexModel(),
+                value.codexEffort(),
+                value.deepSeekModel(),
+                value.version() + 1);
     }
 }

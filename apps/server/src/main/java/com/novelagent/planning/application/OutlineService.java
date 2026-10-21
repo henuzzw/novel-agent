@@ -45,8 +45,14 @@ public class OutlineService {
     private final PlanningMaterialSyncService materials;
     private com.novelagent.ingest.application.ImportedOutlineGenerator importedGenerator;
 
+    /**
+     * 由 Spring 注入导入大纲生成器，供大纲用例复用已确认导入来源；此注入入口不执行生成。
+     *
+     * @param generator 导入大纲生成器，由 Spring 装配
+     */
     @org.springframework.beans.factory.annotation.Autowired
-    public void setImportedGenerator(com.novelagent.ingest.application.ImportedOutlineGenerator generator) {
+    public void setImportedGenerator(
+            com.novelagent.ingest.application.ImportedOutlineGenerator generator) {
         this.importedGenerator = generator;
     }
 
@@ -81,39 +87,73 @@ public class OutlineService {
         NovelProject project = access.requireOwnedProject(projectId);
         UUID bibleId = project.getCurrentBibleVersionId();
         if (bibleId == null) throw new IllegalArgumentException("请先完成并确认雪花规划，再生成大纲");
-        StoryBibleVersion bible = bibles.findByIdAndProjectId(bibleId, projectId)
-                .filter(value -> value.getStatus() == StoryBibleStatus.PUBLISHED)
-                .filter(value -> value.getSourceSnowflakeId() != null)
-                .orElseThrow(() -> new IllegalArgumentException("项目当前已确认雪花规划不可用，请重新确认规划"));
-        ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
-        Optional<OutlineVersion> latest = outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId);
+        StoryBibleVersion bible =
+                bibles.findByIdAndProjectId(bibleId, projectId)
+                        .filter(value -> value.getStatus() == StoryBibleStatus.PUBLISHED)
+                        .filter(value -> value.getSourceSnowflakeId() != null)
+                        .orElseThrow(() -> new IllegalArgumentException("项目当前已确认雪花规划不可用，请重新确认规划"));
+        ModelProvider provider =
+                request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
+        Optional<OutlineVersion> latest =
+                outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId);
         if (request.mode() == GenerationMode.REGENERATE && request.baseOutlineVersionId() != null) {
             throw new IllegalArgumentException("重新生成时不能指定基准大纲版本");
         }
-        OutlineVersion base = request.mode() == GenerationMode.REGENERATE ? null
-                : request.baseOutlineVersionId() == null ? latest.orElse(null)
-                : requireVersion(projectId, request.baseOutlineVersionId());
+        OutlineVersion base =
+                request.mode() == GenerationMode.REGENERATE
+                        ? null
+                        : request.baseOutlineVersionId() == null
+                                ? latest.orElse(null)
+                                : requireVersion(projectId, request.baseOutlineVersionId());
         OutlineWordBudget budget = resolveBudget(projectId, base, latest);
-        StoryBibleContent promptBible = characterNames.render(projectId, bible.getContent(), StoryBibleContent.class);
-        OutlineContent previousContent = base == null ? null
-                : characterNames.render(projectId, base.getContent(), OutlineContent.class);
-        GeneratedOutline generated = importedGenerator != null && bible.getSourceImportId() != null
-                ? importedGenerator.generate(projectId, bible, budget, provider, previousContent,
-                        normalize(request.instruction()), CreativeStrategyPolicy.from(project))
-                : workflow.generate(projectId, promptBible, budget, provider,
-                        previousContent, normalize(request.instruction()), CreativeStrategyPolicy.from(project));
-        int generation = latest
-                .map(value -> value.getGenerationNumber() + 1).orElse(1);
-        OutlineVersion version = OutlineVersion.create(UUID.randomUUID(), projectId, generation,
-                generated.generatorType(), normalize(request.instruction()), bibleId,
-                base == null ? null : base.getId(), budget,
-                generated.content().reviewScenesAgainst(previousContent, base != null && !bibleId.equals(base.getSourceBibleVersionId())),
-                generated.changeSummary());
+        StoryBibleContent promptBible =
+                characterNames.render(projectId, bible.getContent(), StoryBibleContent.class);
+        OutlineContent previousContent =
+                base == null
+                        ? null
+                        : characterNames.render(projectId, base.getContent(), OutlineContent.class);
+        GeneratedOutline generated =
+                importedGenerator != null && bible.getSourceImportId() != null
+                        ? importedGenerator.generate(
+                                projectId,
+                                bible,
+                                budget,
+                                provider,
+                                previousContent,
+                                normalize(request.instruction()),
+                                CreativeStrategyPolicy.from(project))
+                        : workflow.generate(
+                                projectId,
+                                promptBible,
+                                budget,
+                                provider,
+                                previousContent,
+                                normalize(request.instruction()),
+                                CreativeStrategyPolicy.from(project));
+        int generation = latest.map(value -> value.getGenerationNumber() + 1).orElse(1);
+        OutlineVersion version =
+                OutlineVersion.create(
+                        UUID.randomUUID(),
+                        projectId,
+                        generation,
+                        generated.generatorType(),
+                        normalize(request.instruction()),
+                        bibleId,
+                        base == null ? null : base.getId(),
+                        budget,
+                        generated
+                                .content()
+                                .reviewScenesAgainst(
+                                        previousContent,
+                                        base != null
+                                                && !bibleId.equals(base.getSourceBibleVersionId())),
+                        generated.changeSummary());
         return response(outlines.saveAndFlush(version));
     }
 
-    /** Imported planning can exist without a separate intent; reuse its saved capacity, not invented author preferences. */
-    private OutlineWordBudget resolveBudget(UUID projectId, OutlineVersion base, Optional<OutlineVersion> latest) {
+    /** 导入规划可能没有独立创作意图，仅复用已保存的篇幅信息，不推测作者偏好。 */
+    private OutlineWordBudget resolveBudget(
+            UUID projectId, OutlineVersion base, Optional<OutlineVersion> latest) {
         Optional<CreativeIntent> intent = intents.findById(projectId);
         if (intent.isPresent()) return budgetPolicy.plan(intent.get().getTargetWords());
         OutlineVersion source = base != null ? base : latest.orElse(null);
@@ -135,8 +175,12 @@ public class OutlineService {
     public List<OutlineVersionSummaryResponse> versions(UUID projectId) {
         access.requireOwnedProject(projectId);
         return outlines.findAllByProjectIdOrderByGenerationNumberDesc(projectId).stream()
-                .map(value -> OutlineVersionSummaryResponse.from(value,
-                        characterNames.render(projectId, value.getContent().title())))
+                .map(
+                        value ->
+                                OutlineVersionSummaryResponse.from(
+                                        value,
+                                        characterNames.render(
+                                                projectId, value.getContent().title())))
                 .toList();
     }
 
@@ -161,7 +205,8 @@ public class OutlineService {
     @Transactional(readOnly = true)
     public Optional<OutlineResponse> latest(UUID projectId) {
         access.requireOwnedProject(projectId);
-        return outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId).map(this::response);
+        return outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
+                .map(this::response);
     }
 
     /**
@@ -187,7 +232,8 @@ public class OutlineService {
      * @param content 待保存或生成的内容，仍须满足来源与状态约束。
      */
     @Transactional
-    public OutlineResponse update(UUID projectId, UUID outlineId, long expectedVersion, OutlineContent content) {
+    public OutlineResponse update(
+            UUID projectId, UUID outlineId, long expectedVersion, OutlineContent content) {
         access.requireOwnedProject(projectId);
         OutlineVersion version = requireVersion(projectId, outlineId);
         checkVersion(version, expectedVersion);
@@ -217,14 +263,23 @@ public class OutlineService {
     }
 
     private OutlineVersion requireVersion(UUID projectId, UUID id) {
-        return outlines.findByIdAndProjectId(id, projectId).orElseThrow(() -> new OutlineVersionNotFoundException(id));
+        return outlines.findByIdAndProjectId(id, projectId)
+                .orElseThrow(() -> new OutlineVersionNotFoundException(id));
     }
+
     private OutlineResponse response(OutlineVersion value) {
-        OutlineContent content = characterNames.render(value.getProjectId(), value.getContent(), OutlineContent.class);
+        OutlineContent content =
+                characterNames.render(
+                        value.getProjectId(), value.getContent(), OutlineContent.class);
         return OutlineResponse.from(value, content);
     }
+
     private static void checkVersion(OutlineVersion value, long expected) {
-        if (value.getRowVersion() != expected) throw new ResourceVersionConflictException(expected, value.getRowVersion());
+        if (value.getRowVersion() != expected)
+            throw new ResourceVersionConflictException(expected, value.getRowVersion());
     }
-    private static String normalize(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
 }

@@ -21,12 +21,14 @@ public class WritingStyleAnalysisService {
     private final WritingStyleService styles;
     private final WritingGenerationGateway gateway;
 
-    public WritingStyleAnalysisService(WritingStyleService styles, WritingGenerationGateway gateway) {
+    public WritingStyleAnalysisService(
+            WritingStyleService styles, WritingGenerationGateway gateway) {
         this.styles = styles;
         this.gateway = gateway;
     }
 
-    public record Analysis(WritingStyleProfile profile, String analysisMode, int sampleCharacters) { }
+    public record Analysis(
+            WritingStyleProfile profile, String analysisMode, int sampleCharacters) {}
 
     /**
      * 对样本文字进行结构化风格分析，输出可编辑技法候选及原文依据，不移植样本人物、事件或自动应用项目。
@@ -42,7 +44,10 @@ public class WritingStyleAnalysisService {
         }
         ModelProvider selected = provider == null ? ModelProvider.LOCAL_TEMPLATE : provider;
         WritingStyleProfile profile = gateway.analyzeStyle(projectId, sample.strip(), selected);
-        return new Analysis(profile, selected == ModelProvider.LOCAL_TEMPLATE ? "TEXT_METRICS" : "MODEL", sample.strip().length());
+        return new Analysis(
+                profile,
+                selected == ModelProvider.LOCAL_TEMPLATE ? "TEXT_METRICS" : "MODEL",
+                sample.strip().length());
     }
 
     /**
@@ -60,8 +65,13 @@ public class WritingStyleAnalysisService {
             throw new IllegalArgumentException("请上传不超过 100 KB 的 UTF-8 TXT 或 Markdown 文字样本");
         }
         try {
-            String sample = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+            String sample =
+                    StandardCharsets.UTF_8
+                            .newDecoder()
+                            .onMalformedInput(CodingErrorAction.REPORT)
+                            .onUnmappableCharacter(CodingErrorAction.REPORT)
+                            .decode(ByteBuffer.wrap(bytes))
+                            .toString();
             if (sample.startsWith("\uFEFF")) sample = sample.substring(1);
             return analyze(projectId, sample, provider);
         } catch (CharacterCodingException exception) {

@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class EntityResolutionService {
-    private static final Set<String> PRONOUNS = Set.of(
-            "我", "你", "我们", "你们", "他", "她", "它", "他们", "她们", "它们", "自己", "对方", "那个人", "这个人");
+    private static final Set<String> PRONOUNS =
+            Set.of("我", "你", "我们", "你们", "他", "她", "它", "他们", "她们", "它们", "自己", "对方", "那个人", "这个人");
 
     private final EntityResolutionStore store;
 
@@ -39,8 +39,16 @@ public class EntityResolutionService {
      * @param requestedEntityId 模型明确引用的实体 ID；必须存在于本项目，不能虚构。
      * @param evidence 来源中的连续原文证据，不允许拼接或伪造引文。
      */
-    public UUID resolve(UUID projectId, UUID commitId, long canonVersion, String proposalId,
-            String role, String entityType, String mention, String requestedEntityId, String evidence) {
+    public UUID resolve(
+            UUID projectId,
+            UUID commitId,
+            long canonVersion,
+            String proposalId,
+            String role,
+            String entityType,
+            String mention,
+            String requestedEntityId,
+            String evidence) {
         String name = required(mention, "实体名称");
         String type = required(entityType, "实体类型").toUpperCase(Locale.ROOT);
         UUID requestedId = parseId(requestedEntityId);
@@ -50,8 +58,18 @@ public class EntityResolutionService {
         } else {
             resolution = resolveByName(projectId, name, type, commitId, canonVersion, evidence);
         }
-        store.recordMention(new EntityResolutionStore.Mention(projectId, commitId, proposalId, role, name,
-                requestedId, resolution.entityId(), resolution.method(), resolution.confidence(), evidence));
+        store.recordMention(
+                new EntityResolutionStore.Mention(
+                        projectId,
+                        commitId,
+                        proposalId,
+                        role,
+                        name,
+                        requestedId,
+                        resolution.entityId(),
+                        resolution.method(),
+                        resolution.confidence(),
+                        evidence));
         return resolution.entityId();
     }
 
@@ -62,10 +80,16 @@ public class EntityResolutionService {
         return new Resolution(entityId, "REQUESTED_ID", 1.0);
     }
 
-    private Resolution resolveByName(UUID projectId, String name, String type, UUID commitId,
-            long canonVersion, String evidence) {
+    private Resolution resolveByName(
+            UUID projectId,
+            String name,
+            String type,
+            UUID commitId,
+            long canonVersion,
+            String evidence) {
         List<UUID> canonical = store.canonicalMatches(projectId, type, name);
-        if (canonical.size() == 1) return new Resolution(canonical.getFirst(), "CANONICAL_NAME", 1.0);
+        if (canonical.size() == 1)
+            return new Resolution(canonical.getFirst(), "CANONICAL_NAME", 1.0);
         if (canonical.size() > 1) throw ambiguous(name);
 
         List<UUID> aliases = store.aliasMatches(projectId, type, name);
@@ -74,8 +98,10 @@ public class EntityResolutionService {
         if (isPronoun(name)) {
             throw new IllegalArgumentException("无法确定代词“" + name + "”指向哪个实体，请选择具体人物");
         }
-        return new Resolution(store.create(projectId, commitId, canonVersion, type, name, evidence),
-                "CREATED", 0.85);
+        return new Resolution(
+                store.create(projectId, commitId, canonVersion, type, name, evidence),
+                "CREATED",
+                0.85);
     }
 
     private UUID parseId(String value) {
@@ -96,6 +122,5 @@ public class EntityResolutionService {
         return value.trim();
     }
 
-    private record Resolution(UUID entityId, String method, double confidence) {
-    }
+    private record Resolution(UUID entityId, String method, double confidence) {}
 }

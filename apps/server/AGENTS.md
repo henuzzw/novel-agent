@@ -60,7 +60,7 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 ## 4. 当前完成度
 
-最后更新：2026-10-19。
+最后更新：2026-10-21。
 
 ### 4.1 已完成
 
@@ -292,6 +292,13 @@ infrastructure  Repository、外部模型、数据库和消息适配
 ```
 
 不要让 Controller 直接操作 Repository。领域状态转换放在领域对象中；跨聚合用例和事务边界放在 application 层；供应商 SDK、SQL、Cypher 和 HTTP 调用放在 infrastructure 层。
+
+### Controller / Service 格式与注释
+
+- `api/*Controller.java` 与 `application/*Service.java` 统一四空格缩进，使用 `scripts/format-server.ps1` 格式化，`scripts/format-server.ps1 -Check` 只检查。脚本固定 Google Java Format 1.24.0 的 AOSP 风格，首次运行从 Maven Central 下载至系统临时缓存；不添加服务运行时依赖，不重排 import、改写文档或重排字符串。Java 编辑器约定见本目录 `.editorconfig`。
+- 类注释说明职责和协作者边界；公开业务方法注明实际读写、副作用、异步执行、版本条件和作者确认要求。参数区分项目 ID、章节号、运行 ID、行版本与正史水位；不以“执行本模块操作”等通用句式代替业务说明。
+- 普通构造器、简单访问器及框架实现无需重复名称的注释。旧兼容入口应明确退役或历史读取语义，模型生成不可写成自动发布，后台记忆整理不可写成正文发布门禁。
+- 格式与注释整理不应改变请求映射、事务注解、模型提示词、SQL 或业务分支；必要时用语法树或编译验证改动范围。
 
 写作内部：`WritingService` 为无事务兼容门面，仅有三个用例服务依赖。查询/作者修改的 `@Transactional` 声明位于专用服务的公开方法；模型生成入口不声明长事务。审稿打回仍在模型调用结束后由 `writingTransactionTemplate` 原子保存候选与审稿状态。质量修订使用 ManuscriptService 准备候选，由既有 QualityReviewStore 复核并保存，禁止回调门面形成循环。
 

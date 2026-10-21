@@ -47,11 +47,17 @@ public class CharacterProfileController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PutMapping("/{characterId}")
-    public ResponseEntity<CharacterProfileResponse> update(@PathVariable UUID projectId,
-            @PathVariable UUID characterId, @RequestHeader("If-Match") String match,
+    public ResponseEntity<CharacterProfileResponse> update(
+            @PathVariable UUID projectId,
+            @PathVariable UUID characterId,
+            @RequestHeader("If-Match") String match,
             @Valid @RequestBody UpdateCharacterProfileRequest request) {
-        CharacterProfileResponse value = service.update(projectId, characterId,
-                Long.parseLong(match.replace("\"", "").trim()), request);
+        CharacterProfileResponse value =
+                service.update(
+                        projectId,
+                        characterId,
+                        Long.parseLong(match.replace("\"", "").trim()),
+                        request);
         return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
     }
 }

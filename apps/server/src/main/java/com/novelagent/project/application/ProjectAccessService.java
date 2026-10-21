@@ -28,8 +28,9 @@ public class ProjectAccessService {
      */
     @Transactional(readOnly = true)
     public NovelProject requireOwnedProject(UUID projectId) {
-        NovelProject project = projects.findById(projectId)
-                .orElseThrow(() -> new ProjectNotFoundException(projectId));
+        NovelProject project =
+                projects.findById(projectId)
+                        .orElseThrow(() -> new ProjectNotFoundException(projectId));
         return verifyOwner(project, projectId);
     }
 

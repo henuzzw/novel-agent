@@ -21,7 +21,10 @@ public class WritingStyleRecommendationService {
     private final WritingGenerationWorkflow workflow;
     private final WritingStyleService styles;
 
-    public WritingStyleRecommendationService(ConfirmedSnowflakeService bibles, WritingGenerationWorkflow workflow, WritingStyleService styles) {
+    public WritingStyleRecommendationService(
+            ConfirmedSnowflakeService bibles,
+            WritingGenerationWorkflow workflow,
+            WritingStyleService styles) {
         this.bibles = bibles;
         this.workflow = workflow;
         this.styles = styles;
@@ -33,12 +36,17 @@ public class WritingStyleRecommendationService {
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public WritingStyleRecommendationResponse recommend(UUID projectId, RecommendWritingStyleRequest request) {
+    public WritingStyleRecommendationResponse recommend(
+            UUID projectId, RecommendWritingStyleRequest request) {
         StoryBibleResponse source = bibles.version(projectId, request.bibleVersionId());
         WritingChecks.check(source.version(), request.expectedBibleVersion());
         var presets = styles.presets(projectId);
-        WritingStyleRecommendationContent content = workflow.recommendStyle(projectId, source.content(),
-                request.provider(), WritingChecks.normalize(request.instruction()));
+        WritingStyleRecommendationContent content =
+                workflow.recommendStyle(
+                        projectId,
+                        source.content(),
+                        request.provider(),
+                        WritingChecks.normalize(request.instruction()));
         StoryBibleResponse current = bibles.version(projectId, request.bibleVersionId());
         WritingChecks.check(current.version(), source.version());
         if (!current.content().equals(source.content())) {
@@ -47,15 +55,28 @@ public class WritingStyleRecommendationService {
         if (!presets.equals(styles.presets(projectId))) {
             throw new IllegalArgumentException("风格预设已变化，请重新推荐");
         }
-        return new WritingStyleRecommendationResponse(source.id(), source.version(), source.generationNumber(),
-                request.provider(), request.provider() == ModelProvider.LOCAL_TEMPLATE ? "TEMPLATE" : "MODEL",
-                content.summary(), content.recommendations().stream().map(item ->
-                        new WritingStyleRecommendationResponse.Recommendation(preset(presets, item.presetName()),
-                                item.reason(), item.tradeoff(), item.evidence())).toList());
+        return new WritingStyleRecommendationResponse(
+                source.id(),
+                source.version(),
+                source.generationNumber(),
+                request.provider(),
+                request.provider() == ModelProvider.LOCAL_TEMPLATE ? "TEMPLATE" : "MODEL",
+                content.summary(),
+                content.recommendations().stream()
+                        .map(
+                                item ->
+                                        new WritingStyleRecommendationResponse.Recommendation(
+                                                preset(presets, item.presetName()),
+                                                item.reason(),
+                                                item.tradeoff(),
+                                                item.evidence()))
+                        .toList());
     }
 
     private WritingStyleProfile preset(java.util.List<WritingStyleProfile> presets, String name) {
-        return presets.stream().filter(profile -> profile.name().equals(name)).findFirst()
+        return presets.stream()
+                .filter(profile -> profile.name().equals(name))
+                .findFirst()
                 .orElseThrow(() -> new IllegalStateException("推荐风格不是已知预设"));
     }
 }

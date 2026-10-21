@@ -37,7 +37,7 @@ public class WritingStyleService {
         this.catalog = catalog;
     }
 
-    public record StyleState(WritingStyleProfile profile, long version) { }
+    public record StyleState(WritingStyleProfile profile, long version) {}
 
     /**
      * 读取当前请求指定的业务记录或视图，不触发模型生成；缺失记录按本模块的返回或异常约定处理。
@@ -48,7 +48,11 @@ public class WritingStyleService {
     public StyleState get(UUID projectId) {
         NovelProject project = access.requireOwnedProject(projectId);
         Object value = project.getSetting("writingStyle");
-        return new StyleState(value == null ? null : catalog.resolve(mapper.convertValue(value, WritingStyleProfile.class)), project.getRowVersion());
+        return new StyleState(
+                value == null
+                        ? null
+                        : catalog.resolve(mapper.convertValue(value, WritingStyleProfile.class)),
+                project.getRowVersion());
     }
 
     /**
@@ -73,9 +77,13 @@ public class WritingStyleService {
     @Transactional
     public StyleState apply(UUID projectId, WritingStyleProfile profile, long expectedVersion) {
         NovelProject project = access.requireOwnedProject(projectId);
-        if (project.getRowVersion() != expectedVersion) throw new ResourceVersionConflictException(expectedVersion, project.getRowVersion());
+        if (project.getRowVersion() != expectedVersion)
+            throw new ResourceVersionConflictException(expectedVersion, project.getRowVersion());
         profile = catalog.resolve(profile);
-        Map<String, Object> value = profile == null ? null : mapper.convertValue(profile, new TypeReference<Map<String, Object>>() { });
+        Map<String, Object> value =
+                profile == null
+                        ? null
+                        : mapper.convertValue(profile, new TypeReference<Map<String, Object>>() {});
         project.setSetting("writingStyle", value);
         projects.saveAndFlush(project);
         return new StyleState(profile, project.getRowVersion());
@@ -89,7 +97,8 @@ public class WritingStyleService {
     @Transactional(readOnly = true)
     public String promptContext(UUID projectId) {
         WritingStyleProfile profile = get(projectId).profile();
-        return profile == null ? "未指定；沿用故事圣经中的叙事风格。"
+        return profile == null
+                ? "未指定；沿用故事圣经中的叙事风格。"
                 : "风格只指导表达；章节合同的视角、人物身份、事实与硬约束优先。\n" + WritingStyleGuide.render(profile);
     }
 
@@ -101,5 +110,4 @@ public class WritingStyleService {
     public WritingStyleProfile resolveProfile(WritingStyleProfile profile) {
         return catalog.resolve(profile);
     }
-
 }

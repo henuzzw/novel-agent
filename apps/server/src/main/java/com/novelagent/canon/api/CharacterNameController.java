@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.*;
 public class CharacterNameController {
     private final CharacterNameService service;
 
-    public CharacterNameController(CharacterNameService service) { this.service = service; }
+    public CharacterNameController(CharacterNameService service) {
+        this.service = service;
+    }
 
     /**
      * 返回当前请求范围内的记录列表；项目或来源范围以传入标识及业务查询条件为准。
@@ -26,7 +28,9 @@ public class CharacterNameController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping
-    public List<CharacterNameResponse> list(@PathVariable UUID projectId) { return service.list(projectId); }
+    public List<CharacterNameResponse> list(@PathVariable UUID projectId) {
+        return service.list(projectId);
+    }
 
     /**
      * 从项目最新保存的圣经建立规划人物命名记录；已有身份与作者改名保留。此入口不生成圣经、不自动填写完整档案或提交正史。
@@ -48,12 +52,19 @@ public class CharacterNameController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PutMapping("/{characterId}")
-    public ResponseEntity<CharacterNameResponse> update(@PathVariable UUID projectId,
-            @PathVariable UUID characterId, @RequestHeader("If-Match") String match,
+    public ResponseEntity<CharacterNameResponse> update(
+            @PathVariable UUID projectId,
+            @PathVariable UUID characterId,
+            @RequestHeader("If-Match") String match,
             @Valid @RequestBody UpdateCharacterNameRequest request) {
-        CharacterNameResponse value = service.update(projectId, characterId,
-                Long.parseLong(match.replace("\"", "").trim()), request.canonicalName(),
-                request.nickname(), request.title());
+        CharacterNameResponse value =
+                service.update(
+                        projectId,
+                        characterId,
+                        Long.parseLong(match.replace("\"", "").trim()),
+                        request.canonicalName(),
+                        request.nickname(),
+                        request.title());
         return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
     }
 }

@@ -22,9 +22,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class QualityReviewController {
     private final QualityReviewService service;
 
-    public QualityReviewController(QualityReviewService service) { this.service = service; }
+    public QualityReviewController(QualityReviewService service) {
+        this.service = service;
+    }
 
-    public record GenerateRequest(ModelProvider provider, String instruction) { }
+    public record GenerateRequest(ModelProvider provider, String instruction) {}
 
     /**
      * 读取最新保存结果；“最新”不自动表示已发布、已确认或已进入正史。
@@ -33,8 +35,11 @@ public class QualityReviewController {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      */
     @GetMapping("/latest")
-    public ResponseEntity<QualityReviewResponse> latest(@PathVariable UUID projectId, @PathVariable int chapterNumber) {
-        return service.latest(projectId, chapterNumber).map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
+    public ResponseEntity<QualityReviewResponse> latest(
+            @PathVariable UUID projectId, @PathVariable int chapterNumber) {
+        return service.latest(projectId, chapterNumber)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     /**
@@ -45,9 +50,17 @@ public class QualityReviewController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/actions/generate")
-    public ResponseEntity<QualityReviewResponse> generate(@PathVariable UUID projectId, @PathVariable int chapterNumber,
+    public ResponseEntity<QualityReviewResponse> generate(
+            @PathVariable UUID projectId,
+            @PathVariable int chapterNumber,
             @RequestBody GenerateRequest request) {
-        return ResponseEntity.status(201).body(service.generate(projectId, chapterNumber, request.provider(), request.instruction()));
+        return ResponseEntity.status(201)
+                .body(
+                        service.generate(
+                                projectId,
+                                chapterNumber,
+                                request.provider(),
+                                request.instruction()));
     }
 
     /**
@@ -59,8 +72,20 @@ public class QualityReviewController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/{id}/actions/revise")
-    public ResponseEntity<ManuscriptResponse> revise(@PathVariable UUID projectId, @PathVariable int chapterNumber,
-            @PathVariable UUID id, @Valid @RequestBody ReviseQualityRequest request) {
-        return ResponseEntity.status(201).body(service.revise(projectId, chapterNumber, id, request.issueIds(), request.provider(), request.instruction(), request.scope()));
+    public ResponseEntity<ManuscriptResponse> revise(
+            @PathVariable UUID projectId,
+            @PathVariable int chapterNumber,
+            @PathVariable UUID id,
+            @Valid @RequestBody ReviseQualityRequest request) {
+        return ResponseEntity.status(201)
+                .body(
+                        service.revise(
+                                projectId,
+                                chapterNumber,
+                                id,
+                                request.issueIds(),
+                                request.provider(),
+                                request.instruction(),
+                                request.scope()));
     }
 }

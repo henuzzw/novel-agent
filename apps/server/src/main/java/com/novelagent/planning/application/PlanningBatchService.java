@@ -50,10 +50,17 @@ public class PlanningBatchService {
     private final PlanningCheckpointService checkpoints;
     private final ObjectMapper mapper;
 
-    public PlanningBatchService(ProjectAccessService access, EntityManager entities,
-            StoryBibleVersionRepository bibles, CreativeIntentRepository intents,
-            OutlineVersionRepository outlines, OutlineWordBudgetPolicy budgets, CharacterNameService names,
-            PlanningBatchJdbcStore store, PlanningCheckpointService checkpoints, ObjectMapper mapper) {
+    public PlanningBatchService(
+            ProjectAccessService access,
+            EntityManager entities,
+            StoryBibleVersionRepository bibles,
+            CreativeIntentRepository intents,
+            OutlineVersionRepository outlines,
+            OutlineWordBudgetPolicy budgets,
+            CharacterNameService names,
+            PlanningBatchJdbcStore store,
+            PlanningCheckpointService checkpoints,
+            ObjectMapper mapper) {
         this.access = access;
         this.entities = entities;
         this.bibles = bibles;
@@ -66,28 +73,66 @@ public class PlanningBatchService {
         this.mapper = mapper;
     }
 
-    public record CreateCommand(int chapterTo, int chunkSize, ModelProvider provider, String instruction,
-            UUID requestId, Long expectedBibleVersion, UUID expectedBibleId) {
+    public record CreateCommand(
+            int chapterTo,
+            int chunkSize,
+            ModelProvider provider,
+            String instruction,
+            UUID requestId,
+            Long expectedBibleVersion,
+            UUID expectedBibleId) {
         public CreateCommand {
             instruction = instruction == null ? "" : instruction.strip();
-            if (chapterTo < 1 || chapterTo > 500 || chunkSize < 1 || chunkSize > 20 || provider == null
-                    || provider == ModelProvider.LOCAL_TEMPLATE || instruction.length() > 1000
-                    || requestId == null || expectedBibleId == null || expectedBibleVersion == null || expectedBibleVersion < 0) {
+            if (chapterTo < 1
+                    || chapterTo > 500
+                    || chunkSize < 1
+                    || chunkSize > 20
+                    || provider == null
+                    || provider == ModelProvider.LOCAL_TEMPLATE
+                    || instruction.length() > 1000
+                    || requestId == null
+                    || expectedBibleId == null
+                    || expectedBibleVersion == null
+                    || expectedBibleVersion < 0) {
                 throw new IllegalArgumentException("规划批次范围、真实模型、请求标识或规划资料版本不可用");
             }
         }
     }
 
-    public record View(UUID id, UUID projectId, UUID bibleId, long bibleRowVersion, int chapterTo,
-            int chunkSize, ModelProvider provider, String instruction, long version, PlanningBatch.Status status,
-            UUID outlineVersionId, List<PlanningCheckpoint> checkpoints, Instant createdAt) { }
+    public record View(
+            UUID id,
+            UUID projectId,
+            UUID bibleId,
+            long bibleRowVersion,
+            int chapterTo,
+            int chunkSize,
+            ModelProvider provider,
+            String instruction,
+            long version,
+            PlanningBatch.Status status,
+            UUID outlineVersionId,
+            List<PlanningCheckpoint> checkpoints,
+            Instant createdAt) {}
 
-    public record Claim(long batchVersion, PlanningCheckpoint checkpoint,
-            com.novelagent.planning.domain.OutlineWordBudget wordBudget, int chapterCount) { }
+    public record Claim(
+            long batchVersion,
+            PlanningCheckpoint checkpoint,
+            com.novelagent.planning.domain.OutlineWordBudget wordBudget,
+            int chapterCount) {}
 
-    private record Basis(String schema, UUID projectId, String title, UUID bibleId, long bibleRowVersion,
-            StoryBibleContent bible, CreativeIntentSnapshot intent, long intentVersion,
-            CreativeStrategyPolicy policy, UUID currentOutlineId, long canonVersion, PlanningBatch.Source source) { }
+    private record Basis(
+            String schema,
+            UUID projectId,
+            String title,
+            UUID bibleId,
+            long bibleRowVersion,
+            StoryBibleContent bible,
+            CreativeIntentSnapshot intent,
+            long intentVersion,
+            CreativeStrategyPolicy policy,
+            UUID currentOutlineId,
+            long canonVersion,
+            PlanningBatch.Source source) {}
 
     /**
      * 创建本模块业务记录或任务；是否继续执行、发布或确认由该模块后续动作决定。
@@ -103,8 +148,10 @@ public class PlanningBatchService {
         if (prior.isPresent()) {
             var value = prior.get();
             var source = value.source();
-            if (source.chapterTo() != command.chapterTo() || source.chunkSize() != command.chunkSize()
-                    || source.provider() != command.provider() || !source.instruction().equals(command.instruction())
+            if (source.chapterTo() != command.chapterTo()
+                    || source.chunkSize() != command.chunkSize()
+                    || source.provider() != command.provider()
+                    || !source.instruction().equals(command.instruction())
                     || source.bibleRowVersion() != command.expectedBibleVersion()
                     || !source.bibleId().equals(command.expectedBibleId())) {
                 throw conflict("同一请求标识不能用于不同的规划要求");
@@ -113,15 +160,31 @@ public class PlanningBatchService {
         }
         requireUnwrittenProject(project);
         var bible = currentBible(project);
-        if (!bible.getId().equals(command.expectedBibleId())) throw conflict("当前已确认雪花资料已切换，请刷新后创建批次");
+        if (!bible.getId().equals(command.expectedBibleId()))
+            throw conflict("当前已确认雪花资料已切换，请刷新后创建批次");
         if (bible.getRowVersion() != command.expectedBibleVersion()) {
-            throw new ResourceVersionConflictException(command.expectedBibleVersion(), bible.getRowVersion());
+            throw new ResourceVersionConflictException(
+                    command.expectedBibleVersion(), bible.getRowVersion());
         }
-        var intent = intents.findById(projectId).orElseThrow(() -> new IllegalArgumentException("项目缺少创作意图"));
+        var intent =
+                intents.findById(projectId)
+                        .orElseThrow(() -> new IllegalArgumentException("项目缺少创作意图"));
         entities.refresh(intent, LockModeType.PESSIMISTIC_READ);
-        var source = new PlanningBatch.Source(bible.getId(), bible.getRowVersion(), command.chapterTo(), command.chunkSize(),
-                command.provider(), command.instruction(), budgets.plan(intent.getTargetWords()));
-        return view(store.insert(projectId, command.requestId(), source, sourceHash(project, bible, source)));
+        var source =
+                new PlanningBatch.Source(
+                        bible.getId(),
+                        bible.getRowVersion(),
+                        command.chapterTo(),
+                        command.chunkSize(),
+                        command.provider(),
+                        command.instruction(),
+                        budgets.plan(intent.getTargetWords()));
+        return view(
+                store.insert(
+                        projectId,
+                        command.requestId(),
+                        source,
+                        sourceHash(project, bible, source)));
     }
 
     /**
@@ -171,7 +234,8 @@ public class PlanningBatchService {
                 checkpoints.reuse(projectId, value.id());
                 prefix.add(value.id());
             } else {
-                if (value != values.getLast() || value.status() != PlanningCheckpoint.Status.PENDING) {
+                if (value != values.getLast()
+                        || value.status() != PlanningCheckpoint.Status.PENDING) {
                     throw conflict("未完成片段必须显式恢复后再执行");
                 }
                 next = value;
@@ -181,13 +245,22 @@ public class PlanningBatchService {
             int from = values.isEmpty() ? 1 : values.getLast().chapterTo() + 1;
             if (from > batch.source().chapterTo()) throw conflict("所有片段已经完成，请拼装为大纲草稿");
             int to = Math.min(batch.source().chapterTo(), from + batch.source().chunkSize() - 1);
-            next = checkpoints.createDependent(projectId, new PlanningCheckpointService.CreateCommand(
-                    "batch:" + id + ":" + from, from, to, batch.source().provider(), batch.source().instruction()), prefix);
+            next =
+                    checkpoints.createDependent(
+                            projectId,
+                            new PlanningCheckpointService.CreateCommand(
+                                    "batch:" + id + ":" + from,
+                                    from,
+                                    to,
+                                    batch.source().provider(),
+                                    batch.source().instruction()),
+                            prefix);
         }
         var ids = new ArrayList<>(batch.checkpointIds());
         if (!ids.contains(next.id())) ids.add(next.id());
         change(batch, PlanningBatch.Status.RUNNING, ids, null);
-        return new Claim(batch.version() + 1, next, batch.source().wordBudget(), batch.source().chapterTo());
+        return new Claim(
+                batch.version() + 1, next, batch.source().wordBudget(), batch.source().chapterTo());
     }
 
     /**
@@ -258,13 +331,16 @@ public class PlanningBatchService {
         NovelProject project = ownedLocked(projectId);
         var batch = batch(projectId, id, true);
         requireVersion(batch, version);
-        if (batch.status() != PlanningBatch.Status.CANCELLED && batch.status() != PlanningBatch.Status.FAILED) {
+        if (batch.status() != PlanningBatch.Status.CANCELLED
+                && batch.status() != PlanningBatch.Status.FAILED) {
             throw conflict("只有失败或取消的批次可以显式恢复，运行中断请先取消");
         }
         requireSource(project, batch);
         for (var value : materialized(batch)) {
-            if (value.status() == PlanningCheckpoint.Status.SUCCEEDED) checkpoints.reuse(projectId, value.id());
-            else if (value.status() == PlanningCheckpoint.Status.FAILED || value.status() == PlanningCheckpoint.Status.CANCELLED) {
+            if (value.status() == PlanningCheckpoint.Status.SUCCEEDED)
+                checkpoints.reuse(projectId, value.id());
+            else if (value.status() == PlanningCheckpoint.Status.FAILED
+                    || value.status() == PlanningCheckpoint.Status.CANCELLED) {
                 checkpoints.retry(projectId, value.id(), value.version());
             } else if (value.status() == PlanningCheckpoint.Status.RUNNING) {
                 throw conflict("片段仍在执行，请先取消批次");
@@ -286,7 +362,9 @@ public class PlanningBatchService {
         NovelProject project = ownedLocked(projectId);
         var batch = batch(projectId, id, true);
         if (batch.status() == PlanningBatch.Status.SUCCEEDED) {
-            var existing = outlines.findByIdAndProjectId(batch.outlineVersionId(), projectId).orElseThrow();
+            var existing =
+                    outlines.findByIdAndProjectId(batch.outlineVersionId(), projectId)
+                            .orElseThrow();
             return response(existing);
         }
         requireVersion(batch, version);
@@ -299,13 +377,27 @@ public class PlanningBatchService {
             checkpoints.reuse(projectId, value.id());
             prefix.add(value.id());
         }
-        var content = PlanningBatchAssembler.assemble(project.getName(),
-                names.render(projectId, bible.getContent(), StoryBibleContent.class), batch.source().wordBudget(),
-                batch.source().chapterTo(), values);
-        int generation = outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
-                .map(value -> Math.addExact(value.getGenerationNumber(), 1)).orElse(1);
-        var outline = OutlineVersion.create(UUID.randomUUID(), projectId, generation, "PLANNING_BATCH",
-                batch.source().instruction(), bible.getId(), batch.source().wordBudget(), content);
+        var content =
+                PlanningBatchAssembler.assemble(
+                        project.getName(),
+                        names.render(projectId, bible.getContent(), StoryBibleContent.class),
+                        batch.source().wordBudget(),
+                        batch.source().chapterTo(),
+                        values);
+        int generation =
+                outlines.findFirstByProjectIdOrderByGenerationNumberDesc(projectId)
+                        .map(value -> Math.addExact(value.getGenerationNumber(), 1))
+                        .orElse(1);
+        var outline =
+                OutlineVersion.create(
+                        UUID.randomUUID(),
+                        projectId,
+                        generation,
+                        "PLANNING_BATCH",
+                        batch.source().instruction(),
+                        bible.getId(),
+                        batch.source().wordBudget(),
+                        content);
         outlines.saveAndFlush(outline);
         change(batch, PlanningBatch.Status.SUCCEEDED, batch.checkpointIds(), outline.getId());
         return response(outline);
@@ -320,8 +412,12 @@ public class PlanningBatchService {
     private void requireUnwrittenProject(NovelProject project) {
         if (project.getCurrentCanonVersion() > 0) throw conflict("已有正史的项目请使用原大纲增量调整，不能从第一章重新分块规划");
         if (project.getCurrentOutlineVersionId() != null) {
-            var outline = outlines.findByIdAndProjectId(project.getCurrentOutlineVersionId(), project.getId()).orElseThrow();
-            if (outline.getContent().arcs().stream().flatMap(arc -> arc.chapters().stream())
+            var outline =
+                    outlines.findByIdAndProjectId(
+                                    project.getCurrentOutlineVersionId(), project.getId())
+                            .orElseThrow();
+            if (outline.getContent().arcs().stream()
+                    .flatMap(arc -> arc.chapters().stream())
                     .anyMatch(chapter -> chapter.status() == ChapterPlanStatus.OCCURRED)) {
                 throw conflict("已有已发生章节，请使用原大纲增量调整");
             }
@@ -329,8 +425,11 @@ public class PlanningBatchService {
     }
 
     private StoryBibleVersion currentBible(NovelProject project) {
-        if (project.getCurrentBibleVersionId() == null) throw new IllegalArgumentException("请先发布已确认雪花资料");
-        var bible = bibles.findByIdAndProjectId(project.getCurrentBibleVersionId(), project.getId()).orElseThrow();
+        if (project.getCurrentBibleVersionId() == null)
+            throw new IllegalArgumentException("请先发布已确认雪花资料");
+        var bible =
+                bibles.findByIdAndProjectId(project.getCurrentBibleVersionId(), project.getId())
+                        .orElseThrow();
         entities.refresh(bible, LockModeType.PESSIMISTIC_READ);
         if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw conflict("当前规划资料尚未发布");
         return bible;
@@ -345,13 +444,26 @@ public class PlanningBatchService {
         return bible;
     }
 
-    private String sourceHash(NovelProject project, StoryBibleVersion bible, PlanningBatch.Source source) {
-        var intent = intents.findById(project.getId()).orElseThrow(() -> new IllegalArgumentException("项目缺少创作意图"));
+    private String sourceHash(
+            NovelProject project, StoryBibleVersion bible, PlanningBatch.Source source) {
+        var intent =
+                intents.findById(project.getId())
+                        .orElseThrow(() -> new IllegalArgumentException("项目缺少创作意图"));
         entities.refresh(intent, LockModeType.PESSIMISTIC_READ);
-        var basis = new Basis("planning-batch/1", project.getId(), project.getName(), bible.getId(), bible.getRowVersion(),
-                names.render(project.getId(), bible.getContent(), StoryBibleContent.class), CreativeIntentSnapshot.from(intent),
-                intent.getRowVersion(), CreativeStrategyPolicy.from(project), project.getCurrentOutlineVersionId(),
-                project.getCurrentCanonVersion(), source);
+        var basis =
+                new Basis(
+                        "planning-batch/1",
+                        project.getId(),
+                        project.getName(),
+                        bible.getId(),
+                        bible.getRowVersion(),
+                        names.render(project.getId(), bible.getContent(), StoryBibleContent.class),
+                        CreativeIntentSnapshot.from(intent),
+                        intent.getRowVersion(),
+                        CreativeStrategyPolicy.from(project),
+                        project.getCurrentOutlineVersionId(),
+                        project.getCurrentCanonVersion(),
+                        source);
         try {
             return Sha256.ofBytes(mapper.writeValueAsBytes(basis));
         } catch (JsonProcessingException exception) {
@@ -360,37 +472,60 @@ public class PlanningBatchService {
     }
 
     private PlanningBatch batch(UUID projectId, UUID id, boolean lock) {
-        return store.find(projectId, id, lock).orElseThrow(() -> new PlanningCheckpointException("规划批次不存在", true));
+        return store.find(projectId, id, lock)
+                .orElseThrow(() -> new PlanningCheckpointException("规划批次不存在", true));
     }
 
     private List<PlanningCheckpoint> materialized(PlanningBatch batch) {
-        return batch.checkpointIds().stream().map(id -> checkpoints.get(batch.projectId(), id)).toList();
+        return batch.checkpointIds().stream()
+                .map(id -> checkpoints.get(batch.projectId(), id))
+                .toList();
     }
 
     private View view(PlanningBatch batch) {
         var source = batch.source();
-        return new View(batch.id(), batch.projectId(), source.bibleId(), source.bibleRowVersion(), source.chapterTo(),
-                source.chunkSize(), source.provider(), source.instruction(), batch.version(), batch.status(),
-                batch.outlineVersionId(), materialized(batch), batch.createdAt());
+        return new View(
+                batch.id(),
+                batch.projectId(),
+                source.bibleId(),
+                source.bibleRowVersion(),
+                source.chapterTo(),
+                source.chunkSize(),
+                source.provider(),
+                source.instruction(),
+                batch.version(),
+                batch.status(),
+                batch.outlineVersionId(),
+                materialized(batch),
+                batch.createdAt());
     }
 
     private OutlineResponse response(OutlineVersion outline) {
-        return OutlineResponse.from(outline,
-                names.render(outline.getProjectId(), outline.getContent(), com.novelagent.planning.domain.OutlineContent.class));
+        return OutlineResponse.from(
+                outline,
+                names.render(
+                        outline.getProjectId(),
+                        outline.getContent(),
+                        com.novelagent.planning.domain.OutlineContent.class));
     }
 
-    private void change(PlanningBatch batch, PlanningBatch.Status status, List<UUID> ids, UUID outlineId) {
+    private void change(
+            PlanningBatch batch, PlanningBatch.Status status, List<UUID> ids, UUID outlineId) {
         if (!store.transition(batch, status, ids, outlineId)) throw conflict("批次已被其他操作更新");
     }
 
     private void requirePrefix(PlanningCheckpoint checkpoint, List<UUID> prefix) {
-        if (!checkpoint.source().dependencies().stream().map(PlanningCheckpoint.Dependency::checkpointId).toList().equals(prefix)) {
+        if (!checkpoint.source().dependencies().stream()
+                .map(PlanningCheckpoint.Dependency::checkpointId)
+                .toList()
+                .equals(prefix)) {
             throw conflict("片段的前置依赖与批次已完成计划不一致");
         }
     }
 
     private static void requireVersion(PlanningBatch batch, long version) {
-        if (batch.version() != version) throw new ResourceVersionConflictException(version, batch.version());
+        if (batch.version() != version)
+            throw new ResourceVersionConflictException(version, batch.version());
     }
 
     private static void requireRunning(PlanningBatch batch, long version) {

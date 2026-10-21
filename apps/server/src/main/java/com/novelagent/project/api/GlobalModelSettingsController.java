@@ -21,7 +21,8 @@ public class GlobalModelSettingsController {
     private final GlobalModelSettingsService settings;
     private final GlobalModelCatalogService catalog;
 
-    public GlobalModelSettingsController(GlobalModelSettingsService settings, GlobalModelCatalogService catalog) {
+    public GlobalModelSettingsController(
+            GlobalModelSettingsService settings, GlobalModelCatalogService catalog) {
         this.settings = settings;
         this.catalog = catalog;
     }

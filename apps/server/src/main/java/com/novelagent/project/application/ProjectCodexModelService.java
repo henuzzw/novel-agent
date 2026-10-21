@@ -18,7 +18,9 @@ public class ProjectCodexModelService {
     private final GlobalModelSettingsService settings;
     private final GlobalModelCatalogService catalog;
 
-    public ProjectCodexModelService(ProjectAccessService access, GlobalModelSettingsService settings,
+    public ProjectCodexModelService(
+            ProjectAccessService access,
+            GlobalModelSettingsService settings,
             GlobalModelCatalogService catalog) {
         this.access = access;
         this.settings = settings;
@@ -46,10 +48,20 @@ public class ProjectCodexModelService {
     public CodexModelChoice update(UUID projectId, CodexModelChoice choice) {
         access.requireOwnedProject(projectId);
         var current = settings.get();
-        var value = new GlobalModelSettings(current.provider(), choice.model(), choice.effort(),
-                current.deepSeekModel(), current.version());
-        catalog.validate(new GlobalModelSettings(ModelProvider.LOCAL_CODEX,
-                value.codexModel(), value.codexEffort(), value.deepSeekModel(), value.version()));
+        var value =
+                new GlobalModelSettings(
+                        current.provider(),
+                        choice.model(),
+                        choice.effort(),
+                        current.deepSeekModel(),
+                        current.version());
+        catalog.validate(
+                new GlobalModelSettings(
+                        ModelProvider.LOCAL_CODEX,
+                        value.codexModel(),
+                        value.codexEffort(),
+                        value.deepSeekModel(),
+                        value.version()));
         settings.update(value);
         return choice;
     }

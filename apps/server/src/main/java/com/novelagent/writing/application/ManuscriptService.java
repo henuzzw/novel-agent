@@ -37,9 +37,13 @@ public class ManuscriptService {
     private final CharacterNameService characterNames;
     private final WritingStyleService styles;
 
-    public ManuscriptService(WritingContextService contexts,
-            ManuscriptVersionRepository manuscripts, WritingGenerationWorkflow workflow,
-            ContextBudgetPlanner budgetPlanner, CharacterNameService characterNames, WritingStyleService styles) {
+    public ManuscriptService(
+            WritingContextService contexts,
+            ManuscriptVersionRepository manuscripts,
+            WritingGenerationWorkflow workflow,
+            ContextBudgetPlanner budgetPlanner,
+            CharacterNameService characterNames,
+            WritingStyleService styles) {
         this.contexts = contexts;
         this.manuscripts = manuscripts;
         this.workflow = workflow;
@@ -58,7 +62,9 @@ public class ManuscriptService {
     @Transactional(readOnly = true)
     public Optional<ManuscriptResponse> latestManuscript(UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
-        return manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
+        return manuscripts
+                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                        projectId, chapterNumber)
                 .map(this::manuscriptResponse);
     }
 
@@ -70,11 +76,20 @@ public class ManuscriptService {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @Transactional(readOnly = true)
-    public List<ManuscriptVersionSummaryResponse> manuscriptVersions(UUID projectId, int chapterNumber) {
+    public List<ManuscriptVersionSummaryResponse> manuscriptVersions(
+            UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
-        return manuscripts.findAllByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
-                .stream().map(value -> ManuscriptVersionSummaryResponse.from(value,
-                        characterNames.render(projectId, value.getContent().title()))).toList();
+        return manuscripts
+                .findAllByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                        projectId, chapterNumber)
+                .stream()
+                .map(
+                        value ->
+                                ManuscriptVersionSummaryResponse.from(
+                                        value,
+                                        characterNames.render(
+                                                projectId, value.getContent().title())))
+                .toList();
     }
 
     /**
@@ -87,8 +102,10 @@ public class ManuscriptService {
     @Transactional(readOnly = true)
     public ManuscriptResponse manuscriptVersion(UUID projectId, int chapterNumber, UUID id) {
         contexts.requireOwnedProject(projectId);
-        return manuscriptResponse(manuscripts.findByIdAndProjectIdAndChapterNumber(id, projectId, chapterNumber)
-                .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", id)));
+        return manuscriptResponse(
+                manuscripts
+                        .findByIdAndProjectIdAndChapterNumber(id, projectId, chapterNumber)
+                        .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", id)));
     }
 
     /**
@@ -98,8 +115,10 @@ public class ManuscriptService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public ManuscriptResponse generateManuscript(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
-        return manuscriptResponse(manuscripts.saveAndFlush(prepareManuscript(projectId, chapterNumber, request)));
+    public ManuscriptResponse generateManuscript(
+            UUID projectId, int chapterNumber, GenerateWritingRequest request) {
+        return manuscriptResponse(
+                manuscripts.saveAndFlush(prepareManuscript(projectId, chapterNumber, request)));
     }
 
     /**
@@ -109,34 +128,65 @@ public class ManuscriptService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    ManuscriptVersion prepareManuscript(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
+    ManuscriptVersion prepareManuscript(
+            UUID projectId, int chapterNumber, GenerateWritingRequest request) {
         long sourceCanonVersion = contexts.requireOwnedProject(projectId).getCurrentCanonVersion();
         WritingContextService.Context context = contexts.context(projectId, chapterNumber);
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
         var writingBasis = ChapterWritingBasisService.capture(context);
         var plan = writingBasis.plan();
-        ModelProvider provider = request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
-        Optional<ManuscriptVersion> latest = manuscripts
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber);
-        if (request.mode() == GenerationMode.REGENERATE && request.baseManuscriptVersionId() != null) {
+        ModelProvider provider =
+                request.provider() == null ? ModelProvider.LOCAL_TEMPLATE : request.provider();
+        Optional<ManuscriptVersion> latest =
+                manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                        projectId, chapterNumber);
+        if (request.mode() == GenerationMode.REGENERATE
+                && request.baseManuscriptVersionId() != null) {
             throw new IllegalArgumentException("重新创作时不能指定基准正文版本");
         }
-        ManuscriptVersion base = request.mode() == GenerationMode.REGENERATE ? null
-                : request.baseManuscriptVersionId() == null ? latest.orElse(null)
-                : manuscripts.findByIdAndProjectIdAndChapterNumber(
-                        request.baseManuscriptVersionId(), projectId, chapterNumber)
-                        .orElseThrow(() -> new WritingResourceNotFoundException(
-                                "正文版本", request.baseManuscriptVersionId()));
+        ManuscriptVersion base =
+                request.mode() == GenerationMode.REGENERATE
+                        ? null
+                        : request.baseManuscriptVersionId() == null
+                                ? latest.orElse(null)
+                                : manuscripts
+                                        .findByIdAndProjectIdAndChapterNumber(
+                                                request.baseManuscriptVersionId(),
+                                                projectId,
+                                                chapterNumber)
+                                        .orElseThrow(
+                                                () ->
+                                                        new WritingResourceNotFoundException(
+                                                                "正文版本",
+                                                                request.baseManuscriptVersionId()));
         ManuscriptContent previousContent = base == null ? null : base.getContent();
         if (base == null) contexts.requireMemoryReady(projectId, chapterNumber);
         String styleContext = styles.promptContext(projectId);
-        MemoryBudgetPlan budget = budgetPlanner.plan(AgentStage.MANUSCRIPT, provider,
-                context.budgetInputs(context.writingMaterials(), context.writingArc(), context.chapter(), plan,
-                        previousContent, request.instruction(), styleContext));
-        NovelMemoryContext recalled = contexts.recall(AgentStage.MANUSCRIPT, context, request.instruction(), budget);
-        GeneratedManuscript generated = workflow.generateManuscript(projectId, context.writingMaterials(), context.writingArc(),
-                context.chapter(), plan, recalled, previousContent, provider,
-                context.instructionWithPreparation(normalize(request.instruction())));
+        MemoryBudgetPlan budget =
+                budgetPlanner.plan(
+                        AgentStage.MANUSCRIPT,
+                        provider,
+                        context.budgetInputs(
+                                context.writingMaterials(),
+                                context.writingArc(),
+                                context.chapter(),
+                                plan,
+                                previousContent,
+                                request.instruction(),
+                                styleContext));
+        NovelMemoryContext recalled =
+                contexts.recall(AgentStage.MANUSCRIPT, context, request.instruction(), budget);
+        GeneratedManuscript generated =
+                workflow.generateManuscript(
+                        projectId,
+                        context.writingMaterials(),
+                        context.writingArc(),
+                        context.chapter(),
+                        plan,
+                        recalled,
+                        previousContent,
+                        provider,
+                        context.instructionWithPreparation(normalize(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
         if (contexts.requireOwnedProject(projectId).getCurrentCanonVersion() != sourceCanonVersion)
             throw new IllegalStateException("生成期间前文正史或记忆已变化，请重新生成");
@@ -144,18 +194,30 @@ public class ManuscriptService {
             throw new IllegalStateException("生成期间写作风格已变化，请刷新后重试");
         }
         if (base != null) {
-            ManuscriptVersion currentBase = manuscripts.findByIdAndProjectIdAndChapterNumber(
-                    base.getId(), projectId, chapterNumber).orElseThrow();
+            ManuscriptVersion currentBase =
+                    manuscripts
+                            .findByIdAndProjectIdAndChapterNumber(
+                                    base.getId(), projectId, chapterNumber)
+                            .orElseThrow();
             if (!java.util.Objects.equals(previousContent, currentBase.getContent())) {
                 throw new IllegalStateException("生成期间基准正文已变化，请刷新后重试");
             }
         }
-        ManuscriptContent generatedContent = characterNames.tokenize(projectId, generated.content());
+        ManuscriptContent generatedContent =
+                characterNames.tokenize(projectId, generated.content());
         int version = latest.map(value -> value.getVersionNumber() + 1).orElse(1);
-        return ManuscriptVersion.create(UUID.randomUUID(), projectId, null,
-                chapterNumber, version, provider.name(), normalize(request.instruction()),
-                base == null ? null : base.getId(), generatedContent,
-                generated.changeSummary()).withWritingBasis(writingBasis);
+        return ManuscriptVersion.create(
+                        UUID.randomUUID(),
+                        projectId,
+                        null,
+                        chapterNumber,
+                        version,
+                        provider.name(),
+                        normalize(request.instruction()),
+                        base == null ? null : base.getId(),
+                        generatedContent,
+                        generated.changeSummary())
+                .withWritingBasis(writingBasis);
     }
 
     /**
@@ -168,21 +230,42 @@ public class ManuscriptService {
      * @param provider 明确选择的生成供应商；本地模板不代表真实文学生成。
      * @param feedback 来自作者选中问题的修订要求，不能扩大事实或授权范围。
      */
-    ManuscriptVersion prepareQualityRevision(UUID projectId, int chapterNumber, UUID sourceId,
-            long sourceVersion, ModelProvider provider, String feedback) {
+    ManuscriptVersion prepareQualityRevision(
+            UUID projectId,
+            int chapterNumber,
+            UUID sourceId,
+            long sourceVersion,
+            ModelProvider provider,
+            String feedback) {
         contexts.requireOwnedProject(projectId);
         ManuscriptVersion source = requireManuscript(projectId, sourceId);
         check(source.getRowVersion(), sourceVersion);
-        if (source.getChapterNumber() != chapterNumber || !manuscripts
-                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber).orElseThrow()
-                .getId().equals(sourceId)) throw new IllegalStateException("请从当前正文进行润色");
+        if (source.getChapterNumber() != chapterNumber
+                || !manuscripts
+                        .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                                projectId, chapterNumber)
+                        .orElseThrow()
+                        .getId()
+                        .equals(sourceId)) throw new IllegalStateException("请从当前正文进行润色");
         if (provider == null || provider == ModelProvider.LOCAL_TEMPLATE) {
-            return ManuscriptVersion.create(UUID.randomUUID(), projectId, source.getSourceContractVersionId(),
-                    chapterNumber, source.getVersionNumber() + 1, ModelProvider.LOCAL_TEMPLATE.name(), feedback,
-                    sourceId, source.getContent(), List.of("本地模板仅创建版本流程候选，保留原稿，未执行语义润色。")).inheritWritingBasis(source);
+            return ManuscriptVersion.create(
+                            UUID.randomUUID(),
+                            projectId,
+                            source.getSourceContractVersionId(),
+                            chapterNumber,
+                            source.getVersionNumber() + 1,
+                            ModelProvider.LOCAL_TEMPLATE.name(),
+                            feedback,
+                            sourceId,
+                            source.getContent(),
+                            List.of("本地模板仅创建版本流程候选，保留原稿，未执行语义润色。"))
+                    .inheritWritingBasis(source);
         }
-        return prepareManuscript(projectId, chapterNumber, new GenerateWritingRequest(provider, feedback,
-                GenerationMode.REVISE, sourceId, null));
+        return prepareManuscript(
+                projectId,
+                chapterNumber,
+                new GenerateWritingRequest(
+                        provider, feedback, GenerationMode.REVISE, sourceId, null));
     }
 
     /**
@@ -194,7 +277,8 @@ public class ManuscriptService {
      * @param content 待保存或生成的内容，仍须满足来源与状态约束。
      */
     @Transactional
-    public ManuscriptResponse updateManuscript(UUID projectId, UUID id, long expected, ManuscriptContent content) {
+    public ManuscriptResponse updateManuscript(
+            UUID projectId, UUID id, long expected, ManuscriptContent content) {
         contexts.requireOwnedProject(projectId);
         ManuscriptVersion value = requireManuscript(projectId, id);
         check(value.getRowVersion(), expected);
@@ -211,22 +295,38 @@ public class ManuscriptService {
      * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
      */
     @Transactional
-    public ManuscriptResponse createManuscriptRevision(UUID projectId, int chapterNumber, UUID sourceId, long expected) {
+    public ManuscriptResponse createManuscriptRevision(
+            UUID projectId, int chapterNumber, UUID sourceId, long expected) {
         contexts.requireOwnedProject(projectId);
-        ManuscriptVersion source = manuscripts.findByIdAndProjectIdAndChapterNumber(sourceId, projectId, chapterNumber)
-                .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", sourceId));
+        ManuscriptVersion source =
+                manuscripts
+                        .findByIdAndProjectIdAndChapterNumber(sourceId, projectId, chapterNumber)
+                        .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", sourceId));
         check(source.getRowVersion(), expected);
         if (source.getStatus() != ManuscriptStatus.AUTHOR_ACCEPTED) {
             throw new IllegalArgumentException("只有作者已确认的正文才能创建人工修订草稿");
         }
-        ManuscriptVersion latest = manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
-                projectId, chapterNumber).orElseThrow();
+        ManuscriptVersion latest =
+                manuscripts
+                        .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                                projectId, chapterNumber)
+                        .orElseThrow();
         if (!latest.getId().equals(sourceId)) {
             throw new IllegalStateException("当前正文已有更新，请刷新后再创建修订草稿");
         }
-        ManuscriptVersion revision = ManuscriptVersion.create(UUID.randomUUID(), projectId,
-                source.getSourceContractVersionId(), chapterNumber, latest.getVersionNumber() + 1,
-                "AUTHOR_EDIT", null, sourceId, source.getContent(), List.of()).inheritWritingBasis(source);
+        ManuscriptVersion revision =
+                ManuscriptVersion.create(
+                                UUID.randomUUID(),
+                                projectId,
+                                source.getSourceContractVersionId(),
+                                chapterNumber,
+                                latest.getVersionNumber() + 1,
+                                "AUTHOR_EDIT",
+                                null,
+                                sourceId,
+                                source.getContent(),
+                                List.of())
+                        .inheritWritingBasis(source);
         return manuscriptResponse(manuscripts.saveAndFlush(revision));
     }
 
@@ -247,9 +347,11 @@ public class ManuscriptService {
     }
 
     private ManuscriptVersion requireManuscript(UUID projectId, UUID id) {
-        return manuscripts.findByIdAndProjectId(id, projectId)
+        return manuscripts
+                .findByIdAndProjectId(id, projectId)
                 .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", id));
     }
+
     /**
      * 以当前人物显示名称导出选定正文的 Markdown 内容，不修改正文或业务状态。
      *
@@ -267,6 +369,7 @@ public class ManuscriptService {
     private ManuscriptResponse manuscriptResponse(ManuscriptVersion value) {
         return ManuscriptResponse.from(value, renderContent(value));
     }
+
     /**
      * 将存储正文的稳定实体引用渲染为当前姓名，只影响返回内容，不重写数据库版本。
      *
@@ -275,5 +378,4 @@ public class ManuscriptService {
     ManuscriptContent renderContent(ManuscriptVersion value) {
         return characterNames.render(value.getProjectId(), value.getContent());
     }
-
 }

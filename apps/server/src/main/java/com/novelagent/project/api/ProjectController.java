@@ -36,7 +36,8 @@ public class ProjectController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping
-    public ResponseEntity<ProjectResponse> create(@Valid @RequestBody CreateProjectRequest request) {
+    public ResponseEntity<ProjectResponse> create(
+            @Valid @RequestBody CreateProjectRequest request) {
         ProjectResponse project = projectService.create(request);
         return ResponseEntity.created(URI.create("/api/v1/projects/" + project.id()))
                 .eTag(Long.toString(project.version()))
@@ -61,9 +62,7 @@ public class ProjectController {
     @GetMapping("/{projectId}")
     public ResponseEntity<ProjectResponse> get(@PathVariable UUID projectId) {
         ProjectResponse project = projectService.get(projectId);
-        return ResponseEntity.ok()
-                .eTag(Long.toString(project.version()))
-                .body(project);
+        return ResponseEntity.ok().eTag(Long.toString(project.version())).body(project);
     }
 
     /**
@@ -79,11 +78,10 @@ public class ProjectController {
             @RequestHeader("If-Match") String ifMatch,
             @Valid @RequestBody CreativeIntentRequest request) {
         long expectedVersion = parseEtag(ifMatch);
-        ProjectResponse project = projectService.updateCreativeIntent(projectId, expectedVersion, request);
+        ProjectResponse project =
+                projectService.updateCreativeIntent(projectId, expectedVersion, request);
         long intentVersion = project.creativeIntent().version();
-        return ResponseEntity.ok()
-                .eTag(Long.toString(intentVersion))
-                .body(project);
+        return ResponseEntity.ok().eTag(Long.toString(intentVersion)).body(project);
     }
 
     private static long parseEtag(String value) {

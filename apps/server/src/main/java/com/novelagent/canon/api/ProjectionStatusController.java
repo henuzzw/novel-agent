@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProjectionStatusController {
     private final ProjectionStatusService service;
 
-    public ProjectionStatusController(ProjectionStatusService service) { this.service = service; }
+    public ProjectionStatusController(ProjectionStatusService service) {
+        this.service = service;
+    }
 
     /**
      * 查询现有业务状态与可得进度，不执行生成、提交或投影。

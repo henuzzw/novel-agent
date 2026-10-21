@@ -41,10 +41,10 @@ public class WorkImportController {
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<WorkImportResponse> upload(
-            @PathVariable UUID projectId,
-            @RequestPart("file") MultipartFile file) {
+            @PathVariable UUID projectId, @RequestPart("file") MultipartFile file) {
         WorkImportResponse result = service.upload(projectId, file);
-        return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/imports/" + result.id()))
+        return ResponseEntity.created(
+                        URI.create("/api/v1/projects/" + projectId + "/imports/" + result.id()))
                 .body(result);
     }
 
@@ -59,13 +59,21 @@ public class WorkImportController {
         return service.list(projectId);
     }
 
-    public record PastedStoryRequest(@jakarta.validation.constraints.NotBlank String text) { }
+    public record PastedStoryRequest(@jakarta.validation.constraints.NotBlank String text) {}
 
+    /**
+     * 将粘贴文本作为独立导入来源保存并解析章节，不自动确认解析、生成规划或提交正史。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     * @param input 作者粘贴的原文内容
+     */
     @PostMapping("/text")
-    public ResponseEntity<WorkImportResponse> paste(@PathVariable UUID projectId,
-            @Valid @RequestBody PastedStoryRequest input) {
+    public ResponseEntity<WorkImportResponse> paste(
+            @PathVariable UUID projectId, @Valid @RequestBody PastedStoryRequest input) {
         var result = service.paste(projectId, input.text());
-        return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/imports/" + result.id())).body(result);
+        return ResponseEntity.created(
+                        URI.create("/api/v1/projects/" + projectId + "/imports/" + result.id()))
+                .body(result);
     }
 
     /**
@@ -97,11 +105,13 @@ public class WorkImportController {
      * @param importId 导入文件记录 ID，必须与指定项目匹配。
      */
     @GetMapping("/{importId}/source")
-    public ResponseEntity<byte[]> source(@PathVariable UUID projectId, @PathVariable UUID importId) {
+    public ResponseEntity<byte[]> source(
+            @PathVariable UUID projectId, @PathVariable UUID importId) {
         WorkImportService.SourceFile source = service.source(projectId, importId);
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename(source.filename(), StandardCharsets.UTF_8)
-                .build();
+        ContentDisposition disposition =
+                ContentDisposition.attachment()
+                        .filename(source.filename(), StandardCharsets.UTF_8)
+                        .build();
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(source.mediaType()))
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())

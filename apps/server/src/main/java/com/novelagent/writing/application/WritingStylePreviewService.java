@@ -18,7 +18,10 @@ public class WritingStylePreviewService {
     private final WritingGenerationWorkflow workflow;
     private final WritingStyleService styles;
 
-    public WritingStylePreviewService(WritingContextService contexts, WritingGenerationWorkflow workflow, WritingStyleService styles) {
+    public WritingStylePreviewService(
+            WritingContextService contexts,
+            WritingGenerationWorkflow workflow,
+            WritingStyleService styles) {
         this.contexts = contexts;
         this.workflow = workflow;
         this.styles = styles;
@@ -30,22 +33,38 @@ public class WritingStylePreviewService {
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public WritingStylePreviewResponse generate(UUID projectId, GenerateStylePreviewRequest request) {
-        WritingContextService.Context context = contexts.previewContext(projectId, request.outlineVersionId());
+    public WritingStylePreviewResponse generate(
+            UUID projectId, GenerateStylePreviewRequest request) {
+        WritingContextService.Context context =
+                contexts.previewContext(projectId, request.outlineVersionId());
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
         long sourceVersion = context.outline().getRowVersion();
         WritingChecks.check(sourceVersion, request.expectedOutlineVersion());
         var profile = styles.resolveProfile(request.profile());
-        WritingStylePreviewContent content = workflow.generateStylePreview(projectId, context.bible().getContent(),
-                context.arc(), context.chapter(), profile, request.provider(), request.effectiveTargetWords(),
-                context.instructionWithPreparation(WritingChecks.normalize(request.instruction())));
-        WritingContextService.Context current = contexts.previewContext(projectId, request.outlineVersionId());
+        WritingStylePreviewContent content =
+                workflow.generateStylePreview(
+                        projectId,
+                        context.bible().getContent(),
+                        context.arc(),
+                        context.chapter(),
+                        profile,
+                        request.provider(),
+                        request.effectiveTargetWords(),
+                        context.instructionWithPreparation(
+                                WritingChecks.normalize(request.instruction())));
+        WritingContextService.Context current =
+                contexts.previewContext(projectId, request.outlineVersionId());
         WritingChecks.check(current.outline().getRowVersion(), sourceVersion);
         basis.requireUnchanged(current);
-        return new WritingStylePreviewResponse(context.outline().getId(), sourceVersion,
-                context.outline().getGenerationNumber(), context.bible().getId(), profile, request.provider(),
-                request.effectiveTargetWords(), request.provider() == ModelProvider.LOCAL_TEMPLATE ? "TEMPLATE" : "MODEL",
+        return new WritingStylePreviewResponse(
+                context.outline().getId(),
+                sourceVersion,
+                context.outline().getGenerationNumber(),
+                context.bible().getId(),
+                profile,
+                request.provider(),
+                request.effectiveTargetWords(),
+                request.provider() == ModelProvider.LOCAL_TEMPLATE ? "TEMPLATE" : "MODEL",
                 content);
     }
-
 }

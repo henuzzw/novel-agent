@@ -58,8 +58,8 @@ public class PlanningBatchController {
      * @param command 本次显式业务命令，包含范围、来源或预期版本。
      */
     @PostMapping
-    public ResponseEntity<PlanningBatchService.View> create(@PathVariable UUID projectId,
-            @RequestBody PlanningBatchService.CreateCommand command) {
+    public ResponseEntity<PlanningBatchService.View> create(
+            @PathVariable UUID projectId, @RequestBody PlanningBatchService.CreateCommand command) {
         return ResponseEntity.status(201).body(batches.create(projectId, command));
     }
 
@@ -71,7 +71,9 @@ public class PlanningBatchController {
      * @param command 本次显式业务命令，包含范围、来源或预期版本。
      */
     @PostMapping("/{id}/actions/run-next")
-    public PlanningBatchService.View runNext(@PathVariable UUID projectId, @PathVariable UUID id,
+    public PlanningBatchService.View runNext(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
             @Valid @RequestBody VersionRequest command) {
         return runner.runNext(projectId, id, command.version());
     }
@@ -84,7 +86,9 @@ public class PlanningBatchController {
      * @param command 本次显式业务命令，包含范围、来源或预期版本。
      */
     @PostMapping("/{id}/actions/cancel")
-    public PlanningBatchService.View cancel(@PathVariable UUID projectId, @PathVariable UUID id,
+    public PlanningBatchService.View cancel(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
             @Valid @RequestBody VersionRequest command) {
         return batches.cancel(projectId, id, command.version());
     }
@@ -97,7 +101,9 @@ public class PlanningBatchController {
      * @param command 本次显式业务命令，包含范围、来源或预期版本。
      */
     @PostMapping("/{id}/actions/resume")
-    public PlanningBatchService.View resume(@PathVariable UUID projectId, @PathVariable UUID id,
+    public PlanningBatchService.View resume(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
             @Valid @RequestBody VersionRequest command) {
         return batches.resume(projectId, id, command.version());
     }
@@ -110,7 +116,9 @@ public class PlanningBatchController {
      * @param command 本次显式业务命令，包含范围、来源或预期版本。
      */
     @PostMapping("/{id}/actions/assemble")
-    public ResponseEntity<OutlineResponse> assemble(@PathVariable UUID projectId, @PathVariable UUID id,
+    public ResponseEntity<OutlineResponse> assemble(
+            @PathVariable UUID projectId,
+            @PathVariable UUID id,
             @Valid @RequestBody VersionRequest command) {
         return ResponseEntity.status(201).body(batches.assemble(projectId, id, command.version()));
     }

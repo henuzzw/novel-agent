@@ -33,10 +33,15 @@ public class CanonCommitController {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      */
     @GetMapping("/status")
-    public CanonCommitStatusResponse status(@PathVariable UUID projectId, @PathVariable int chapterNumber) {
+    public CanonCommitStatusResponse status(
+            @PathVariable UUID projectId, @PathVariable int chapterNumber) {
         var current = service.currentCommit(projectId, chapterNumber);
-        return current == null ? new CanonCommitStatusResponse(false, null, null, 0)
-                : new CanonCommitStatusResponse(true, current.getId(), current.getManuscriptVersionId(),
+        return current == null
+                ? new CanonCommitStatusResponse(false, null, null, 0)
+                : new CanonCommitStatusResponse(
+                        true,
+                        current.getId(),
+                        current.getManuscriptVersionId(),
                         current.getCanonVersion());
     }
 
@@ -53,10 +58,10 @@ public class CanonCommitController {
             @PathVariable int chapterNumber,
             @RequestBody CommitCanonRequest request) {
         CanonCommitResponse response = service.commit(projectId, chapterNumber, request);
-        URI location = URI.create("/api/v1/projects/" + projectId + "/canon-commits/" + response.id());
+        URI location =
+                URI.create("/api/v1/projects/" + projectId + "/canon-commits/" + response.id());
         return ResponseEntity.created(location).body(response);
     }
-
 
     /**
      * 显式替换本章有效正史，要求新的确认正文、审稿及匹配的当前提交；后续章已有正史时拒绝直接替换。
@@ -66,7 +71,9 @@ public class CanonCommitController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/actions/replace")
-    public CanonCommitResponse replace(@PathVariable UUID projectId, @PathVariable int chapterNumber,
+    public CanonCommitResponse replace(
+            @PathVariable UUID projectId,
+            @PathVariable int chapterNumber,
             @RequestBody ReplaceCanonRequest request) {
         return service.replace(projectId, chapterNumber, request);
     }

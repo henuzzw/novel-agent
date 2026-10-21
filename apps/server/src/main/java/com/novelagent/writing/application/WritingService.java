@@ -26,7 +26,10 @@ public class WritingService {
     private final ManuscriptService manuscripts;
     private final ChapterReviewService reviews;
 
-    public WritingService(ChapterContractService contracts, ManuscriptService manuscripts, ChapterReviewService reviews) {
+    public WritingService(
+            ChapterContractService contracts,
+            ManuscriptService manuscripts,
+            ChapterReviewService reviews) {
         this.contracts = contracts;
         this.manuscripts = manuscripts;
         this.reviews = reviews;
@@ -50,7 +53,8 @@ public class WritingService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
-    public List<ChapterContractVersionSummaryResponse> contractVersions(UUID projectId, int chapterNumber) {
+    public List<ChapterContractVersionSummaryResponse> contractVersions(
+            UUID projectId, int chapterNumber) {
         return contracts.contractVersions(projectId, chapterNumber);
     }
 
@@ -72,10 +76,16 @@ public class WritingService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @return 匹配范围的记录；未找到时返回空 Optional。
      */
-    public Optional<ChapterContractReviewResponse> latestContractReview(UUID projectId, int chapterNumber) {
+    public Optional<ChapterContractReviewResponse> latestContractReview(
+            UUID projectId, int chapterNumber) {
         return contracts.latestContractReview(projectId, chapterNumber);
     }
 
+    /**
+     * 将退役合同写操作委托给合同服务，保留项目权限校验及统一的 410 响应。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     */
     public void rejectRetiredContractWrite(UUID projectId) {
         contracts.rejectRetiredWrite(projectId);
     }
@@ -98,7 +108,8 @@ public class WritingService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
-    public List<ManuscriptVersionSummaryResponse> manuscriptVersions(UUID projectId, int chapterNumber) {
+    public List<ManuscriptVersionSummaryResponse> manuscriptVersions(
+            UUID projectId, int chapterNumber) {
         return manuscripts.manuscriptVersions(projectId, chapterNumber);
     }
 
@@ -120,7 +131,8 @@ public class WritingService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public ManuscriptResponse generateManuscript(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
+    public ManuscriptResponse generateManuscript(
+            UUID projectId, int chapterNumber, GenerateWritingRequest request) {
         return manuscripts.generateManuscript(projectId, chapterNumber, request);
     }
 
@@ -133,9 +145,14 @@ public class WritingService {
      * @param expectedVersion 预期行版本，用于发现并发编辑或失效来源。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public ManuscriptResponse returnReviewToWriting(UUID projectId, int chapterNumber, UUID reviewId,
-            long expectedVersion, ReturnReviewRequest request) {
-        return reviews.returnReviewToWriting(projectId, chapterNumber, reviewId, expectedVersion, request);
+    public ManuscriptResponse returnReviewToWriting(
+            UUID projectId,
+            int chapterNumber,
+            UUID reviewId,
+            long expectedVersion,
+            ReturnReviewRequest request) {
+        return reviews.returnReviewToWriting(
+                projectId, chapterNumber, reviewId, expectedVersion, request);
     }
 
     /**
@@ -146,7 +163,8 @@ public class WritingService {
      * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
      * @param content 待保存或生成的内容，仍须满足来源与状态约束。
      */
-    public ManuscriptResponse updateManuscript(UUID projectId, UUID id, long expected, ManuscriptContent content) {
+    public ManuscriptResponse updateManuscript(
+            UUID projectId, UUID id, long expected, ManuscriptContent content) {
         return manuscripts.updateManuscript(projectId, id, expected, content);
     }
 
@@ -158,7 +176,8 @@ public class WritingService {
      * @param sourceId 本次处理的基准记录 ID，不隐式改用最新版本。
      * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
      */
-    public ManuscriptResponse createManuscriptRevision(UUID projectId, int chapterNumber, UUID sourceId, long expected) {
+    public ManuscriptResponse createManuscriptRevision(
+            UUID projectId, int chapterNumber, UUID sourceId, long expected) {
         return manuscripts.createManuscriptRevision(projectId, chapterNumber, sourceId, expected);
     }
 
@@ -191,7 +210,8 @@ public class WritingService {
      * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
-    public ChapterReviewResponse generateReview(UUID projectId, int chapterNumber, GenerateWritingRequest request) {
+    public ChapterReviewResponse generateReview(
+            UUID projectId, int chapterNumber, GenerateWritingRequest request) {
         return reviews.generateReview(projectId, chapterNumber, request);
     }
 
@@ -203,7 +223,8 @@ public class WritingService {
      * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
      * @param content 待保存或生成的内容，仍须满足来源与状态约束。
      */
-    public ChapterReviewResponse updateReview(UUID projectId, UUID id, long expected, ChapterReviewContent content) {
+    public ChapterReviewResponse updateReview(
+            UUID projectId, UUID id, long expected, ChapterReviewContent content) {
         return reviews.updateReview(projectId, id, expected, content);
     }
 
@@ -215,7 +236,8 @@ public class WritingService {
      * @param expected 调用方持有的预期编辑行版本，不是章节生成序号。
      * @param content 待保存或生成的内容，仍须满足来源与状态约束。
      */
-    public ChapterReviewResponse approveReview(UUID projectId, UUID id, long expected, ChapterReviewContent content) {
+    public ChapterReviewResponse approveReview(
+            UUID projectId, UUID id, long expected, ChapterReviewContent content) {
         return reviews.approveReview(projectId, id, expected, content);
     }
 

@@ -33,20 +33,29 @@ public class EntityCatalogService {
      */
     @Transactional(readOnly = true)
     public EntityCatalogContext forReview(UUID projectId, ChapterContractContent contract) {
-        Set<String> relevantNames = java.util.stream.Stream.concat(
-                        java.util.stream.Stream.of(contract.pov()), contract.locations().stream())
-                .filter(value -> value != null && !value.isBlank())
-                .collect(Collectors.toSet());
+        Set<String> relevantNames =
+                java.util.stream.Stream.concat(
+                                java.util.stream.Stream.of(contract.pov()),
+                                contract.locations().stream())
+                        .filter(value -> value != null && !value.isBlank())
+                        .collect(Collectors.toSet());
         return catalog(projectId, relevantNames);
     }
 
+    /**
+     * 组装当前项目全部有效实体目录供已发布正文提取记忆，避免按章节关键词遗漏已有实体身份。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     */
     @Transactional(readOnly = true)
     public EntityCatalogContext forPublishedMemory(UUID projectId) {
         return catalog(projectId, Set.of());
     }
 
     private EntityCatalogContext catalog(UUID projectId, Set<String> relevantNames) {
-        List<EntityCatalogContext.EntityCatalogEntry> entries = jdbc.query("""
+        List<EntityCatalogContext.EntityCatalogEntry> entries =
+                jdbc.query(
+                        """
                 SELECT e.id, e.entity_type, e.canonical_name,
                        array_remove(array_agg(DISTINCT a.alias), NULL) AS aliases,
                        count(DISTINCT m.id) AS mention_count
@@ -55,21 +64,30 @@ public class EntityCatalogService {
                 LEFT JOIN entity_mention m ON m.resolved_entity_id = e.id
                 WHERE e.project_id = ? AND e.canon_version_to IS NULL
                 GROUP BY e.id, e.entity_type, e.canonical_name
-                """, (rs, row) -> {
-            String name = rs.getString("canonical_name");
-            List<String> aliases = strings(rs.getArray("aliases"));
-            boolean relevant = relevantNames.contains(name)
-                    || aliases.stream().anyMatch(relevantNames::contains);
-            return new EntityCatalogContext.EntityCatalogEntry(
-                    rs.getObject("id", UUID.class), rs.getString("entity_type"), name,
-                    aliases, rs.getLong("mention_count"), relevant);
-        }, projectId);
-        entries.sort(java.util.Comparator
-                .comparing(EntityCatalogContext.EntityCatalogEntry::chapterRelevant,
-                        java.util.Comparator.reverseOrder())
-                .thenComparing(EntityCatalogContext.EntityCatalogEntry::recentMentionCount,
-                        java.util.Comparator.reverseOrder())
-                .thenComparing(EntityCatalogContext.EntityCatalogEntry::name));
+                """,
+                        (rs, row) -> {
+                            String name = rs.getString("canonical_name");
+                            List<String> aliases = strings(rs.getArray("aliases"));
+                            boolean relevant =
+                                    relevantNames.contains(name)
+                                            || aliases.stream().anyMatch(relevantNames::contains);
+                            return new EntityCatalogContext.EntityCatalogEntry(
+                                    rs.getObject("id", UUID.class),
+                                    rs.getString("entity_type"),
+                                    name,
+                                    aliases,
+                                    rs.getLong("mention_count"),
+                                    relevant);
+                        },
+                        projectId);
+        entries.sort(
+                java.util.Comparator.comparing(
+                                EntityCatalogContext.EntityCatalogEntry::chapterRelevant,
+                                java.util.Comparator.reverseOrder())
+                        .thenComparing(
+                                EntityCatalogContext.EntityCatalogEntry::recentMentionCount,
+                                java.util.Comparator.reverseOrder())
+                        .thenComparing(EntityCatalogContext.EntityCatalogEntry::name));
         return new EntityCatalogContext(List.copyOf(entries));
     }
 

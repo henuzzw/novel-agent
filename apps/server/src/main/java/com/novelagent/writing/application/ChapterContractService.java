@@ -26,8 +26,11 @@ public class ChapterContractService {
     private final ChapterContractReviewVersionRepository contractReviews;
     private final CharacterNameService characterNames;
 
-    public ChapterContractService(WritingContextService contexts, ChapterContractVersionRepository contracts,
-            ChapterContractReviewVersionRepository contractReviews, CharacterNameService characterNames) {
+    public ChapterContractService(
+            WritingContextService contexts,
+            ChapterContractVersionRepository contracts,
+            ChapterContractReviewVersionRepository contractReviews,
+            CharacterNameService characterNames) {
         this.contexts = contexts;
         this.contracts = contracts;
         this.contractReviews = contractReviews;
@@ -44,7 +47,9 @@ public class ChapterContractService {
     @Transactional(readOnly = true)
     public Optional<ChapterContractResponse> latestContract(UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
-        return contracts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
+        return contracts
+                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                        projectId, chapterNumber)
                 .map(ChapterContractResponse::from);
     }
 
@@ -56,11 +61,20 @@ public class ChapterContractService {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @Transactional(readOnly = true)
-    public List<ChapterContractVersionSummaryResponse> contractVersions(UUID projectId, int chapterNumber) {
+    public List<ChapterContractVersionSummaryResponse> contractVersions(
+            UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
-        return contracts.findAllByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
-                .stream().map(value -> ChapterContractVersionSummaryResponse.from(value,
-                        characterNames.render(projectId, value.getContent().chapterTitle()))).toList();
+        return contracts
+                .findAllByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                        projectId, chapterNumber)
+                .stream()
+                .map(
+                        value ->
+                                ChapterContractVersionSummaryResponse.from(
+                                        value,
+                                        characterNames.render(
+                                                projectId, value.getContent().chapterTitle())))
+                .toList();
     }
 
     /**
@@ -73,8 +87,10 @@ public class ChapterContractService {
     @Transactional(readOnly = true)
     public ChapterContractResponse contractVersion(UUID projectId, int chapterNumber, UUID id) {
         contexts.requireOwnedProject(projectId);
-        return ChapterContractResponse.from(contracts.findByIdAndProjectIdAndChapterNumber(id, projectId, chapterNumber)
-                .orElseThrow(() -> new WritingResourceNotFoundException("章节合同版本", id)));
+        return ChapterContractResponse.from(
+                contracts
+                        .findByIdAndProjectIdAndChapterNumber(id, projectId, chapterNumber)
+                        .orElseThrow(() -> new WritingResourceNotFoundException("章节合同版本", id)));
     }
 
     /**
@@ -85,15 +101,22 @@ public class ChapterContractService {
      * @return 匹配范围的记录；未找到时返回空 Optional。
      */
     @Transactional(readOnly = true)
-    public Optional<ChapterContractReviewResponse> latestContractReview(UUID projectId, int chapterNumber) {
+    public Optional<ChapterContractReviewResponse> latestContractReview(
+            UUID projectId, int chapterNumber) {
         contexts.requireOwnedProject(projectId);
-        return contractReviews.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, chapterNumber)
+        return contractReviews
+                .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
+                        projectId, chapterNumber)
                 .map(ChapterContractReviewResponse::from);
     }
 
+    /**
+     * 先检查项目归属，再统一拒绝已退役的合同写操作；历史合同读取继续保留。
+     *
+     * @param projectId 所属小说项目 ID，访问范围由应用服务校验
+     */
     public void rejectRetiredWrite(UUID projectId) {
         contexts.requireOwnedProject(projectId);
-        throw new ResponseStatusException(HttpStatus.GONE,
-                "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
+        throw new ResponseStatusException(HttpStatus.GONE, "合同与合同审阅阶段已移除，请发布大纲后直接生成正文");
     }
 }

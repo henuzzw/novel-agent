@@ -35,8 +35,7 @@ public class TypedCanonController {
      */
     @GetMapping("/entities")
     public List<StoryEntityResponse> entities(
-            @PathVariable UUID projectId,
-            @RequestParam(required = false) String type) {
+            @PathVariable UUID projectId, @RequestParam(required = false) String type) {
         return service.entities(projectId, type);
     }
 
@@ -60,8 +59,7 @@ public class TypedCanonController {
      */
     @GetMapping("/entities/{entityId}/state")
     public List<EntityStateResponse> entityState(
-            @PathVariable UUID projectId,
-            @PathVariable UUID entityId) {
+            @PathVariable UUID projectId, @PathVariable UUID entityId) {
         return service.entityState(projectId, entityId);
     }
 
@@ -85,8 +83,7 @@ public class TypedCanonController {
      */
     @GetMapping("/relationships")
     public List<StoryRelationshipResponse> relationships(
-            @PathVariable UUID projectId,
-            @RequestParam(required = false) UUID entityId) {
+            @PathVariable UUID projectId, @RequestParam(required = false) UUID entityId) {
         return service.relationships(projectId, entityId);
     }
 
@@ -99,8 +96,7 @@ public class TypedCanonController {
      */
     @GetMapping("/knowledge")
     public List<CharacterKnowledgeResponse> knowledge(
-            @PathVariable UUID projectId,
-            @RequestParam(required = false) UUID characterId) {
+            @PathVariable UUID projectId, @RequestParam(required = false) UUID characterId) {
         return service.knowledge(projectId, characterId);
     }
 
@@ -112,7 +108,8 @@ public class TypedCanonController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping("/entities/{entityId}/aliases")
-    public List<EntityAliasResponse> aliases(@PathVariable UUID projectId, @PathVariable UUID entityId) {
+    public List<EntityAliasResponse> aliases(
+            @PathVariable UUID projectId, @PathVariable UUID entityId) {
         return service.aliases(projectId, entityId);
     }
 
@@ -124,7 +121,9 @@ public class TypedCanonController {
      * @param request 当前接口的结构化请求，实际约束由本方法及领域校验执行。
      */
     @PostMapping("/entities/{entityId}/aliases")
-    public EntityAliasResponse addAlias(@PathVariable UUID projectId, @PathVariable UUID entityId,
+    public EntityAliasResponse addAlias(
+            @PathVariable UUID projectId,
+            @PathVariable UUID entityId,
             @Valid @RequestBody CreateEntityAliasRequest request) {
         return service.addAlias(projectId, entityId, request.alias(), request.aliasType());
     }
@@ -137,7 +136,8 @@ public class TypedCanonController {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     @GetMapping("/entities/{entityId}/mentions")
-    public List<EntityMentionResponse> mentions(@PathVariable UUID projectId, @PathVariable UUID entityId) {
+    public List<EntityMentionResponse> mentions(
+            @PathVariable UUID projectId, @PathVariable UUID entityId) {
         return service.mentions(projectId, entityId);
     }
 }

@@ -34,10 +34,19 @@ public class PlanningMaterialSyncService {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
 
-    public PlanningMaterialSyncService(ProjectAccessService access, CharacterNameService names,
-            StoryBibleVersionRepository bibles, OutlineVersionRepository outlines, JdbcTemplate jdbc, ObjectMapper mapper) {
-        this.access = access; this.names = names; this.bibles = bibles; this.outlines = outlines;
-        this.jdbc = jdbc; this.mapper = mapper;
+    public PlanningMaterialSyncService(
+            ProjectAccessService access,
+            CharacterNameService names,
+            StoryBibleVersionRepository bibles,
+            OutlineVersionRepository outlines,
+            JdbcTemplate jdbc,
+            ObjectMapper mapper) {
+        this.access = access;
+        this.names = names;
+        this.bibles = bibles;
+        this.outlines = outlines;
+        this.jdbc = jdbc;
+        this.mapper = mapper;
     }
 
     /**
@@ -49,7 +58,10 @@ public class PlanningMaterialSyncService {
     public void syncCurrent(UUID projectId) {
         access.requireOwnedProject(projectId);
         lock(projectId);
-        var pointers = jdbc.queryForMap("SELECT current_bible_version_id, current_outline_version_id FROM novel_project WHERE id = ?", projectId);
+        var pointers =
+                jdbc.queryForMap(
+                        "SELECT current_bible_version_id, current_outline_version_id FROM novel_project WHERE id = ?",
+                        projectId);
         UUID bibleId = (UUID) pointers.get("current_bible_version_id");
         UUID outlineId = (UUID) pointers.get("current_outline_version_id");
         if (bibleId == null) throw new IllegalArgumentException("请先发布已确认雪花资料");
@@ -68,27 +80,39 @@ public class PlanningMaterialSyncService {
      */
     @Transactional
     public void syncBible(StoryBibleVersion bible) {
-        if (bible.getStatus() != StoryBibleStatus.PUBLISHED) throw new IllegalArgumentException("只能同步已发布已确认雪花资料");
+        if (bible.getStatus() != StoryBibleStatus.PUBLISHED)
+            throw new IllegalArgumentException("只能同步已发布已确认雪花资料");
         UUID projectId = bible.getProjectId();
         access.requireOwnedProject(projectId);
         lock(projectId);
         names.initializeFromStoryBible(projectId, bible);
         for (var blueprint : bible.getContent().characterBlueprints()) {
             UUID characterId = characterId(projectId, blueprint.name());
-            jdbc.update("""
+            jdbc.update(
+                    """
                     INSERT INTO planning_character_snapshot(project_id, source_bible_id, character_id, blueprint)
                     VALUES (?, ?, ?, CAST(? AS jsonb)) ON CONFLICT DO NOTHING
-                    """, projectId, bible.getId(), characterId, json(blueprint));
+                    """,
+                    projectId,
+                    bible.getId(),
+                    characterId,
+                    json(blueprint));
             fillProfile(projectId, characterId, blueprint);
             for (int i = 0; i < blueprint.initialRelationships().size(); i++) {
-                relationship(projectId, bible.getId(), characterId, characterId + ":" + i, blueprint.initialRelationships().get(i));
+                relationship(
+                        projectId,
+                        bible.getId(),
+                        characterId,
+                        characterId + ":" + i,
+                        blueprint.initialRelationships().get(i));
             }
         }
         var dynamics = bible.getContent().relationshipDynamics();
         for (int i = 0; dynamics != null && i < dynamics.size(); i++) {
             relationship(projectId, bible.getId(), null, "DYNAMIC:" + i, dynamics.get(i));
         }
-        for (var seed : bible.getContent().readerExperiencePlans()) insertPlan(projectId, "BIBLE", bible.getId(), seed);
+        for (var seed : bible.getContent().readerExperiencePlans())
+            insertPlan(projectId, "BIBLE", bible.getId(), seed);
     }
 
     /**
@@ -98,12 +122,15 @@ public class PlanningMaterialSyncService {
      */
     @Transactional
     public void syncOutline(OutlineVersion outline) {
-        if (outline.getStatus() != OutlineStatus.PUBLISHED) throw new IllegalArgumentException("只能同步已发布大纲");
+        if (outline.getStatus() != OutlineStatus.PUBLISHED)
+            throw new IllegalArgumentException("只能同步已发布大纲");
         access.requireOwnedProject(outline.getProjectId());
         lock(outline.getProjectId());
         for (var seed : outline.getContent().readerExperiencePlans()) {
-            if (seed.plannedChapter() != null && outline.getContent().arcs().stream()
-                    .flatMap(arc -> arc.chapters().stream()).noneMatch(chapter -> chapter.number() == seed.plannedChapter())) {
+            if (seed.plannedChapter() != null
+                    && outline.getContent().arcs().stream()
+                            .flatMap(arc -> arc.chapters().stream())
+                            .noneMatch(chapter -> chapter.number() == seed.plannedChapter())) {
                 throw new IllegalArgumentException("承诺或伏笔的计划兑现章不存在于大纲中：" + seed.key());
             }
             insertPlan(outline.getProjectId(), "OUTLINE", outline.getId(), seed);
@@ -117,7 +144,8 @@ public class PlanningMaterialSyncService {
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
      */
     public void syncCanonForeshadows(UUID projectId) {
-        jdbc.update("""
+        jdbc.update(
+                """
                 INSERT INTO reader_experience_plan(id, project_id, kind, title, promise_text, setup_text,
                     payoff_text, aftermath_text, planned_chapter, source_kind, source_id, source_key)
                 SELECT f.id, f.project_id, 'FORESHADOW', left(f.title, 200),
@@ -125,7 +153,8 @@ public class PlanningMaterialSyncService {
                     f.planned_resolve_chapter, 'CANON', f.id, 'FORESHADOW'
                 FROM foreshadow f WHERE f.project_id = ? AND f.canon_version_to IS NULL
                 ON CONFLICT DO NOTHING
-                """, projectId);
+                """,
+                projectId);
     }
 
     /**
@@ -137,7 +166,6 @@ public class PlanningMaterialSyncService {
      * @param plot 剧情结构或剧情规划内容。
      */
 
-
     /**
      * 返回查询范围内的人物关系，并保留规划与已发生事实各自的来源，不自动生成新关系。
      *
@@ -148,15 +176,26 @@ public class PlanningMaterialSyncService {
     @Transactional(readOnly = true)
     public List<PlannedRelationship> relationships(UUID projectId, UUID characterId) {
         access.requireOwnedProject(projectId);
-        var result = new java.util.ArrayList<>(jdbc.query("""
+        var result =
+                new java.util.ArrayList<>(
+                        jdbc.query(
+                                """
                 SELECT r.id, r.source_bible_id, r.character_id, r.description
                 FROM planning_relationship r JOIN novel_project p ON p.id = r.project_id
                 WHERE r.project_id = ? AND r.source_bible_id = p.current_bible_version_id
                     AND (CAST(? AS uuid) IS NULL OR r.character_id IS NULL OR r.character_id = ?)
                 ORDER BY r.source_key
-                """, (rs, n) -> new PlannedRelationship(rs.getObject("id", UUID.class),
-                rs.getObject("source_bible_id", UUID.class), rs.getObject("character_id", UUID.class),
-                names.render(projectId, rs.getString("description"))), projectId, characterId, characterId));
+                """,
+                                (rs, n) ->
+                                        new PlannedRelationship(
+                                                rs.getObject("id", UUID.class),
+                                                rs.getObject("source_bible_id", UUID.class),
+                                                rs.getObject("character_id", UUID.class),
+                                                names.render(
+                                                        projectId, rs.getString("description"))),
+                                projectId,
+                                characterId,
+                                characterId));
 
         return result;
     }
@@ -170,13 +209,21 @@ public class PlanningMaterialSyncService {
     @Transactional(readOnly = true)
     public List<CharacterSnapshot> characters(UUID projectId) {
         access.requireOwnedProject(projectId);
-        var result = new java.util.ArrayList<>(jdbc.query("""
+        var result =
+                new java.util.ArrayList<>(
+                        jdbc.query(
+                                """
                 SELECT s.source_bible_id, s.character_id, s.blueprint::text FROM planning_character_snapshot s
                 JOIN novel_project p ON p.id = s.project_id
                 WHERE s.project_id = ? AND s.source_bible_id = p.current_bible_version_id
                 ORDER BY s.character_id
-                """, (rs, n) -> new CharacterSnapshot(rs.getObject("source_bible_id", UUID.class),
-                rs.getObject("character_id", UUID.class), blueprint(projectId, rs.getString("blueprint"))), projectId));
+                """,
+                                (rs, n) ->
+                                        new CharacterSnapshot(
+                                                rs.getObject("source_bible_id", UUID.class),
+                                                rs.getObject("character_id", UUID.class),
+                                                blueprint(projectId, rs.getString("blueprint"))),
+                                projectId));
         return result;
     }
 
@@ -189,7 +236,8 @@ public class PlanningMaterialSyncService {
     @Transactional(readOnly = true)
     public List<PlanOrigin> origins(UUID projectId) {
         access.requireOwnedProject(projectId);
-        return jdbc.query("""
+        return jdbc.query(
+                """
                 SELECT r.id, r.source_kind, r.source_id,
                     CASE r.source_kind WHEN 'BIBLE' THEN r.source_id = p.current_bible_version_id
                     WHEN 'OUTLINE' THEN r.source_id = p.current_outline_version_id AND EXISTS (
@@ -200,8 +248,14 @@ public class PlanningMaterialSyncService {
                     ELSE TRUE END AS current
                 FROM reader_experience_plan r JOIN novel_project p ON p.id = r.project_id
                 WHERE r.project_id = ? AND r.source_kind IS NOT NULL AND NOT r.deleted
-                """, (rs, n) -> new PlanOrigin(rs.getObject("id", UUID.class), rs.getString("source_kind"),
-                rs.getObject("source_id", UUID.class), rs.getBoolean("current")), projectId);
+                """,
+                (rs, n) ->
+                        new PlanOrigin(
+                                rs.getObject("id", UUID.class),
+                                rs.getString("source_kind"),
+                                rs.getObject("source_id", UUID.class),
+                                rs.getBoolean("current")),
+                projectId);
     }
 
     /**
@@ -213,28 +267,55 @@ public class PlanningMaterialSyncService {
      * @param seed 创建规划条目的明确来源设计，不能推定为已发生事实。
      */
     private void insertPlan(UUID projectId, String kind, UUID sourceId, ReaderExperienceSeed seed) {
-        jdbc.update("""
+        jdbc.update(
+                """
                 INSERT INTO reader_experience_plan(id, project_id, kind, title, promise_text, setup_text,
                     payoff_text, aftermath_text, planned_chapter, source_kind, source_id, source_key)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
-                """, UUID.randomUUID(), projectId, seed.kind(), seed.title(), seed.promise(), seed.setup(),
-                seed.payoff(), seed.aftermath(), seed.plannedChapter(), kind, sourceId, seed.key());
+                """,
+                UUID.randomUUID(),
+                projectId,
+                seed.kind(),
+                seed.title(),
+                seed.promise(),
+                seed.setup(),
+                seed.payoff(),
+                seed.aftermath(),
+                seed.plannedChapter(),
+                kind,
+                sourceId,
+                seed.key());
     }
 
-    private void relationship(UUID projectId, UUID bibleId, UUID characterId, String key, String text) {
+    private void relationship(
+            UUID projectId, UUID bibleId, UUID characterId, String key, String text) {
         if (text == null || text.isBlank()) return;
-        jdbc.update("""
+        jdbc.update(
+                """
                 INSERT INTO planning_relationship(id, project_id, source_bible_id, source_key, character_id, description)
                 VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING
-                """, UUID.randomUUID(), projectId, bibleId, key, characterId, text);
+                """,
+                UUID.randomUUID(),
+                projectId,
+                bibleId,
+                key,
+                characterId,
+                text);
     }
 
     private UUID characterId(UUID projectId, String name) {
-        var ids = jdbc.query("""
+        var ids =
+                jdbc.query(
+                        """
                 SELECT e.id FROM story_entity e WHERE e.project_id = ? AND e.entity_type = 'CHARACTER'
                 AND e.canon_version_to IS NULL AND (e.canonical_name = ? OR e.source_name = ?
                 OR EXISTS (SELECT 1 FROM entity_alias a WHERE a.entity_id = e.id AND a.alias = ? AND a.canon_version_to IS NULL))
-                """, (rs, n) -> rs.getObject("id", UUID.class), projectId, name, name, name);
+                """,
+                        (rs, n) -> rs.getObject("id", UUID.class),
+                        projectId,
+                        name,
+                        name,
+                        name);
         if (ids.size() != 1) throw new IllegalArgumentException("人物身份无法唯一匹配：" + name);
         return ids.getFirst();
     }
@@ -247,42 +328,73 @@ public class PlanningMaterialSyncService {
      * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
      */
     private void fillProfile(UUID projectId, UUID characterId, CharacterBlueprint value) {
-        jdbc.update("INSERT INTO character_profile(character_id, project_id) VALUES (?, ?) ON CONFLICT DO NOTHING", characterId, projectId);
+        jdbc.update(
+                "INSERT INTO character_profile(character_id, project_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                characterId,
+                projectId);
         Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("gender", value.gender()); fields.put("age_description", value.ageDescription());
-        fields.put("identity_text", value.identity()); fields.put("appearance", value.appearance());
-        fields.put("background", value.background()); fields.put("external_personality", value.externalPersonality());
-        fields.put("internal_personality", value.internalPersonality()); fields.put("core_desire", value.coreDesire());
-        fields.put("fear", value.fear()); fields.put("flaw", value.flaw()); fields.put("values_text", value.values());
-        fields.put("speech_style", value.speechStyle()); fields.put("behavior_habits", value.behaviorHabits());
-        fields.put("secret_text", value.secret()); fields.put("character_arc", value.characterArc());
+        fields.put("gender", value.gender());
+        fields.put("age_description", value.ageDescription());
+        fields.put("identity_text", value.identity());
+        fields.put("appearance", value.appearance());
+        fields.put("background", value.background());
+        fields.put("external_personality", value.externalPersonality());
+        fields.put("internal_personality", value.internalPersonality());
+        fields.put("core_desire", value.coreDesire());
+        fields.put("fear", value.fear());
+        fields.put("flaw", value.flaw());
+        fields.put("values_text", value.values());
+        fields.put("speech_style", value.speechStyle());
+        fields.put("behavior_habits", value.behaviorHabits());
+        fields.put("secret_text", value.secret());
+        fields.put("character_arc", value.characterArc());
         fields.put("behavior_boundaries", value.behaviorBoundaries());
-        // Column names only come from the fixed map above; author text is always bound as parameters.
+        // Column names only come from the fixed map above; author text is always bound as
+        // parameters.
         for (var field : fields.entrySet()) {
             if (field.getValue().isBlank()) continue;
-            jdbc.update("UPDATE character_profile SET " + field.getKey() + " = ?, row_version = row_version + 1, updated_at = now()"
-                    + " WHERE project_id = ? AND character_id = ? AND NULLIF(btrim(" + field.getKey() + "), '') IS NULL",
-                    field.getValue(), projectId, characterId);
+            jdbc.update(
+                    "UPDATE character_profile SET "
+                            + field.getKey()
+                            + " = ?, row_version = row_version + 1, updated_at = now()"
+                            + " WHERE project_id = ? AND character_id = ? AND NULLIF(btrim("
+                            + field.getKey()
+                            + "), '') IS NULL",
+                    field.getValue(),
+                    projectId,
+                    characterId);
         }
     }
 
     private void lock(UUID projectId) {
-        jdbc.queryForObject("SELECT id FROM novel_project WHERE id = ? FOR UPDATE", UUID.class, projectId);
+        jdbc.queryForObject(
+                "SELECT id FROM novel_project WHERE id = ? FOR UPDATE", UUID.class, projectId);
     }
-
-
-
 
     private String json(Object value) {
-        try { return mapper.writeValueAsString(value); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("规划资料无法保存", e); }
-    }
-    private CharacterBlueprint blueprint(UUID projectId, String value) {
-        try { return names.render(projectId, mapper.readValue(value, CharacterBlueprint.class), CharacterBlueprint.class); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("人物规划无法读取", e); }
+        try {
+            return mapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("规划资料无法保存", e);
+        }
     }
 
-    public record PlannedRelationship(UUID id, UUID sourceBibleId, UUID characterId, String description) { }
-    public record CharacterSnapshot(UUID sourceBibleId, UUID characterId, CharacterBlueprint blueprint) { }
-    public record PlanOrigin(UUID planId, String sourceKind, UUID sourceId, boolean current) { }
+    private CharacterBlueprint blueprint(UUID projectId, String value) {
+        try {
+            return names.render(
+                    projectId,
+                    mapper.readValue(value, CharacterBlueprint.class),
+                    CharacterBlueprint.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("人物规划无法读取", e);
+        }
+    }
+
+    public record PlannedRelationship(
+            UUID id, UUID sourceBibleId, UUID characterId, String description) {}
+
+    public record CharacterSnapshot(
+            UUID sourceBibleId, UUID characterId, CharacterBlueprint blueprint) {}
+
+    public record PlanOrigin(UUID planId, String sourceKind, UUID sourceId, boolean current) {}
 }
