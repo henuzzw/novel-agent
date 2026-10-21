@@ -51,7 +51,7 @@ class CreativeStrategyServiceTest {
                 "不临时开挂");
         var gripping = service.policy(project.getId());
         assertThat(CreativeStrategyGuide.previewRules(gripping)).contains("不强求整章兑现");
-        var standard = com.novelagent.project.domain.CreativeStrategyPolicy.of(CreativeStrategy.STANDARD);
+        var standard = CreativeStrategyPolicy.of(CreativeStrategy.STANDARD);
         assertThat(CreativeStrategyGuide.outlineRules(standard) + CreativeStrategyGuide.manuscriptRules(standard)
                 + CreativeStrategyGuide.reviewRules(standard) + CreativeStrategyGuide.previewRules(standard)
                 + CreativeStrategyGuide.previewReviewRules(standard)).isEmpty();

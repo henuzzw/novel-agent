@@ -1,7 +1,10 @@
 package com.novelagent.canon.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -10,21 +13,19 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /** 在隔离 schema 中验证 V065 迁移与可发布事件查询：退避中的事件及其同聚合后续事件暂不发布。 */
-@EnabledIfEnvironmentVariable(named = "NOVEL_OUTBOX_DB_TEST", matches = "true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OutboxEventDatabaseTest {
     private final String schema = "outbox_test_" + UUID.randomUUID().toString().replace("-", "");
     private JdbcTemplate jdbc;
 
     @BeforeAll void migrateIsolatedSchema() throws Exception {
-        var datasource = new DriverManagerDataSource("jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432")
-                + "/" + env("DB_NAME", "novel_agent") + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
+        var datasource = new DriverManagerDataSource(TestDatabase.url() + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
                 env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", "change-me"));
         jdbc = new JdbcTemplate(datasource);
         jdbc.execute("CREATE SCHEMA " + schema);
@@ -67,8 +68,4 @@ class OutboxEventDatabaseTest {
         }
     }
 
-    private static String env(String key, String fallback) {
-        String value = System.getenv(key);
-        return value == null || value.isBlank() ? fallback : value;
-    }
 }

@@ -1,16 +1,19 @@
 package com.novelagent.modelaccess.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.modelaccess.infrastructure.ChatGptHttp;
-import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore;
 import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.Credentials;
+import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.sun.net.httpserver.HttpServer;
 import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +24,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -53,7 +58,7 @@ public class ChatGptOAuthService {
                         return thread;
                     });
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public ChatGptOAuthService(
             PrivateOAuthStore store, ChatGptHttp http, CurrentActorProvider actors) {
         this(store, http, actors, decoder(http));
@@ -147,8 +152,7 @@ public class ChatGptOAuthService {
                             body.write(bytes);
                         }
                         if (!"PENDING".equals(attempt.status))
-                            timers.schedule(
-                                    () -> server.stop(0), 1, java.util.concurrent.TimeUnit.SECONDS);
+                            timers.schedule(() -> server.stop(0), 1, TimeUnit.SECONDS);
                     });
             attempts.put(user, attempt);
             server.start();
@@ -164,7 +168,7 @@ public class ChatGptOAuthService {
                         }
                     },
                     10,
-                    java.util.concurrent.TimeUnit.MINUTES);
+                    TimeUnit.MINUTES);
             var parameters = new LinkedHashMap<String, String>();
             parameters.put("client_id", saved == null ? "dynamic_agent_client" : saved.clientId());
             if (saved == null) parameters.put("agent_name_hint", "Novel Agent");
@@ -182,7 +186,7 @@ public class ChatGptOAuthService {
                     attempt.id,
                     ChatGptHttp.AUTH + "?" + ChatGptHttp.encode(parameters),
                     attempt.expiresAt);
-        } catch (java.io.IOException error) {
+        } catch (IOException error) {
             throw new ChatGptAccessException("AUTHENTICATION", "无法启动本机登录回调，请检查服务端网络权限");
         }
     }
@@ -414,7 +418,7 @@ public class ChatGptOAuthService {
     }
 
     private static Credentials credentials(
-            com.fasterxml.jackson.databind.JsonNode tokens,
+            JsonNode tokens,
             String client,
             String subject,
             String email,
@@ -470,7 +474,7 @@ public class ChatGptOAuthService {
                     .encodeToString(
                             MessageDigest.getInstance("SHA-256")
                                     .digest(verifier.getBytes(StandardCharsets.US_ASCII)));
-        } catch (java.security.NoSuchAlgorithmException error) {
+        } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
     }

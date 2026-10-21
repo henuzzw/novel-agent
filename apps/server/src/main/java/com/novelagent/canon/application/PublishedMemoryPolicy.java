@@ -2,6 +2,7 @@ package com.novelagent.canon.application;
 
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -14,7 +15,7 @@ public class PublishedMemoryPolicy {
     private static final Set<String> ENTITY_TYPES = Set.of("CHARACTER", "LOCATION", "ORGANIZATION", "ITEM", "SECRET", "RULE");
     public static void validate(List<FactProposal> facts, String body) {
         if (facts == null || facts.size() > 100) throw new IllegalArgumentException("记忆条目数量无效");
-        var ids = new java.util.HashSet<String>();
+        var ids = new HashSet<String>();
         for (var fact : facts) {
             if (fact == null || fact.id() == null || fact.id().isBlank() || fact.id().length() > 100
                     || !ids.add(fact.id()) || !TYPES.contains(fact.factType())

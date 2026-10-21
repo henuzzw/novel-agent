@@ -1,12 +1,15 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.agent.application.ModelOutputAvailability;
+import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -69,7 +72,7 @@ final class PlainTextOutputProtocol implements ModelOutputProtocol {
     }
 
     public String instructions() {
-        String unavailable = com.novelagent.agent.application.ModelOutputAvailability.INSTRUCTIONS;
+        String unavailable = ModelOutputAvailability.INSTRUCTIONS;
         if (freeText()) return "\n【本次输出】直接返回最终创作文本，不使用 JSON、代码块或说明。" + unavailable;
         StringBuilder guide = new StringBuilder("\n【本次纯文本输出约定，取代旧版返回格式指令】\n"
                 + "不输出 JSON，不输出 Schema，不使用代码围栏。用下列二级标题标识保存位置，标题下直接写自然文字。"
@@ -101,14 +104,14 @@ final class PlainTextOutputProtocol implements ModelOutputProtocol {
 
     public String decode(String raw) {
         if (raw == null || raw.isBlank()) throw new IllegalArgumentException("模型未返回可读文本");
-        com.novelagent.agent.application.ModelOutputAvailability.requireAvailable(raw);
+        ModelOutputAvailability.requireAvailable(raw);
         // Accept internal test fixtures and old locally generated DTOs; neither provider is asked for this format.
         try {
             if (raw.stripLeading().startsWith("{")) {
                 JsonNode parsed = JSON.readTree(raw);
                 if (parsed != null && parsed.isObject()) return raw;
             }
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) { }
+        } catch (JsonProcessingException ignored) { }
         if (freeText()) return JSON.createObjectNode().put("text", raw.strip()).toString();
         Map<String, String> sections = new LinkedHashMap<>();
         var matcher = HEADING.matcher(raw);
@@ -187,7 +190,7 @@ final class PlainTextOutputProtocol implements ModelOutputProtocol {
         }
         try {
             if (type.equals("integer")) return JSON.getNodeFactory().numberNode(Long.parseLong(value));
-            if (type.equals("number")) return JSON.getNodeFactory().numberNode(new java.math.BigDecimal(value));
+            if (type.equals("number")) return JSON.getNodeFactory().numberNode(new BigDecimal(value));
             if (type.equals("boolean") && (value.equals("true") || value.equals("false")))
                 return JSON.getNodeFactory().booleanNode(Boolean.parseBoolean(value));
         } catch (NumberFormatException exception) { throw invalid(path + " 数值无效"); }

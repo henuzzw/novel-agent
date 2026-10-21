@@ -1,5 +1,6 @@
 package com.novelagent.writing.api;
 
+import com.novelagent.writing.domain.ManuscriptBasis;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ManuscriptVersion;
@@ -16,7 +17,7 @@ public record ManuscriptResponse(UUID id, UUID projectId, UUID sourceContractVer
         UUID baseManuscriptVersionId, UUID sourceReviewVersionId, int chapterNumber,
         int versionNumber, String schemaVersion, ManuscriptStatus status, String generatorType,
         String authorInstruction, ManuscriptContent content, List<String> changeSummary,
-        long version, Instant createdAt, Instant updatedAt, com.novelagent.writing.domain.ManuscriptBasis writingBasis) {
+        long version, Instant createdAt, Instant updatedAt, ManuscriptBasis writingBasis) {
     public ManuscriptResponse(UUID id, UUID projectId, UUID sourceContractVersionId,
             UUID baseManuscriptVersionId, UUID sourceReviewVersionId, int chapterNumber,
             int versionNumber, String schemaVersion, ManuscriptStatus status, String generatorType,

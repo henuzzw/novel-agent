@@ -15,10 +15,12 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.infrastructure.EventFactProjector;
-import com.novelagent.canon.infrastructure.StateFactProjector;
-import com.novelagent.canon.infrastructure.RelationshipFactProjector;
-import com.novelagent.canon.infrastructure.KnowledgeFactProjector;
 import com.novelagent.canon.infrastructure.ForeshadowFactProjector;
+import com.novelagent.canon.infrastructure.JdbcCanonFactStore;
+import com.novelagent.canon.infrastructure.KnowledgeFactProjector;
+import com.novelagent.canon.infrastructure.RelationshipFactProjector;
+import com.novelagent.canon.infrastructure.StateFactProjector;
+import com.novelagent.planning.application.PlanningMaterialSyncService;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
 import java.util.List;
@@ -26,6 +28,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class TypedCanonMaterializerTest {
@@ -36,15 +39,15 @@ class TypedCanonMaterializerTest {
         var resolver = mock(EntityResolutionService.class);
         var projector = mock(CanonFactProjector.class);
         when(projector.factTypes()).thenReturn(Set.of("CUSTOM", "CUSTOM_CHANGE"));
-        var sync = mock(com.novelagent.planning.application.PlanningMaterialSyncService.class);
-        var materializer = new TypedCanonMaterializer(new com.novelagent.canon.infrastructure.JdbcCanonFactStore(jdbc), List.of(projector), resolver, sync);
+        var sync = mock(PlanningMaterialSyncService.class);
+        var materializer = new TypedCanonMaterializer(new JdbcCanonFactStore(jdbc), List.of(projector), resolver, sync);
         var fact = fact("F1", " custom_change ", "线索", "出现", "信封");
         UUID project = UUID.randomUUID();
         UUID commit = UUID.randomUUID();
         materializer.materialize(project, 3, commit, 7, List.of(fact));
         var generic = ArgumentCaptor.forClass(Object[].class);
         var projection = ArgumentCaptor.forClass(CanonFactProjector.Projection.class);
-        var order = org.mockito.Mockito.inOrder(jdbc, projector, sync);
+        var order = Mockito.inOrder(jdbc, projector, sync);
         order.verify(jdbc).update(anyString(), generic.capture());
         order.verify(projector).project(projection.capture());
         order.verify(sync).syncCanonForeshadows(project);
@@ -60,7 +63,7 @@ class TypedCanonMaterializerTest {
         when(first.factTypes()).thenReturn(Set.of("EVENT"));
         when(second.factTypes()).thenReturn(Set.of(" event "));
         assertThatThrownBy(() -> new TypedCanonMaterializer(mock(CanonFactStore.class), List.of(first, second),
-                mock(EntityResolutionService.class), mock(com.novelagent.planning.application.PlanningMaterialSyncService.class)))
+                mock(EntityResolutionService.class), mock(PlanningMaterialSyncService.class)))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("EVENT");
     }
 
@@ -69,8 +72,8 @@ class TypedCanonMaterializerTest {
         var jdbc = mock(JdbcTemplate.class);
         var projector = mock(CanonFactProjector.class);
         when(projector.factTypes()).thenReturn(Set.of("EVENT", "EVENT_CREATE"));
-        var materializer = new TypedCanonMaterializer(new com.novelagent.canon.infrastructure.JdbcCanonFactStore(jdbc), List.of(projector), mock(EntityResolutionService.class),
-                mock(com.novelagent.planning.application.PlanningMaterialSyncService.class));
+        var materializer = new TypedCanonMaterializer(new JdbcCanonFactStore(jdbc), List.of(projector), mock(EntityResolutionService.class),
+                mock(PlanningMaterialSyncService.class));
         UUID commit = UUID.randomUUID();
         materializer.retire(commit, 8);
         verify(jdbc).update(anyString(), eq(8L), eq(commit));
@@ -80,7 +83,7 @@ class TypedCanonMaterializerTest {
     @Test
     void projectionFailurePropagatesWithoutSynchronizingPlanning() {
         var projector = mock(CanonFactProjector.class);
-        var sync = mock(com.novelagent.planning.application.PlanningMaterialSyncService.class);
+        var sync = mock(PlanningMaterialSyncService.class);
         when(projector.factTypes()).thenReturn(Set.of("EVENT_CREATE"));
         doThrow(new IllegalStateException("projection failed")).when(projector).project(any());
         var materializer = new TypedCanonMaterializer(mock(CanonFactStore.class), List.of(projector),
@@ -99,8 +102,8 @@ class TypedCanonMaterializerTest {
                 anyString(), any(), anyString()))
                 .thenReturn(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID());
-        TypedCanonMaterializer materializer = new TypedCanonMaterializer(new com.novelagent.canon.infrastructure.JdbcCanonFactStore(jdbc), projectors(jdbc, resolver), resolver,
-                mock(com.novelagent.planning.application.PlanningMaterialSyncService.class));
+        TypedCanonMaterializer materializer = new TypedCanonMaterializer(new JdbcCanonFactStore(jdbc), projectors(jdbc, resolver), resolver,
+                mock(PlanningMaterialSyncService.class));
 
         materializer.materialize(UUID.randomUUID(), 3, UUID.randomUUID(), 7, List.of(
                 fact("F1", "EVENT", "顾弦", "发现", "旧笔记"),
@@ -124,8 +127,8 @@ class TypedCanonMaterializerTest {
         EntityResolutionService resolver = mock(EntityResolutionService.class);
         when(resolver.resolve(any(), any(), any(Long.class), anyString(), anyString(), anyString(),
                 anyString(), any(), anyString())).thenReturn(UUID.randomUUID());
-        TypedCanonMaterializer materializer = new TypedCanonMaterializer(new com.novelagent.canon.infrastructure.JdbcCanonFactStore(jdbc), projectors(jdbc, resolver), resolver,
-                mock(com.novelagent.planning.application.PlanningMaterialSyncService.class));
+        TypedCanonMaterializer materializer = new TypedCanonMaterializer(new JdbcCanonFactStore(jdbc), projectors(jdbc, resolver), resolver,
+                mock(PlanningMaterialSyncService.class));
 
         materializer.materialize(UUID.randomUUID(), 1, UUID.randomUUID(), 1,
                 List.of(fact("F1", "STATE", "顾弦", "章节退出状态", "沉默离场")));

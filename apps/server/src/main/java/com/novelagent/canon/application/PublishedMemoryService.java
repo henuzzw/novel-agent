@@ -2,10 +2,12 @@ package com.novelagent.canon.application;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
+import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
 import com.novelagent.writing.domain.ManuscriptContent;
@@ -13,9 +15,12 @@ import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import com.novelagent.writing.infrastructure.WritingGenerationGateway;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
-import java.time.Instant;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -211,7 +216,7 @@ public class PublishedMemoryService {
     }
 
     void process(Source source) {
-        var extracted = new java.util.concurrent.atomic.AtomicReference<List<FactProposal>>();
+        var extracted = new AtomicReference<List<FactProposal>>();
         try {
             var result =
                     gateway.publishedMemory(
@@ -340,7 +345,7 @@ public class PublishedMemoryService {
                     PublishedMemoryPolicy.validate(request.candidates(), body);
                     if (request.candidates().size() != view.candidates().size())
                         throw new IllegalArgumentException("请保留全部记忆条目");
-                    var accepted = new java.util.ArrayList<FactProposal>();
+                    var accepted = new ArrayList<FactProposal>();
                     for (var original : view.candidates()) {
                         var supplied =
                                 request.candidates().stream()
@@ -467,7 +472,7 @@ public class PublishedMemoryService {
     }
 
     private void recordHistory(UUID projectId, UUID commitId, View view, String action) {
-        var snapshot = new java.util.LinkedHashMap<String, FactProposal>();
+        var snapshot = new LinkedHashMap<String, FactProposal>();
         view.candidates().forEach(f -> snapshot.put(f.id(), f));
         // A failed re-extraction may contain new drafts; preserve the still-applied memory as well.
         commits.findById(commitId)
@@ -491,17 +496,14 @@ public class PublishedMemoryService {
         if (a.payload() != null && b.payload() != null) {
             for (String field :
                     List.of("entityId", "sourceEntityId", "targetEntityId", "characterId")) {
-                ((com.fasterxml.jackson.databind.node.ObjectNode) left.get("payload"))
-                        .remove(field);
-                ((com.fasterxml.jackson.databind.node.ObjectNode) right.get("payload"))
-                        .remove(field);
+                ((ObjectNode) left.get("payload")).remove(field);
+                ((ObjectNode) right.get("payload")).remove(field);
             }
         }
         return left.equals(right);
     }
 
-    private com.novelagent.canon.domain.CanonCommit requireCurrent(
-            UUID projectId, int chapter, UUID id) {
+    private CanonCommit requireCurrent(UUID projectId, int chapter, UUID id) {
         lockProject(projectId);
         var commit =
                 commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapter)

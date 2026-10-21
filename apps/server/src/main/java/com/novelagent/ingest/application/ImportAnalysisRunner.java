@@ -3,8 +3,10 @@ package com.novelagent.ingest.application;
 import com.novelagent.ingest.infrastructure.ImportAnalysisPrompt;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.project.application.BookTitleService;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -17,9 +19,9 @@ public class ImportAnalysisRunner {
     private final ImportAnalysisStore store;
     private final StructuredModelGateway models;
     private final ImportAnalysisPrompt prompt;
-    private com.novelagent.project.application.BookTitleService titles;
-    @org.springframework.beans.factory.annotation.Autowired
-    public void setTitles(com.novelagent.project.application.BookTitleService titles) { this.titles = titles; }
+    private BookTitleService titles;
+    @Autowired
+    public void setTitles(BookTitleService titles) { this.titles = titles; }
     public ImportAnalysisRunner(ImportAnalysisStore store, StructuredModelGateway models, ImportAnalysisPrompt prompt) {
         this.store = store; this.models = models; this.prompt = prompt;
     }

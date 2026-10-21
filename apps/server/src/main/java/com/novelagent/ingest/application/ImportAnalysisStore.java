@@ -1,21 +1,27 @@
 package com.novelagent.ingest.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
+import com.novelagent.agent.application.GenerationStoppedException;
+import com.novelagent.agent.application.ModelFailureDetails;
 import com.novelagent.ingest.api.ImportedChapterResponse;
 import com.novelagent.ingest.domain.ImportAnalysis;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.ingest.infrastructure.ImportAnalysisOutputParser;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.platform.support.Json;
+import com.novelagent.platform.support.Sha256;
+import com.novelagent.project.application.CreativeBoundaryService;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,9 +38,9 @@ public class ImportAnalysisStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final ImportAnalysisOutputParser parser;
-    private com.novelagent.project.application.CreativeBoundaryService boundaries;
-    @org.springframework.beans.factory.annotation.Autowired
-    public void setBoundaries(com.novelagent.project.application.CreativeBoundaryService boundaries) { this.boundaries = boundaries; }
+    private CreativeBoundaryService boundaries;
+    @Autowired
+    public void setBoundaries(CreativeBoundaryService boundaries) { this.boundaries = boundaries; }
     public ImportAnalysisStore(ProjectAccessService access, WorkImportService imports, JdbcTemplate jdbc, ObjectMapper mapper, ImportAnalysisOutputParser parser) {
         this.access = access; this.imports = imports; this.jdbc = jdbc; this.mapper = mapper; this.parser = parser;
     }
@@ -144,9 +150,9 @@ public class ImportAnalysisStore {
      */
     @Transactional
     public void fail(Claim claim, RuntimeException error) {
-        var detail = com.novelagent.agent.application.ModelFailureDetails.from(error);
+        var detail = ModelFailureDetails.from(error);
         jdbc.update("UPDATE import_analysis_report SET status = ?, error_message = ?, row_version = row_version + 1, updated_at = now() WHERE id = ? AND status = 'RUNNING' AND row_version = ?",
-                error instanceof com.novelagent.agent.application.GenerationStoppedException ? "CANCELLED" : "FAILED",
+                error instanceof GenerationStoppedException ? "CANCELLED" : "FAILED",
                 detail.type() + ": " + detail.detail(), claim.report().id(), claim.report().version());
     }
     /**
@@ -242,7 +248,7 @@ public class ImportAnalysisStore {
      *
      * @param rs 当前数据库结果行，字段对应本方法的 SQL 投影。
      */
-    private Report row(java.sql.ResultSet rs) throws java.sql.SQLException {
+    private Report row(ResultSet rs) throws SQLException {
         return new Report(rs.getObject("id", UUID.class), rs.getObject("project_id", UUID.class), rs.getObject("import_id", UUID.class),
                 ModelProvider.valueOf(rs.getString("provider")), rs.getString("source_hash"),
                 read(rs.getString("slices"), new TypeReference<List<ImportAnalysis.Slice>>() { }), rs.getInt("next_slice"), rs.getString("status"),
@@ -257,7 +263,7 @@ public class ImportAnalysisStore {
      *
      * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
      */
-    private String json(Object value) { try { return mapper.writeValueAsString(value); } catch (JsonProcessingException e) { throw new IllegalArgumentException("解析报告格式错误", e); } }
+    private String json(Object value) { return Json.call(() -> mapper.writeValueAsString(value), "解析报告格式错误", IllegalArgumentException::new); }
     /**
      * 将 JSON 字段反序列化为指定报告或来源类型，失败保留存储错误，不把损坏数据变成空解析结论。
      *
@@ -265,7 +271,7 @@ public class ImportAnalysisStore {
      * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
      * @param type JSON 转换或反序列化的目标 Java 类型。
      */
-    private <T> T read(String value, Class<T> type) { try { return mapper.readValue(value, type); } catch (JsonProcessingException e) { throw new IllegalArgumentException("解析报告格式错误", e); } }
+    private <T> T read(String value, Class<T> type) { return Json.call(() -> mapper.readValue(value, type), "解析报告格式错误", IllegalArgumentException::new); }
     /**
      * 将 JSON 字段反序列化为指定报告或来源类型，失败保留存储错误，不把损坏数据变成空解析结论。
      *
@@ -273,6 +279,6 @@ public class ImportAnalysisStore {
      * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
      * @param type 本次查询类别或反序列化目标类型，具体含义由签名区分。
      */
-    private <T> T read(String value, TypeReference<T> type) { try { return mapper.readValue(value, type); } catch (JsonProcessingException e) { throw new IllegalArgumentException("解析报告格式错误", e); } }
+    private <T> T read(String value, TypeReference<T> type) { return Json.call(() -> mapper.readValue(value, type), "解析报告格式错误", IllegalArgumentException::new); }
     private static void version(Report report, long version) { if (report.version() != version) throw new ResourceVersionConflictException(version, report.version()); }
 }

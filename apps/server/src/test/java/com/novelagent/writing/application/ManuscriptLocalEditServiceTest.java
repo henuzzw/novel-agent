@@ -15,6 +15,7 @@ import com.novelagent.writing.infrastructure.ManuscriptLocalEditModel;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class ManuscriptLocalEditServiceTest {
     private final UUID project = UUID.randomUUID();
@@ -48,7 +49,7 @@ class ManuscriptLocalEditServiceTest {
         assertThat(result.manuscript()).isNull();
         assertThat(result.replacement()).isNull();
         verifyNoInteractions(model);
-        verify(store, org.mockito.Mockito.never()).save(any(), any(), any(), any());
+        verify(store, Mockito.never()).save(any(), any(), any(), any());
     }
 
     @Test

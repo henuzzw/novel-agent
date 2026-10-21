@@ -1,5 +1,6 @@
 package com.novelagent.canon.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,11 +13,14 @@ import com.novelagent.canon.application.CanonFactProjector;
 import com.novelagent.canon.application.EntityResolutionService;
 import com.novelagent.canon.application.TypedCanonMaterializer;
 import com.novelagent.planning.application.PlanningMaterialSyncService;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -24,14 +28,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@EnabledIfEnvironmentVariable(named = "NOVEL_AUTOMATION_DB_TEST", matches = "true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CanonFactProjectorDatabaseTest {
     private final String schema = "canon_projection_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -48,8 +51,7 @@ class CanonFactProjectorDatabaseTest {
 
     @BeforeAll
     void createIsolatedTablesAndWireStrategies() throws Exception {
-        var datasource = new DriverManagerDataSource("jdbc:postgresql://" + env("DB_HOST", "localhost")
-                + ":" + env("DB_PORT", "5432") + "/" + env("DB_NAME", "novel_agent")
+        var datasource = new DriverManagerDataSource(TestDatabase.url()
                 + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
                 env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", "change-me"));
         jdbc = new JdbcTemplate(datasource);
@@ -86,7 +88,7 @@ class CanonFactProjectorDatabaseTest {
         target = UUID.randomUUID();
         jdbc.update("INSERT INTO novel_project VALUES (?)", project);
         jdbc.update("INSERT INTO canon_commit VALUES (?)", commit);
-        for (var entry : List.of(java.util.Map.entry(subject, "甲"), java.util.Map.entry(target, "乙"))) {
+        for (var entry : List.of(Map.entry(subject, "甲"), Map.entry(target, "乙"))) {
             jdbc.update("""
                     INSERT INTO story_entity(id, project_id, entity_type, canonical_name, canon_version_from, source_commit_id)
                     VALUES (?, ?, 'CHARACTER', ?, 1, ?)
@@ -193,7 +195,4 @@ class CanonFactProjectorDatabaseTest {
         }
     }
 
-    private static String env(String key, String fallback) {
-        return System.getenv().getOrDefault(key, fallback);
-    }
 }

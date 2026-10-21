@@ -1,6 +1,5 @@
 package com.novelagent.canon.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -9,9 +8,11 @@ import com.novelagent.canon.api.CharacterNameResponse;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.domain.ManuscriptContent;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -99,11 +100,7 @@ public class CharacterNameService {
                             ? "PROTAGONIST"
                             : "BLUEPRINT_"
                                     + UUID.nameUUIDFromBytes(
-                                            blueprint
-                                                    .name()
-                                                    .getBytes(
-                                                            java.nio.charset.StandardCharsets
-                                                                    .UTF_8)),
+                                            blueprint.name().getBytes(StandardCharsets.UTF_8)),
                     blueprint.name());
         }
         if (!names.containsKey("PROTAGONIST"))
@@ -151,9 +148,7 @@ public class CharacterNameService {
                             occupied != null && occupied > 0
                                     ? "BLUEPRINT_"
                                             + UUID.nameUUIDFromBytes(
-                                                    name.getBytes(
-                                                            java.nio.charset.StandardCharsets
-                                                                    .UTF_8))
+                                                    name.getBytes(StandardCharsets.UTF_8))
                                     : role;
                     jdbc.update(
                             """
@@ -326,11 +321,7 @@ public class CharacterNameService {
         JsonNode tree = objectMapper.valueToTree(value);
         List<CharacterNameResponse> characters = rows(projectId);
         renderTextNodes(tree, characters, nameForms(projectId, characters));
-        try {
-            return objectMapper.treeToValue(tree, type);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("人物名称渲染失败", exception);
-        }
+        return Json.call(() -> objectMapper.treeToValue(tree, type), "人物名称渲染失败");
     }
 
     /**

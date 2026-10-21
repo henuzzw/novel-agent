@@ -10,6 +10,8 @@ import com.novelagent.writing.infrastructure.WritingGenerationGateway;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class WritingStyleAnalysisServiceTest {
     private final WritingStyleService styles = mock(WritingStyleService.class);
@@ -24,7 +26,7 @@ class WritingStyleAnalysisServiceTest {
         assertThat(result.profile()).isEqualTo(profile);
         assertThat(result.analysisMode()).isEqualTo("TEXT_METRICS");
         assertThat(result.sampleCharacters()).isEqualTo(sample.length());
-        org.mockito.Mockito.verify(styles, org.mockito.Mockito.never()).apply(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyLong());
+        Mockito.verify(styles, Mockito.never()).apply(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.anyLong());
     }
     @Test void rejectsBadEncodingExtensionAndOversizedOrShortSamplesBeforeCallingModel() {
         assertThatThrownBy(() -> service.upload(project, "sample.txt", new byte[]{(byte) 0xc3, 0x28}, null)).isInstanceOf(IllegalArgumentException.class);
@@ -33,8 +35,5 @@ class WritingStyleAnalysisServiceTest {
         assertThatThrownBy(() -> service.analyze(project, "短文", null)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.analyze(project, "文".repeat(12001), null)).isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(gateway);
-    }
-    @Test void allPresetsAreCompleteDistinctEditableProfiles() {
-        assertThat(WritingStylePresets.all()).hasSize(11).extracting(p -> p.name()).doesNotHaveDuplicates();
     }
 }

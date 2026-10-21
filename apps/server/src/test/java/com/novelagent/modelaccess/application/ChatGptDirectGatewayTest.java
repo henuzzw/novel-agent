@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient;
@@ -13,6 +14,7 @@ import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class ChatGptDirectGatewayTest {
     @Test void unsuccessfulDecodeReleasesLeaseWithoutPersistingPartialHistory() {
@@ -30,7 +32,7 @@ class ChatGptDirectGatewayTest {
             var output = json.createArrayNode(); output.addObject().put("type", "message").put("role", "assistant");
             prepared.accept(new ChatGptResponsesClient.Result("response", "final", null, output));
         }
-        var saved = org.mockito.ArgumentCaptor.forClass(com.fasterxml.jackson.databind.JsonNode.class);
+        var saved = ArgumentCaptor.forClass(JsonNode.class);
         verify(store).complete(eq(lease), saved.capture()); assertThat(saved.getValue().size()).isEqualTo(3);
         verify(store, times(1)).release(lease);
     }

@@ -61,7 +61,7 @@ V055 为 `user_agent_prompt` 和 `user_agent_prompt_revision` 增加可空 `sess
 cd apps/server
 .\mvnw.cmd -Dtest=AgentPromptServiceTest,AgentPromptControllerTest,StructuredModelGatewayTest,HttpLogSanitizerTest test
 # 加载本地数据库配置后，使用随机隔离 schema 验证迁移与原子保存
-$env:NOVEL_PROMPT_DB_TEST = 'true'
+$env:NOVEL_DB_TEST = 'true'
 .\mvnw.cmd -Dtest=AgentPromptRepositoryDatabaseTest test
 ```
 

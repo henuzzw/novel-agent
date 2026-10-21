@@ -1,22 +1,22 @@
 package com.novelagent.agent.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.platform.support.Json;
+import com.novelagent.platform.support.Sha256;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.function.Consumer;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -165,11 +165,7 @@ public class AgentRunRecorder {
 
     private static String json(Object value) {
         if (value == null) return null;
-        try {
-            return JSON.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("Cannot serialize model request metadata", exception);
-        }
+        return Json.call(() -> JSON.writeValueAsString(value), "Cannot serialize model request metadata", IllegalArgumentException::new);
     }
 
     public record EffectiveSettings(ModelProvider provider, String model, String effort, Long version) { }

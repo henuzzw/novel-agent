@@ -3,10 +3,12 @@ package com.novelagent.writing.infrastructure;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.prompt.application.AgentPromptDefaults;
 import com.novelagent.writing.application.ManuscriptLocalEditStore.Snapshot;
 import com.novelagent.writing.domain.ManuscriptLocalEditSelection;
 import java.util.UUID;
@@ -24,7 +26,7 @@ public class ManuscriptLocalEditModel {
 
     public String replace(UUID projectId, Snapshot source, ManuscriptLocalEditSelection selection,
             ModelProvider provider, String instruction) {
-        String system = com.novelagent.prompt.application.AgentPromptDefaults.system("MANUSCRIPT_LOCAL_EDIT");
+        String system = AgentPromptDefaults.system("MANUSCRIPT_LOCAL_EDIT");
         var data = mapper.createObjectNode();
         data.put("basis", source.context());
         data.put("sourceBody", source.rendered().body());
@@ -35,7 +37,7 @@ public class ManuscriptLocalEditModel {
         JsonNode schema = mapper.createObjectNode().put("type", "object").put("additionalProperties", false)
                 .set("properties", mapper.createObjectNode().set("replacement", mapper.createObjectNode()
                         .put("type", "string").put("maxLength", 24000)));
-        ((com.fasterxml.jackson.databind.node.ObjectNode) schema).set("required", mapper.createArrayNode().add("replacement"));
+        ((ObjectNode) schema).set("required", mapper.createArrayNode().add("replacement"));
         String output = gateway.request(projectId, "MANUSCRIPT_LOCAL_EDIT", provider, system, data.toString(), schema,
                 "manuscript_local_edit", 12000, CodexSessionPolicy.NEW_THREAD);
         try {

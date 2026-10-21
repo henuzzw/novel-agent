@@ -1,5 +1,6 @@
 package com.novelagent.agent.tool;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -9,6 +10,8 @@ import com.novelagent.memory.application.TextEmbeddingService;
 import com.novelagent.memory.infrastructure.LocalFeatureHashEmbeddingService;
 import com.novelagent.memory.infrastructure.SemanticChunkStore;
 import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -16,14 +19,13 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Small isolated-schema verification of real PostgreSQL operators, source filters and V058. */
-@EnabledIfEnvironmentVariable(named = "NOVEL_MEMORY_DB_TEST", matches = "true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ParagraphMemoryDatabaseTest {
     private final String schema = "paragraph_memory_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -32,8 +34,7 @@ class ParagraphMemoryDatabaseTest {
     private TransactionTemplate tx;
 
     @BeforeAll void setup() throws Exception {
-        var source = new DriverManagerDataSource("jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432")
-                + "/" + env("DB_NAME", "novel_agent") + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
+        var source = new DriverManagerDataSource(TestDatabase.url() + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
                 env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", "change-me"));
         jdbc = new JdbcTemplate(source);
         tx = new TransactionTemplate(new DataSourceTransactionManager(source));
@@ -131,5 +132,4 @@ class ParagraphMemoryDatabaseTest {
     }
 
     @AfterAll void cleanup() { if (jdbc != null) jdbc.execute("DROP SCHEMA IF EXISTS " + schema + " CASCADE"); }
-    private static String env(String key, String fallback) { return System.getenv().getOrDefault(key, fallback); }
 }

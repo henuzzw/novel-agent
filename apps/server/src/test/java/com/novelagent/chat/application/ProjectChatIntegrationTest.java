@@ -1,12 +1,15 @@
 package com.novelagent.chat.application;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.canon.infrastructure.OutboxPublisher;
 import com.novelagent.chat.domain.ChatAction;
+import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.SnowflakeStep;
 import com.novelagent.planning.domain.*;
@@ -14,10 +17,12 @@ import com.novelagent.planning.infrastructure.*;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.domain.*;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,7 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(properties={"spring.kafka.listener.auto-startup=false","spring.kafka.admin.auto-create=false",
         "logging.file.name=target/chat-integration-test.log"})
 @AutoConfigureMockMvc
-@EnabledIfEnvironmentVariable(named="NOVEL_CHAT_DB_TEST",matches="true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ProjectChatIntegrationTest {
     private static final String SCHEMA="chat_test_"+UUID.randomUUID().toString().replace("-","");
@@ -45,12 +50,11 @@ class ProjectChatIntegrationTest {
     @Autowired SnowflakePlanStore snowflakes;
     @Autowired OutlineVersionRepository outlines;
     @MockitoBean StructuredModelGateway models;
-    @MockitoBean com.novelagent.canon.infrastructure.OutboxPublisher outbox;
-    @MockitoBean com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill embeddings;
+    @MockitoBean OutboxPublisher outbox;
+    @MockitoBean SemanticEmbeddingBackfill embeddings;
 
     @DynamicPropertySource static void database(DynamicPropertyRegistry p) {
-        p.add("spring.datasource.url",()->"jdbc:postgresql://"+env("DB_HOST","localhost")+":"+env("DB_PORT","5432")
-                +"/"+env("DB_NAME","novel_agent")+"?currentSchema="+SCHEMA+",public&sslmode="+env("DB_SSL_MODE","disable"));
+        p.add("spring.datasource.url",()->TestDatabase.url()+"?currentSchema="+SCHEMA+",public&sslmode="+env("DB_SSL_MODE","disable"));
         p.add("spring.flyway.default-schema",()->SCHEMA); p.add("spring.flyway.schemas",()->SCHEMA);
         p.add("spring.jpa.properties.hibernate.default_schema",()->SCHEMA);
     }
@@ -77,7 +81,7 @@ class ProjectChatIntegrationTest {
         UUID turn=UUID.randomUUID();
         mvc.perform(post("/api/v1/projects/"+p+"/chat/turns").contentType("application/json")
                 .content(json.createObjectNode().put("id",turn.toString()).put("question","调整背景与欲望").toString())).andExpect(status().isAccepted());
-        long end=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
+        long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(10);
         while(store.active(p,turn)&&System.nanoTime()<end) Thread.sleep(30);
         assertThat(store.get(p,turn).status()).isEqualTo("SUCCEEDED");
         assertThat(store.changes(p)).hasSize(2).allMatch(c->c.status().equals("PENDING"));
@@ -136,5 +140,4 @@ class ProjectChatIntegrationTest {
         assertThat(restored.id()).isNotEqualTo(base);
     }
     @AfterAll void cleanup() {jdbc.execute("DROP SCHEMA IF EXISTS "+SCHEMA+" CASCADE");}
-    private static String env(String key,String fallback) {return System.getenv().getOrDefault(key,fallback);}
 }

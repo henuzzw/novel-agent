@@ -1,12 +1,15 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.modelaccess.application.ChatGptAccessException;
 import com.novelagent.modelaccess.application.ChatGptOAuthService;
+import com.novelagent.platform.support.Sha256;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -15,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -104,22 +108,22 @@ public class ChatGptResponsesClient {
             }
         } catch (InterruptedException stopped) {
             Thread.currentThread().interrupt(); throw new GenerationStoppedException();
-        } catch (java.util.concurrent.ExecutionException error) {
+        } catch (ExecutionException error) {
             if (error.getCause() instanceof RuntimeException failure) throw failure;
             throw new ChatGptAccessException("NETWORK", "ChatGPT network 流连接中断，未获得完成响应");
         } catch (TimeoutException error) {
             throw new ChatGptAccessException("TIMEOUT", "ChatGPT HTTP 连接或响应头等待超时");
         } finally {
             pending.cancel(true);
-            if (body != null) try { body.close(); } catch (java.io.IOException ignored) { }
+            if (body != null) try { body.close(); } catch (IOException ignored) { }
             if (reader != null) reader.interrupt();
         }
     }
 
-    Result read(InputStream stream, Consumer<String> progress, AtomicLong activity) throws java.io.IOException {
+    Result read(InputStream stream, Consumer<String> progress, AtomicLong activity) throws IOException {
         return read(stream, progress, activity, () -> { });
     }
-    private Result read(InputStream stream, Consumer<String> progress, AtomicLong activity, Runnable activityObserver) throws java.io.IOException {
+    private Result read(InputStream stream, Consumer<String> progress, AtomicLong activity, Runnable activityObserver) throws IOException {
         var text = new StringBuilder();
         var event = new StringBuilder();
         long highestOutputTokens = 0;
@@ -140,7 +144,7 @@ public class ChatGptResponsesClient {
                 if ("[DONE]".equals(data)) break;
                 JsonNode message;
                 try { message = json.readTree(data); }
-                catch (com.fasterxml.jackson.core.JsonProcessingException error) {
+                catch (JsonProcessingException error) {
                     throw new ChatGptAccessException("PROVIDER", "ChatGPT 返回无法解析的事件帧，未保存响应");
                 }
                 String type = message.path("type").asText();
@@ -180,7 +184,7 @@ public class ChatGptResponsesClient {
         }
         throw new ChatGptAccessException("NETWORK", "ChatGPT network 流提前结束，未收到 response.completed；部分文字仅作预览");
     }
-    private static String boundedLine(BufferedReader reader) throws java.io.IOException {
+    private static String boundedLine(BufferedReader reader) throws IOException {
         StringBuilder line = new StringBuilder();
         int value;
         while ((value = reader.read()) != -1) {
@@ -191,7 +195,7 @@ public class ChatGptResponsesClient {
         return value == -1 && line.isEmpty() ? null : line.toString();
     }
     public static String accountBinding(PrivateOAuthStore.Credentials credentials) {
-        return com.novelagent.platform.support.Sha256.ofUtf8(credentials.clientId() + "\n" + credentials.subject());
+        return Sha256.ofUtf8(credentials.clientId() + "\n" + credentials.subject());
     }
     public record Result(String responseId, String output, AgentRunRecorder.Usage usage, JsonNode historyOutput)
             implements AgentRunRecorder.ModelResult { }

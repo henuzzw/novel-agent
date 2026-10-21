@@ -14,9 +14,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.neo4j.core.Neo4jClient;
@@ -39,12 +41,12 @@ class GraphProjectionConsumerTest {
     }
 
     @Test void convertsPostgresNumericConfidenceToSupportedNeo4jValue() {
-        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(new java.math.BigDecimal("0.98")))
+        Assertions.assertThat(consumer.neo4jValue(new BigDecimal("0.98")))
                 .isEqualTo(0.98d);
         UUID id=UUID.randomUUID();
-        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(id)).isEqualTo(id.toString());
-        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(7L)).isEqualTo(7L);
-        org.assertj.core.api.Assertions.assertThat(consumer.neo4jValue(null)).isNull();
+        Assertions.assertThat(consumer.neo4jValue(id)).isEqualTo(id.toString());
+        Assertions.assertThat(consumer.neo4jValue(7L)).isEqualTo(7L);
+        Assertions.assertThat(consumer.neo4jValue(null)).isNull();
     }
 
     @Test

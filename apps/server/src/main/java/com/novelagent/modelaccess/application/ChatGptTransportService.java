@@ -2,6 +2,8 @@ package com.novelagent.modelaccess.application;
 
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ResourceVersionConflictException;
+import java.lang.management.ManagementFactory;
+import java.sql.Timestamp;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,9 +24,8 @@ public class ChatGptTransportService {
     private final JdbcTemplate jdbc;
     private final CurrentActorProvider actors;
     private final ChatGptOAuthService auth;
-    private final java.sql.Timestamp instanceStarted =
-            new java.sql.Timestamp(
-                    java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime());
+    private final Timestamp instanceStarted =
+            new Timestamp(ManagementFactory.getRuntimeMXBean().getStartTime());
 
     public ChatGptTransportService(
             JdbcTemplate jdbc, CurrentActorProvider actors, ChatGptOAuthService auth) {

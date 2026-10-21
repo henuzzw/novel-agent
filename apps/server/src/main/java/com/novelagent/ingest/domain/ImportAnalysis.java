@@ -1,5 +1,6 @@
 package com.novelagent.ingest.domain;
 
+import com.novelagent.project.domain.CreativeBoundaries;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -31,14 +32,14 @@ public final class ImportAnalysis {
             if (evidence.size() > 6 || (!"UNKNOWN".equals(certainty) && evidence.isEmpty())) invalid("事实或推测必须附原文依据");
         }
     }
-    public record WorldAssessment(com.novelagent.project.domain.CreativeBoundaries.WorldMode worldMode,
+    public record WorldAssessment(CreativeBoundaries.WorldMode worldMode,
             String reason, List<Evidence> evidence) {
         public WorldAssessment {
-            if (worldMode == null || worldMode == com.novelagent.project.domain.CreativeBoundaries.WorldMode.AUTO) invalid("世界判断结果无效");
+            if (worldMode == null || worldMode == CreativeBoundaries.WorldMode.AUTO) invalid("世界判断结果无效");
             reason = text(reason, 1000, false);
             evidence = evidence == null ? List.of() : List.copyOf(evidence);
             if (evidence.size() > 3) invalid("世界判断证据过多");
-            if (worldMode != com.novelagent.project.domain.CreativeBoundaries.WorldMode.REALISTIC && evidence.isEmpty()) invalid("扩大虚构范围须有原文依据");
+            if (worldMode != CreativeBoundaries.WorldMode.REALISTIC && evidence.isEmpty()) invalid("扩大虚构范围须有原文依据");
         }
     }
     public record Batch(String summary, List<Item> items, WorldAssessment worldAssessment) {

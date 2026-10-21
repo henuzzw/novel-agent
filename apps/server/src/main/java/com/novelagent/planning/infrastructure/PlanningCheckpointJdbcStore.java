@@ -1,11 +1,12 @@
 package com.novelagent.planning.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import java.sql.ResultSet;
@@ -133,8 +134,7 @@ public class PlanningCheckpointJdbcStore {
     }
 
     private String json(Object result) {
-        try { return mapper.writeValueAsString(result); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("规划分块不能序列化", exception); }
+        return Json.call(() -> mapper.writeValueAsString(result), "规划分块不能序列化");
     }
 
     /**
@@ -157,7 +157,6 @@ public class PlanningCheckpointJdbcStore {
      * @param json 存储中的 JSON 文本，损坏时拒绝恢复为有效对象。
      */
     private PlanningCheckpointResult result(String json) {
-        try { return mapper.readValue(json, PlanningCheckpointResult.class); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("规划分块不能解析", exception); }
+        return Json.call(() -> mapper.readValue(json, PlanningCheckpointResult.class), "规划分块不能解析");
     }
 }

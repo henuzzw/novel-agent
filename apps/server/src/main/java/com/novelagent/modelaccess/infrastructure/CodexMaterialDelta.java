@@ -1,5 +1,6 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -43,7 +44,7 @@ public final class CodexMaterialDelta {
         } else text.append(block);
     }
     public static String fingerprint(String text) {
-        return com.novelagent.platform.support.Sha256.ofUtf8(text);
+        return Sha256.ofUtf8(text);
     }
     public record Result(String text, Map<String, String> materials) { }
 }

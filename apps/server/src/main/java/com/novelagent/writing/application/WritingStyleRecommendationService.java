@@ -1,12 +1,13 @@
 package com.novelagent.writing.application;
 
 import com.novelagent.planning.api.StoryBibleResponse;
-import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
+import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.api.RecommendWritingStyleRequest;
 import com.novelagent.writing.api.WritingStyleRecommendationResponse;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import com.novelagent.writing.domain.WritingStyleRecommendationContent;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -73,7 +74,7 @@ public class WritingStyleRecommendationService {
                         .toList());
     }
 
-    private WritingStyleProfile preset(java.util.List<WritingStyleProfile> presets, String name) {
+    private WritingStyleProfile preset(List<WritingStyleProfile> presets, String name) {
         return presets.stream()
                 .filter(profile -> profile.name().equals(name))
                 .findFirst()

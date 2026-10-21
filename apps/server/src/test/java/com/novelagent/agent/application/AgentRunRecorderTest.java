@@ -18,6 +18,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import org.mockito.Mockito;
 
 class AgentRunRecorderTest {
     private JdbcTemplate jdbc;
@@ -55,12 +60,12 @@ class AgentRunRecorderTest {
 
     @Test
     void storesActualUsageSeparatelyFromEstimatesAndStoresOnlyRequestHashesInSnapshot() throws Exception {
-        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var mapper = new ObjectMapper();
         var snapshot = AgentRunRecorder.RequestSnapshot.capture(
                 new AgentRunRecorder.EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 9L),
                 "private system", "private manuscript", mapper.createObjectNode(), "schema", 200, "STATELESS");
         var usage = new AgentRunRecorder.Usage(123, 45, 168L, 30L, 12L);
-        var result = new com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient.ResponseResult("{}", usage);
+        var result = new DeepSeekStructuredOutputClient.ResponseResult("{}", usage);
 
         assertThat(recorder.record(UUID.randomUUID(), "OUTLINE", ModelProvider.DEEPSEEK,
                 "private system", "private manuscript", snapshot, () -> result)).isSameAs(result);
@@ -118,7 +123,7 @@ class AgentRunRecorderTest {
     @ValueSource(strings = {"IMPORT_SOURCE_ANALYSIS", "FIRST_THREE_CHAPTERS_REVIEW"})
     void outputValidationFailureStoresResponseUsageAndSpecificErrorInsteadOfSuccess(String stage) {
         var usage = new AgentRunRecorder.Usage(100, 45, 145L, null, null);
-        var result = new com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient.ResponseResult("{invalid output}", usage);
+        var result = new DeepSeekStructuredOutputClient.ResponseResult("{invalid output}", usage);
         var error = new IllegalArgumentException(stage.equals("IMPORT_SOURCE_ANALYSIS")
                 ? "原文解析输出校验失败：items[2].category：分类无效"
                 : "三章报告输出校验失败：assessments.[0].evidence 字段格式或类型不符合返回协议");
@@ -140,11 +145,11 @@ class AgentRunRecorderTest {
         var controls = new GenerationControlRegistry();
         recorder = new AgentRunRecorder(jdbc, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 BigDecimal.ZERO, new AgentRunOutputBuffer(), controls);
-        var id = new java.util.concurrent.atomic.AtomicReference<UUID>();
-        org.mockito.Mockito.doAnswer(call -> { id.set((UUID) ((Object[]) call.getRawArguments()[1])[0]); return 1; })
+        var id = new AtomicReference<UUID>();
+        Mockito.doAnswer(call -> { id.set((UUID) ((Object[]) call.getRawArguments()[1])[0]); return 1; })
                 .when(jdbc).update(argThat(sql -> sql.contains("INSERT INTO")), any(Object[].class));
-        var processed = new java.util.concurrent.atomic.AtomicBoolean();
-        var result = new com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient.ResponseResult(
+        var processed = new AtomicBoolean();
+        var result = new DeepSeekStructuredOutputClient.ResponseResult(
                 "late output", new AgentRunRecorder.Usage(100, 20, 120L, null, null));
         UUID project = UUID.randomUUID();
         assertThatThrownBy(() -> recorder.record(project, "OUTLINE", ModelProvider.DEEPSEEK,

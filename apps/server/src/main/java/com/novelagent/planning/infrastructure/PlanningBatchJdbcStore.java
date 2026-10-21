@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.PlanningBatch;
+import com.novelagent.platform.support.Json;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
@@ -117,10 +118,6 @@ public class PlanningBatchJdbcStore {
     }
 
     private String json(Object value) {
-        try {
-            return mapper.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("规划批次不能序列化", exception);
-        }
+        return Json.call(() -> mapper.writeValueAsString(value), "规划批次不能序列化");
     }
 }

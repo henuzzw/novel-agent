@@ -5,10 +5,12 @@ import com.novelagent.agent.application.AgentRunRecorder.ContextBudget;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.planning.application.ModelProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Validates the final request, including edited instructions, schema and output/safety reserves. */
 final class StructuredRequestBudget {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(StructuredRequestBudget.class);
+    private static final Logger log = LoggerFactory.getLogger(StructuredRequestBudget.class);
     private final ModelContextProperties context;
 
     StructuredRequestBudget(ModelContextProperties context) {

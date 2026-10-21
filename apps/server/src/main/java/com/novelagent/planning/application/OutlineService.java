@@ -1,6 +1,7 @@
 package com.novelagent.planning.application;
 
 import com.novelagent.canon.application.CharacterNameService;
+import com.novelagent.ingest.application.ImportedOutlineGenerator;
 import com.novelagent.planning.api.GenerateOutlineRequest;
 import com.novelagent.planning.api.OutlineResponse;
 import com.novelagent.planning.api.OutlineVersionSummaryResponse;
@@ -17,13 +18,14 @@ import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeIntent;
-import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
-import java.util.Optional;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,16 +45,15 @@ public class OutlineService {
     private final ProjectAccessService access;
     private final CharacterNameService characterNames;
     private final PlanningMaterialSyncService materials;
-    private com.novelagent.ingest.application.ImportedOutlineGenerator importedGenerator;
+    private ImportedOutlineGenerator importedGenerator;
 
     /**
      * 由 Spring 注入导入大纲生成器，供大纲用例复用已确认导入来源；此注入入口不执行生成。
      *
      * @param generator 导入大纲生成器，由 Spring 装配
      */
-    @org.springframework.beans.factory.annotation.Autowired
-    public void setImportedGenerator(
-            com.novelagent.ingest.application.ImportedOutlineGenerator generator) {
+    @Autowired
+    public void setImportedGenerator(ImportedOutlineGenerator generator) {
         this.importedGenerator = generator;
     }
 

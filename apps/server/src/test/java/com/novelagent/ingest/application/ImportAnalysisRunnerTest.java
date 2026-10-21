@@ -11,6 +11,7 @@ import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 
 class ImportAnalysisRunnerTest {
@@ -22,7 +23,7 @@ class ImportAnalysisRunnerTest {
     @Test void onlyRunsOneChunkWithANewSessionAndNoAutomaticConfirmation() {
         var claim = new ImportAnalysisStore.Claim(report(), "原文"); when(store.claim(project, source, id, 0)).thenReturn(claim);
         when(models.request(eq(project), eq("IMPORT_SOURCE_ANALYSIS"), eq(ModelProvider.DEEPSEEK), anyString(), eq("原文"), any(), eq("import_source_analysis"), eq(12000), eq(CodexSessionPolicy.NEW_THREAD), any())).thenAnswer(call -> {
-            ((java.util.function.Consumer<String>) call.getArgument(9)).accept("output"); return "output";
+            ((Consumer<String>) call.getArgument(9)).accept("output"); return "output";
         });
         var expected = new ImportAnalysisStore.View(report(), false); when(store.finish(claim, "output")).thenReturn(expected);
         assertThat(runner.next(project, source, id, 0)).isSameAs(expected); verify(store).finish(claim, "output");
@@ -42,7 +43,7 @@ class ImportAnalysisRunnerTest {
         var error = new IllegalArgumentException("原文解析输出校验失败：items[0].category");
         when(store.finish(claim, "raw")).thenThrow(error);
         when(models.request(any(), anyString(), any(), anyString(), anyString(), any(), anyString(), anyInt(), any(), any()))
-                .thenAnswer(call -> { ((java.util.function.Consumer<String>) call.getArgument(9)).accept("raw"); return "raw"; });
+                .thenAnswer(call -> { ((Consumer<String>) call.getArgument(9)).accept("raw"); return "raw"; });
         var failed = new ImportAnalysisStore.View(report(), false); when(store.get(project, source, id)).thenReturn(failed);
         assertThat(runner.next(project, source, id, 0)).isSameAs(failed);
         verify(store).fail(claim, error);

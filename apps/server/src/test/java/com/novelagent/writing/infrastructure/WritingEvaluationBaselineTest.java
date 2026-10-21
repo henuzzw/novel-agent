@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.writing.domain.ManuscriptContent;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -129,7 +132,7 @@ class WritingEvaluationBaselineTest {
         assertThat(first).isEqualTo(second);
         byte[] original = WritingEvaluationFixtures.MAPPER.writeValueAsBytes(first.getFirst());
         JsonNode modified = WritingEvaluationFixtures.MAPPER.valueToTree(first.getFirst());
-        ((com.fasterxml.jackson.databind.node.ObjectNode) modified).put("userPrompt", "changed prompt");
+        ((ObjectNode) modified).put("userPrompt", "changed prompt");
         assertThat(WritingEvaluationFixtures.sha256(original)).hasSize(64)
                 .isNotEqualTo(WritingEvaluationFixtures.sha256(WritingEvaluationFixtures.MAPPER.writeValueAsBytes(modified)));
     }
@@ -176,11 +179,11 @@ class WritingEvaluationBaselineTest {
                     "evidence", scene.expected().evidence(), "description", "合成证据校验用例",
                     "suggestion", "保留事实", "resolved", false);
             var report = mapper.valueToTree(Map.of("summary", "合成报告，不是检查器命中结果", "scores", scores, "issues", List.of(issue)));
-            var manuscript = new com.novelagent.writing.domain.ManuscriptContent("微型场景", scene.body(), "原文", List.of());
+            var manuscript = new ManuscriptContent("微型场景", scene.body(), "原文", List.of());
             assertThat(parser.qualityReview(mapper.writeValueAsString(report), manuscript).issues()).hasSize(1);
-            ((com.fasterxml.jackson.databind.node.ObjectNode) report.path("issues").get(0)).put("evidence", "正文中不存在的伪造证据");
+            ((ObjectNode) report.path("issues").get(0)).put("evidence", "正文中不存在的伪造证据");
             assertThatThrownBy(() -> parser.qualityReview(mapper.writeValueAsString(report), manuscript))
-                    .isInstanceOf(com.novelagent.planning.application.ModelProviderException.class);
+                    .isInstanceOf(ModelProviderException.class);
         }
     }
 

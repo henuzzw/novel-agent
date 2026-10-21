@@ -24,10 +24,12 @@ import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectNotFoundException;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class ReadQueryControllerTest {
@@ -70,7 +72,7 @@ class ReadQueryControllerTest {
     @Test void tokenUsageReturnsBothPeriodsWithoutCachingAndKeepsOwnerErrors() throws Exception {
         UUID id = UUID.randomUUID();
         var service = mock(AgentRunQueryService.class);
-        var now = java.time.OffsetDateTime.parse("2026-10-13T08:00:00Z");
+        var now = OffsetDateTime.parse("2026-10-13T08:00:00Z");
         var total = new AgentRunSummary(120, 2, 1000, 50, BigDecimal.ZERO, "CNY", "MIXED");
         var recent = new AgentRunSummary(10, 1, 100, 5, BigDecimal.ZERO, "CNY", "ESTIMATED");
         when(service.usage(id)).thenReturn(new AgentTokenUsage(now, now.minusHours(5), total, recent));
@@ -89,7 +91,7 @@ class ReadQueryControllerTest {
     @Test void memoryPreviewKeepsDefaultAndExplicitQueryParameters() throws Exception {
         UUID id = UUID.randomUUID();
         var service = mock(MemoryPreviewService.class);
-        when(service.preview(any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any()))
+        when(service.preview(any(), ArgumentMatchers.anyInt(), any(), any(), any()))
                 .thenReturn(new NovelMemoryContext(List.of(), List.of(), null));
         var mvc = MockMvcBuilders.standaloneSetup(new MemoryController(service)).setControllerAdvice(new ApiExceptionHandler()).build();
         String path = "/api/v1/projects/" + id + "/memory/preview";

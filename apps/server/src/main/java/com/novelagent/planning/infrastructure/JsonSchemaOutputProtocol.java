@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.ModelOutputAvailability;
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
 /** Validates the small B/C transport contract, not literary quality or evidence truth. */
 final class JsonSchemaOutputProtocol implements ModelOutputProtocol {
@@ -45,7 +48,7 @@ final class JsonSchemaOutputProtocol implements ModelOutputProtocol {
         ModelOutputAvailability.requireAvailable(raw);
         JsonNode output;
         try { output = JSON.readTree(raw); }
-        catch (java.io.IOException error) { throw invalid("$", "不是单个合法JSON对象"); }
+        catch (IOException error) { throw invalid("$", "不是单个合法JSON对象"); }
         validate(schema, output, "$", 0);
         return output.toString();
     }
@@ -53,7 +56,7 @@ final class JsonSchemaOutputProtocol implements ModelOutputProtocol {
     private static void requireSupported(JsonNode schema, String path, int depth) {
         if (depth > 32) throw invalid(path, "协议嵌套过深");
         schema.fieldNames().forEachRemaining(key -> {
-            if (!java.util.Set.of("type", "properties", "required", "additionalProperties", "items", "enum",
+            if (!Set.of("type", "properties", "required", "additionalProperties", "items", "enum",
                     "minItems", "maxItems", "description").contains(key))
                 throw invalid(path, "不支持的协议关键字 " + key);
         });
@@ -64,9 +67,9 @@ final class JsonSchemaOutputProtocol implements ModelOutputProtocol {
             if (!schema.path("properties").isObject() || !schema.path("required").isArray()
                     || !schema.path("additionalProperties").isBoolean() || schema.path("additionalProperties").asBoolean())
                 throw invalid(path, "对象必须明确字段、必填项并禁止额外字段");
-            var required = new java.util.HashSet<String>();
+            var required = new HashSet<String>();
             schema.path("required").forEach(value -> required.add(value.asText()));
-            var fields = new java.util.HashSet<String>();
+            var fields = new HashSet<String>();
             schema.path("properties").fields().forEachRemaining(field -> {
                 fields.add(field.getKey()); requireSupported(field.getValue(), path + "." + field.getKey(), depth + 1);
             });
@@ -76,7 +79,7 @@ final class JsonSchemaOutputProtocol implements ModelOutputProtocol {
     }
 
     private static void requireType(String type, String path) {
-        if (!java.util.Set.of("object", "array", "string", "null").contains(type)) throw invalid(path, "不支持的字段类型");
+        if (!Set.of("object", "array", "string", "null").contains(type)) throw invalid(path, "不支持的字段类型");
     }
 
     private static boolean permits(JsonNode schema, String type) {

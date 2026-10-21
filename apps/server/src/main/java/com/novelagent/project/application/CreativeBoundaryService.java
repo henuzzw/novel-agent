@@ -1,9 +1,12 @@
 package com.novelagent.project.application;
 
+import com.novelagent.ingest.domain.ImportAnalysis;
 import com.novelagent.project.domain.CreativeBoundaries;
+import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,8 +90,7 @@ public class CreativeBoundaryService {
             UUID projectId,
             UUID importId,
             String sourceHash,
-            java.util.List<com.novelagent.ingest.domain.ImportAnalysis.WorldAssessment>
-                    assessments) {
+            List<ImportAnalysis.WorldAssessment> assessments) {
         var project = access.requireOwnedProject(projectId);
         entities.refresh(project, LockModeType.PESSIMISTIC_WRITE);
         var current = CreativeBoundaries.from(project);
@@ -112,7 +114,7 @@ public class CreativeBoundaryService {
         projects.saveAndFlush(project);
     }
 
-    private static State state(com.novelagent.project.domain.NovelProject project) {
+    private static State state(NovelProject project) {
         var p = CreativeBoundaries.from(project);
         return new State(
                 p.worldMode(),

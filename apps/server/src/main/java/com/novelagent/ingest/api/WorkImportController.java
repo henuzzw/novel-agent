@@ -2,6 +2,7 @@ package com.novelagent.ingest.api;
 
 import com.novelagent.ingest.application.WorkImportService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -13,8 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -59,7 +60,7 @@ public class WorkImportController {
         return service.list(projectId);
     }
 
-    public record PastedStoryRequest(@jakarta.validation.constraints.NotBlank String text) {}
+    public record PastedStoryRequest(@NotBlank String text) {}
 
     /**
      * 将粘贴文本作为独立导入来源保存并解析章节，不自动确认解析、生成规划或提交正史。

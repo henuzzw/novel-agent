@@ -9,8 +9,9 @@ import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.application.ChatGptDirectGateway;
 import com.novelagent.modelaccess.application.ChatGptTransportService;
 import com.novelagent.modelaccess.application.CodexProjectGateway;
-import com.novelagent.prompt.application.AgentPromptService;
 import com.novelagent.project.application.CreativeBoundaryService;
+import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.prompt.application.AgentPromptService;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
@@ -21,7 +22,7 @@ class ModelExecutorWiringTest {
                     CodexAgentSessionRepository.class, DeepSeekStructuredOutputClient.class,
                     ChatGptDirectGateway.class, ChatGptTransportService.class, CodexProjectGateway.class,
                     AgentPromptService.class, CreativeBoundaryService.class,
-                    com.novelagent.project.application.ProjectAccessService.class}) registerMock(context, type);
+                    ProjectAccessService.class}) registerMock(context, type);
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
             context.registerBean(ModelContextProperties.class, () -> new ModelContextProperties());
             context.register(LegacyCodexPromptGateway.class, LegacyCodexExecutor.class, ProjectCodexExecutor.class,

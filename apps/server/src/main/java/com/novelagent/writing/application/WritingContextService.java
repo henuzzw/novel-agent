@@ -2,22 +2,28 @@ package com.novelagent.writing.application;
 
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
-import com.novelagent.memory.application.MemoryBudgetPlan;
+import com.novelagent.canon.application.PublishedMemoryReadiness;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
+import com.novelagent.memory.application.MemoryBudgetPlan;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.memory.application.NovelMemoryService;
 import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.CharacterBlueprint;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.domain.OutlineVersion;
-import com.novelagent.planning.domain.StoryBibleVersion;
+import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleStatus;
+import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.project.application.CreativeBoundaryGuide;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.domain.NovelProject;
-import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.domain.CreativeBoundaries;
 import com.novelagent.project.domain.CreativeStrategy;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.domain.NovelProject;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -36,7 +42,7 @@ public class WritingContextService {
     private final StoryBibleVersionRepository bibles;
     private final NovelMemoryService memory;
     private final CharacterNameService names;
-    private final com.novelagent.canon.application.PublishedMemoryReadiness memoryReadiness;
+    private final PublishedMemoryReadiness memoryReadiness;
 
     public WritingContextService(
             ProjectAccessService access,
@@ -44,7 +50,7 @@ public class WritingContextService {
             StoryBibleVersionRepository bibles,
             NovelMemoryService memory,
             CharacterNameService names,
-            com.novelagent.canon.application.PublishedMemoryReadiness memoryReadiness) {
+            PublishedMemoryReadiness memoryReadiness) {
         this.access = access;
         this.outlines = outlines;
         this.bibles = bibles;
@@ -126,9 +132,7 @@ public class WritingContextService {
 
     /** 正文生成与后续检查共用项目创作边界，保证同一来源的指纹一致。 */
     static Context prepared(Context context, NovelProject project) {
-        String boundaries =
-                com.novelagent.project.application.CreativeBoundaryGuide.render(
-                        com.novelagent.project.domain.CreativeBoundaries.from(project));
+        String boundaries = CreativeBoundaryGuide.render(CreativeBoundaries.from(project));
         return new Context(
                 context.outline(),
                 context.bible(),
@@ -171,9 +175,7 @@ public class WritingContextService {
                         context.bible().getContent() == null
                                 ? List.of()
                                 : context.bible().getContent().characterBlueprints().stream()
-                                        .map(
-                                                com.novelagent.planning.domain.CharacterBlueprint
-                                                        ::name)
+                                        .map(CharacterBlueprint::name)
                                         .filter(query::contains)
                                         .toList());
         if (context.previous() == null
@@ -309,12 +311,12 @@ public class WritingContextService {
 
         public Object[] budgetInputs(Object... inputs) {
             if (preparationContext.isEmpty()) return inputs;
-            Object[] result = java.util.Arrays.copyOf(inputs, inputs.length + 1);
+            Object[] result = Arrays.copyOf(inputs, inputs.length + 1);
             result[inputs.length] = preparationContext;
             return result;
         }
 
-        public com.novelagent.planning.domain.StoryBibleContent writingMaterials() {
+        public StoryBibleContent writingMaterials() {
             return WritingMaterialSelection.forChapter(bible.getContent(), chapter.content());
         }
 

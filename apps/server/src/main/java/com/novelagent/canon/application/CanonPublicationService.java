@@ -1,15 +1,18 @@
 package com.novelagent.canon.application;
 
+import com.novelagent.agent.domain.AutomationRun;
+import com.novelagent.agent.domain.AutomationStatus;
+import com.novelagent.agent.infrastructure.AutomationRunRepository;
 import com.novelagent.canon.api.CanonCommitResponse;
 import com.novelagent.canon.api.PublishManuscriptRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
+import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -31,7 +34,7 @@ public class CanonPublicationService {
     private final CanonPublicationEvents events;
     private final EntityManager entities;
     private final JdbcTemplate jdbc;
-    private final com.novelagent.agent.infrastructure.AutomationRunRepository automations;
+    private final AutomationRunRepository automations;
 
     public CanonPublicationService(
             ProjectAccessService access,
@@ -42,7 +45,7 @@ public class CanonPublicationService {
             CanonPublicationEvents events,
             EntityManager entities,
             JdbcTemplate jdbc,
-            com.novelagent.agent.infrastructure.AutomationRunRepository automations) {
+            AutomationRunRepository automations) {
         this.access = access;
         this.projects = projects;
         this.manuscripts = manuscripts;
@@ -135,13 +138,10 @@ public class CanonPublicationService {
                                                 run.getCurrentChapter() == chapter
                                                         && !run.isCancelRequested()
                                                         && (run.getStatus()
-                                                                        == com.novelagent.agent
-                                                                                .domain
-                                                                                .AutomationStatus
-                                                                                .RUNNING
+                                                                        == AutomationStatus.RUNNING
                                                                 || run.isWaitingForPublication()))
                                 .findFirst()
-                                .map(com.novelagent.agent.domain.AutomationRun::isAutoMemory)
+                                .map(AutomationRun::isAutoMemory)
                                 .orElse(true);
         jdbc.update(
                 "INSERT INTO canon_memory_job(commit_id, project_id, provider, status) VALUES (?, ?, ?, ?)",

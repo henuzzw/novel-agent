@@ -1,9 +1,9 @@
 package com.novelagent.memory.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.platform.support.Json;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -52,10 +52,6 @@ public class ContextBudgetPlanner {
         if (value instanceof String text) {
             return text;
         }
-        try {
-            return mapper.writeValueAsString(value);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("无法估算 Agent 固定输入 Token", exception);
-        }
+        return Json.call(() -> mapper.writeValueAsString(value), "无法估算 Agent 固定输入 Token", IllegalArgumentException::new);
     }
 }

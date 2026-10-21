@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -233,7 +234,7 @@ public class AutomationRun {
 
     public boolean ownsLoop(UUID loopId, int expectedAttempt, int chapter) {
         return status == AutomationStatus.RUNNING && !cancelRequested && attempt == expectedAttempt
-                && currentChapter == chapter && java.util.Objects.equals(currentLoopId, loopId);
+                && currentChapter == chapter && Objects.equals(currentLoopId, loopId);
     }
 
     public void waitForPublication(String reason) {

@@ -1,25 +1,51 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.agent.application.AgentRunRecorder;
+import com.novelagent.memory.application.ModelContextProperties;
+import com.novelagent.modelaccess.application.ChatGptDirectGateway;
 import com.novelagent.modelaccess.application.ChatGptOAuthService;
 import com.novelagent.modelaccess.application.ChatGptTransportService;
+import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.planning.infrastructure.ChatGptHttpExecutor;
+import com.novelagent.planning.infrastructure.CodexAppServerClient;
+import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient;
+import com.novelagent.planning.infrastructure.ModelPromptAssembler;
+import com.novelagent.planning.infrastructure.StructuredModelGateway;
 import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.project.application.GlobalModelSettingsService;
+import com.novelagent.project.application.ResourceVersionConflictException;
+import com.novelagent.project.domain.GlobalModelSettings;
+import com.novelagent.prompt.application.AgentPromptService;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@EnabledIfEnvironmentVariable(named = "NOVEL_MODELACCESS_DB_TEST", matches = "true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class HttpConversationDatabaseTest {
     private final String schema = "modelaccess_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -29,8 +55,7 @@ class HttpConversationDatabaseTest {
     private HttpConversationStore store;
     private DataSourceTransactionManager manager;
     @BeforeAll void setup() throws Exception {
-        var source = new DriverManagerDataSource("jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432")
-                + "/" + env("DB_NAME", "novel_agent") + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
+        var source = new DriverManagerDataSource(TestDatabase.url() + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
                 env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", "change-me"));
         jdbc = new JdbcTemplate(source); manager = new DataSourceTransactionManager(source);
         jdbc.execute("CREATE SCHEMA " + schema);
@@ -66,9 +91,9 @@ class HttpConversationDatabaseTest {
         var first = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
         assertThatThrownBy(() -> codex.claim(project, "QUALITY_REVIEW", "codex-account", true)).hasMessageContaining("正在生成");
         String content = "完整资料，不是摘要"; String id = CodexMaterialDelta.fingerprint(content);
-        codex.saveMaterials(first, java.util.Map.of(id, content)); codex.bind(first, "persisted-thread");
+        codex.saveMaterials(first, Map.of(id, content)); codex.bind(first, "persisted-thread");
         assertThat(codex.readMaterial(first, id)).isEqualTo(content);
-        codex.complete(first, java.util.Set.of(id), 120000);
+        codex.complete(first, Set.of(id), 120000);
         var next = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
         assertThat(next.thread()).isEqualTo("persisted-thread"); assertThat(next.sent()).containsExactly(id);
         assertThat(next.contextTokens()).isEqualTo(120000);
@@ -77,7 +102,7 @@ class HttpConversationDatabaseTest {
         var retry = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
         assertThat(retry.thread()).isNull(); assertThat(retry.sent()).isEmpty();
         assertThat(codex.readMaterial(retry, id)).isEqualTo(content);
-        codex.bind(retry, "retry-thread"); codex.complete(retry, java.util.Set.of(id), 100);
+        codex.bind(retry, "retry-thread"); codex.complete(retry, Set.of(id), 100);
         var changed = codex.claim(project, "NOVEL_MAIN", "different-account", false);
         assertThat(changed.thread()).isNull(); assertThat(changed.sent()).isEmpty(); codex.release(changed);
         var intruder = new CodexConversationStore(jdbc, json, new CurrentActorProvider(UUID.randomUUID()), manager);
@@ -92,7 +117,7 @@ class HttpConversationDatabaseTest {
         var direct = tx.execute(status -> service.update(new ChatGptTransportService.Choice(ChatGptTransportService.Transport.SIWC_HTTP, 0)));
         assertThat(direct.version()).isEqualTo(1);
         assertThatThrownBy(() -> tx.execute(status -> service.update(new ChatGptTransportService.Choice(ChatGptTransportService.Transport.APP_SERVER, 0))))
-                .isInstanceOf(com.novelagent.project.application.ResourceVersionConflictException.class);
+                .isInstanceOf(ResourceVersionConflictException.class);
         var legacy = UUID.randomUUID();
         jdbc.update("INSERT INTO agent_run(id,project_id,status,started_at) VALUES (?, ?, 'RUNNING', '2000-01-01')", legacy, project);
         service.requireIdle();
@@ -110,8 +135,8 @@ class HttpConversationDatabaseTest {
         var auth = mock(ChatGptOAuthService.class);
         when(auth.authorization()).thenReturn(new PrivateOAuthStore.Credentials("oaiapp_wire", "subject-wire", null, null,
                 "test-access", "test-refresh", Long.MAX_VALUE, "chatgpt.tokens.use.direct"));
-        var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
-        var captured = new java.util.ArrayList<com.fasterxml.jackson.databind.JsonNode>();
+        var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var captured = new ArrayList<JsonNode>();
         server.createContext("/responses", exchange -> {
             captured.add(json.readTree(exchange.getRequestBody()));
             var response = json.createObjectNode().put("id", "test-response").put("status", "completed");
@@ -124,33 +149,33 @@ class HttpConversationDatabaseTest {
         server.start();
         try {
             var responses = new ChatGptResponsesClient(new ChatGptHttp(json, ""), auth, json, 2,
-                    java.net.URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/responses"));
-            var settings = mock(com.novelagent.project.application.GlobalModelSettingsService.class);
-            when(settings.get()).thenReturn(new com.novelagent.project.domain.GlobalModelSettings(
-                    com.novelagent.planning.application.ModelProvider.LOCAL_CODEX, "test-model", "high", "deepseek-flash", 9));
-            var direct = new com.novelagent.modelaccess.application.ChatGptDirectGateway(auth, store, responses, settings,
-                    new com.novelagent.memory.application.ModelContextProperties());
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/responses"));
+            var settings = mock(GlobalModelSettingsService.class);
+            when(settings.get()).thenReturn(new GlobalModelSettings(
+                    ModelProvider.LOCAL_CODEX, "test-model", "high", "deepseek-flash", 9));
+            var direct = new ChatGptDirectGateway(auth, store, responses, settings,
+                    new ModelContextProperties());
             var transport = mock(ChatGptTransportService.class);
             when(transport.get()).thenReturn(new ChatGptTransportService.Choice(ChatGptTransportService.Transport.SIWC_HTTP, 1));
-            var codex = mock(com.novelagent.planning.infrastructure.CodexAppServerClient.class);
-            var deepSeek = mock(com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient.class);
-            var runs = mock(com.novelagent.agent.application.AgentRunRecorder.class);
+            var codex = mock(CodexAppServerClient.class);
+            var deepSeek = mock(DeepSeekStructuredOutputClient.class);
+            var runs = mock(AgentRunRecorder.class);
             when(runs.progressSink()).thenReturn(ignored -> {});
             when(runs.record(any(), anyString(), any(), anyString(), anyString(), any(), any(), any())).thenAnswer(call -> {
-                var result = ((java.util.function.Supplier<?>) call.getArgument(6)).get();
-                ((java.util.function.Consumer<Object>) call.getArgument(7)).accept(result); return result;
+                var result = ((Supplier<?>) call.getArgument(6)).get();
+                ((Consumer<Object>) call.getArgument(7)).accept(result); return result;
             });
-            var prompts = mock(com.novelagent.prompt.application.AgentPromptService.class);
-            when(prompts.resolve(anyString(), anyString())).thenAnswer(call -> new com.novelagent.prompt.application.AgentPromptService.Resolved(
+            var prompts = mock(AgentPromptService.class);
+            when(prompts.resolve(anyString(), anyString())).thenAnswer(call -> new AgentPromptService.Resolved(
                     call.getArgument(0) + " phase", "wire-revision", call.getArgument(0) + " instructions"));
-            var gateway = new com.novelagent.planning.infrastructure.StructuredModelGateway(java.util.List.of(
-                    new com.novelagent.planning.infrastructure.ChatGptHttpExecutor(runs,
-                            new com.novelagent.memory.application.ModelContextProperties(), direct)),
-                    new com.novelagent.planning.infrastructure.ModelPromptAssembler(prompts, null, null), transport);
+            var gateway = new StructuredModelGateway(List.of(
+                    new ChatGptHttpExecutor(runs,
+                            new ModelContextProperties(), direct)),
+                    new ModelPromptAssembler(prompts, null, null), transport);
             var schema = json.createObjectNode().put("type", "object"); schema.putObject("properties").putObject("text").put("type", "string");
             for (String phase : new String[]{"STORY_BIBLE", "OUTLINE"})
-                assertThat(gateway.request(project, phase, com.novelagent.planning.application.ModelProvider.LOCAL_CODEX,
-                        "default", "current data", schema, "text", 1000, com.novelagent.planning.infrastructure.CodexSessionPolicy.REUSE_THREAD))
+                assertThat(gateway.request(project, phase, ModelProvider.LOCAL_CODEX,
+                        "default", "current data", schema, "text", 1000, CodexSessionPolicy.REUSE_THREAD))
                         .contains("usable planning text");
             assertThat(captured.get(0).path("instructions").asText()).startsWith("STORY_BIBLE instructions");
             assertThat(captured.get(1).path("instructions").asText()).startsWith("OUTLINE instructions");
@@ -158,13 +183,12 @@ class HttpConversationDatabaseTest {
             assertThat(captured.get(1).at("/input/0/content").asText()).contains("STORY_BIBLE phase");
             assertThat(captured.get(1).at("/input/2/content").asText()).contains("OUTLINE phase");
             verifyNoInteractions(codex, deepSeek);
-            assertThatThrownBy(() -> gateway.request(project, "OUTLINE", com.novelagent.planning.application.ModelProvider.LOCAL_CODEX,
-                    "default", "invalid data", schema, "text", 1000, com.novelagent.planning.infrastructure.CodexSessionPolicy.REUSE_THREAD,
+            assertThatThrownBy(() -> gateway.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX,
+                    "default", "invalid data", schema, "text", 1000, CodexSessionPolicy.REUSE_THREAD,
                     output -> { throw new IllegalArgumentException("domain validation failed"); })).hasMessageContaining("domain validation");
             var history = store.claim(project, "STORY_PLANNING", ChatGptResponsesClient.accountBinding(auth.authorization()), "wire-revision", false);
             assertThat(history.history()).hasSize(4); store.release(history);
         } finally { server.stop(0); }
     }
     @AfterAll void cleanup() { if (jdbc != null && schema.matches("modelaccess_test_[a-f0-9]{32}")) jdbc.execute("DROP SCHEMA " + schema + " CASCADE"); }
-    private String env(String name, String fallback) { return System.getenv().getOrDefault(name, fallback); }
 }

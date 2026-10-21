@@ -5,10 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineContent;
+import com.novelagent.platform.support.Json;
 import com.novelagent.writing.domain.FactProposal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Comparator;
+import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -131,7 +134,7 @@ class RecentChapterSummariesTool implements NovelReadTool {
         return new NovelToolResult(List.copyOf(memories), List.copyOf(facts));
     }
 
-    private String provenance(java.sql.ResultSet row, NovelToolRequest request) throws java.sql.SQLException {
+    private String provenance(ResultSet row, NovelToolRequest request) throws SQLException {
         return "来源项目=" + request.projectId() + "；提交=" + row.getString("commit_id")
                 + "；正文=" + row.getString("manuscript_id") + "；正文版本=" + row.getInt("version_number")
                 + "；正文行版本=" + row.getLong("manuscript_row_version")
@@ -143,13 +146,11 @@ class RecentChapterSummariesTool implements NovelReadTool {
     }
 
     private OutlineContent readOutline(String json) {
-        try { return mapper.readValue(json, OutlineContent.class); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("已发布大纲无法解析", exception); }
+        return Json.call(() -> mapper.readValue(json, OutlineContent.class), "已发布大纲无法解析");
     }
 
     private String json(ChapterPlan plan) {
-        try { return mapper.writeValueAsString(plan); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("下一章计划无法解析", exception); }
+        return Json.call(() -> mapper.writeValueAsString(plan), "下一章计划无法解析");
     }
 
     private record PlanSource(String provenance, OutlineContent content) { }

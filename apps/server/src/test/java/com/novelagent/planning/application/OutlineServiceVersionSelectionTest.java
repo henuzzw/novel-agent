@@ -26,9 +26,10 @@ import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.CreativeIntent;
-import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.project.domain.EntryMode;
+import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.List;
@@ -65,6 +66,7 @@ class OutlineServiceVersionSelectionTest {
         when(projects.findById(projectId)).thenReturn(Optional.of(project));
         when(bibles.findByIdAndProjectId(bibleId, projectId)).thenReturn(Optional.of(bible));
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
+        when(bible.getSourceSnowflakeId()).thenReturn(UUID.randomUUID());
         when(bible.getContent()).thenReturn(bibleContent());
         when(intents.findById(projectId)).thenReturn(Optional.of(intent));
         when(intent.getTargetWords()).thenReturn(120_000);
@@ -101,7 +103,7 @@ class OutlineServiceVersionSelectionTest {
     @Test
     void passesSavedPolicySeparatelyWithoutAddingSystemTextToAuthorInstruction() {
         var project = NovelProject.create(projectId, actor.currentUserId(), "测试小说",
-                com.novelagent.project.domain.EntryMode.IDEA);
+                EntryMode.IDEA);
         project.publishStoryBible(bibleId);
         var policy = CreativeStrategyPolicy.of(CreativeStrategy.FANQIE_GRIPPING);
         policy.applyTo(project);
@@ -257,7 +259,7 @@ class OutlineServiceVersionSelectionTest {
     void restoringPublishedHistoricalVersionChangesCurrentPointerWithoutReplacingLatestDraft() {
         UUID userId = actor.currentUserId();
         NovelProject project = NovelProject.create(projectId, userId, "测试小说",
-                com.novelagent.project.domain.EntryMode.IDEA);
+                EntryMode.IDEA);
         OutlineVersion older = version(1, "想恢复的旧版");
         older.publish();
         OutlineVersion latest = version(3, "较新的草稿");

@@ -1,5 +1,6 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
@@ -70,7 +71,7 @@ public class LegacyCodexPromptGateway {
             return run(system, settings, outputReserve, null, progress);
         }
         public CodexAppServerClient.TurnResult run(String system, EffectiveSettings settings,
-                int outputReserve, com.fasterxml.jackson.databind.JsonNode schema, Consumer<String> progress) {
+                int outputReserve, JsonNode schema, Consumer<String> progress) {
             attempted = true;
             var capacity = context.require(settings.provider());
             long prior = codex.contextTokens(session.getThreadId());

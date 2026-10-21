@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.EntityCatalogService;
+import com.novelagent.canon.application.PublishedMemoryReadiness;
 import com.novelagent.memory.application.ContextBudgetPlanner;
 import com.novelagent.memory.application.MemoryBudgetPlan;
 import com.novelagent.memory.application.NovelMemoryContext;
@@ -24,6 +25,7 @@ import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.domain.OutlineVersion;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
@@ -37,12 +39,13 @@ import com.novelagent.writing.api.ReturnReviewRequest;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.ChapterContractStatus;
 import com.novelagent.writing.domain.ChapterContractVersion;
-import com.novelagent.writing.domain.ManuscriptContent;
-import com.novelagent.writing.domain.ManuscriptVersion;
-import com.novelagent.writing.domain.ChapterReviewVersion;
 import com.novelagent.writing.domain.ChapterReviewContent;
+import com.novelagent.writing.domain.ChapterReviewVersion;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
+import com.novelagent.writing.domain.ManuscriptContent;
+import com.novelagent.writing.domain.ManuscriptStatus;
+import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.domain.ReviewIssue;
 import com.novelagent.writing.domain.ReviewStatus;
 import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
@@ -53,6 +56,9 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -76,7 +82,7 @@ class WritingServiceManuscriptVersionTest {
     private final CharacterNameService names = mock(CharacterNameService.class);
     private final TransactionTemplate transactions = mock(TransactionTemplate.class);
     private final WritingContextService contexts = new WritingContextService(new ProjectAccessService(projects, actor),
-            outlines, bibles, memory, names, mock(com.novelagent.canon.application.PublishedMemoryReadiness.class));
+            outlines, bibles, memory, names, mock(PublishedMemoryReadiness.class));
     private final ManuscriptService manuscriptService = new ManuscriptService(contexts, manuscripts,
             workflow, budgetPlanner, names, mock(WritingStyleService.class));
     private final WritingService service = new WritingService(mock(ChapterContractService.class), manuscriptService,
@@ -116,7 +122,7 @@ class WritingServiceManuscriptVersionTest {
         when(outlines.findByIdAndProjectId(outlineId, projectId)).thenReturn(Optional.of(outline));
         when(bible.getContent()).thenReturn(bibleContent);
         when(bible.getId()).thenReturn(bibleId);
-        when(bible.getStatus()).thenReturn(com.novelagent.planning.domain.StoryBibleStatus.PUBLISHED);
+        when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
         when(bibles.findByIdAndProjectId(bibleId, projectId)).thenReturn(Optional.of(bible));
         when(contract.getId()).thenReturn(contractId);
         when(contract.getSourceOutlineVersionId()).thenReturn(outlineId);
@@ -143,7 +149,7 @@ class WritingServiceManuscriptVersionTest {
         assertThat(created.writingBasis().outlineId()).isEqualTo(outlineId);
         assertThat(created.writingBasis().plan().requiredBeats())
                 .containsExactly("【本章完整规划；未来计划不是正史】\n" + chapter.content());
-        org.mockito.Mockito.verifyNoInteractions(contracts);
+        Mockito.verifyNoInteractions(contracts);
         var source = ManuscriptVersion.create(created.id(), projectId, null, 1, 1, "LOCAL_TEMPLATE", null, generated)
                 .withWritingBasis(created.writingBasis());
         source.accept();
@@ -190,7 +196,7 @@ class WritingServiceManuscriptVersionTest {
     }
 
     @Test
-    void rejectsCrossChapterBaseBeforeCallingModel() {
+    void rejectsInvalidBaseBeforeCallingModel() {
         UUID wrongChapterVersionId = UUID.randomUUID();
 
         assertThatThrownBy(() -> service.generateManuscript(projectId, 1,
@@ -198,10 +204,16 @@ class WritingServiceManuscriptVersionTest {
                 .isInstanceOf(WritingResourceNotFoundException.class);
         verify(workflow, never()).generateManuscript(any(), any(), any(), any(), any(), any(),
                 any(), any(), any());
+
+        assertThatThrownBy(() -> service.generateManuscript(projectId, 1,
+                request(GenerationMode.REGENERATE, UUID.randomUUID())))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("不能指定基准");
+        verify(workflow, never()).generateManuscript(any(), any(), any(), any(), any(), any(),
+                any(), any(), any());
     }
 
     @Test
-    void rejectsOutlineChangedDuringGenerationWithoutSavingDraft() {
+    void rejectsSourceChangedDuringGenerationWithoutSavingDraft() {
         OutlineVersion outline = outlines.findByIdAndProjectId(outlineId, projectId).orElseThrow();
         when(workflow.generateManuscript(eq(projectId), any(), any(), any(), any(), any(),
                 any(), eq(ModelProvider.LOCAL_TEMPLATE), any())).thenAnswer(call -> {
@@ -212,10 +224,7 @@ class WritingServiceManuscriptVersionTest {
                 request(GenerationMode.REGENERATE, null))).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("大纲");
         verify(manuscripts, never()).saveAndFlush(any());
-    }
 
-    @Test
-    void rejectsBaseChangedDuringGenerationWithoutSavingDraft() {
         ManuscriptVersion base = manuscript(1, "原文");
         when(manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1))
                 .thenReturn(Optional.of(base));
@@ -230,15 +239,6 @@ class WritingServiceManuscriptVersionTest {
                 request(GenerationMode.REVISE, base.getId()))).isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("基准正文");
         verify(manuscripts, never()).saveAndFlush(any());
-    }
-
-    @Test
-    void rejectsBaseWhenRegenerating() {
-        assertThatThrownBy(() -> service.generateManuscript(projectId, 1,
-                request(GenerationMode.REGENERATE, UUID.randomUUID())))
-                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("不能指定基准");
-        verify(workflow, never()).generateManuscript(any(), any(), any(), any(), any(), any(),
-                any(), any(), any());
     }
 
     @Test
@@ -280,7 +280,7 @@ class WritingServiceManuscriptVersionTest {
     }
 
     @Test
-    void rejectsManualRevisionFromAnUnconfirmedOrSupersededVersion() {
+    void rejectsInvalidManualRevisionSources() {
         ManuscriptVersion draft = manuscript(2, "未确认");
         when(manuscripts.findByIdAndProjectIdAndChapterNumber(draft.getId(), projectId, 1))
                 .thenReturn(Optional.of(draft));
@@ -293,10 +293,7 @@ class WritingServiceManuscriptVersionTest {
         assertThatThrownBy(() -> service.createManuscriptRevision(projectId, 1, draft.getId(), 0))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("请刷新");
         verify(manuscripts, never()).saveAndFlush(any(ManuscriptVersion.class));
-    }
 
-    @Test
-    void rejectsWrongChapterAndStalePreconditionForManualRevision() {
         ManuscriptVersion accepted = manuscript(2, "已确认");
         accepted.accept();
         when(manuscripts.findByIdAndProjectIdAndChapterNumber(accepted.getId(), projectId, 1))
@@ -332,16 +329,16 @@ class WritingServiceManuscriptVersionTest {
         assertThat(result.versionNumber()).isEqualTo(4);
         assertThat(result.baseManuscriptVersionId()).isEqualTo(source.getId());
         assertThat(result.sourceReviewVersionId()).isEqualTo(review.getId());
-        assertThat(source.getStatus()).isEqualTo(com.novelagent.writing.domain.ManuscriptStatus.AUTHOR_ACCEPTED);
+        assertThat(source.getStatus()).isEqualTo(ManuscriptStatus.AUTHOR_ACCEPTED);
         assertThat(review.getStatus()).isEqualTo(ReviewStatus.RETURNED);
-        org.mockito.ArgumentCaptor<String> feedback = org.mockito.ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> feedback = ArgumentCaptor.forClass(String.class);
         verify(workflow).generateManuscript(eq(projectId), any(), any(), any(), any(), any(),
                 eq(source.getContent()), eq(ModelProvider.LOCAL_TEMPLATE), feedback.capture());
         assertThat(feedback.getValue()).contains("人物连续性", "原文证据", "成绩不错", "保持对话自然");
     }
 
     @Test
-    void rejectsReviewWithoutSelectedIssuesBeforeCallingModel() {
+    void rejectsInvalidReviewBeforeCallingModel() {
         ManuscriptVersion source = manuscript(3, "已确认的原文");
         source.accept();
         ChapterReviewVersion review = review(source);
@@ -360,6 +357,23 @@ class WritingServiceManuscriptVersionTest {
         verify(workflow, never()).generateManuscript(any(), any(), any(), any(), any(), any(),
                 any(), any(), any());
         assertThat(review.getStatus()).isEqualTo(ReviewStatus.DRAFT);
+
+        ManuscriptVersion staleSource = manuscript(3, "已确认的原文");
+        staleSource.accept();
+        ChapterReviewVersion stale = review(staleSource);
+        when(reviews.findByIdAndProjectId(stale.getId(), projectId)).thenReturn(Optional.of(stale));
+        when(reviews.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1))
+                .thenReturn(Optional.of(stale));
+        when(manuscripts.findByIdAndProjectIdAndChapterNumber(staleSource.getId(), projectId, 1))
+                .thenReturn(Optional.of(staleSource));
+        when(manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1))
+                .thenReturn(Optional.of(manuscript(4, "已有新稿")));
+
+        assertThatThrownBy(() -> service.returnReviewToWriting(projectId, 1, stale.getId(), 0,
+                new ReturnReviewRequest(ModelProvider.LOCAL_TEMPLATE, GenerationMode.REVISE,
+                        List.of("I1"), null))).hasMessageContaining("正文已有新版本");
+        verify(workflow, never()).generateManuscript(any(), any(), any(), any(), any(), any(),
+                any(), any(), any());
     }
 
     @Test
@@ -406,30 +420,10 @@ class WritingServiceManuscriptVersionTest {
 
         assertThat(result.baseManuscriptVersionId()).isNull();
         assertThat(result.sourceReviewVersionId()).isEqualTo(review.getId());
-        org.mockito.ArgumentCaptor<String> feedback = org.mockito.ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> feedback = ArgumentCaptor.forClass(String.class);
         verify(workflow).generateManuscript(eq(projectId), any(), any(), any(), any(), any(),
-                org.mockito.ArgumentMatchers.isNull(), eq(ModelProvider.LOCAL_TEMPLATE), feedback.capture());
+                ArgumentMatchers.isNull(), eq(ModelProvider.LOCAL_TEMPLATE), feedback.capture());
         assertThat(feedback.getValue()).contains("重写整章", "修改说明返回空数组");
-    }
-
-    @Test
-    void rejectsStaleReviewBeforeCallingModel() {
-        ManuscriptVersion source = manuscript(3, "已确认的原文");
-        source.accept();
-        ChapterReviewVersion review = review(source);
-        when(reviews.findByIdAndProjectId(review.getId(), projectId)).thenReturn(Optional.of(review));
-        when(reviews.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1))
-                .thenReturn(Optional.of(review));
-        when(manuscripts.findByIdAndProjectIdAndChapterNumber(source.getId(), projectId, 1))
-                .thenReturn(Optional.of(source));
-        when(manuscripts.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, 1))
-                .thenReturn(Optional.of(manuscript(4, "已有新稿")));
-
-        assertThatThrownBy(() -> service.returnReviewToWriting(projectId, 1, review.getId(), 0,
-                new ReturnReviewRequest(ModelProvider.LOCAL_TEMPLATE, GenerationMode.REVISE,
-                        List.of("I1"), null))).hasMessageContaining("正文已有新版本");
-        verify(workflow, never()).generateManuscript(any(), any(), any(), any(), any(), any(),
-                any(), any(), any());
     }
 
     @Test

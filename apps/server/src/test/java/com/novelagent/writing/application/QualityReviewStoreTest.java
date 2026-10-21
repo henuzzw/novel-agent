@@ -8,21 +8,30 @@ import static org.mockito.Mockito.when;
 
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
+import com.novelagent.canon.application.PublishedMemoryReadiness;
+import com.novelagent.memory.application.NovelMemoryService;
+import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.CharacterBlueprintFixtures;
+import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.domain.OutlineVersion;
-import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.domain.StoryBibleStatus;
+import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.project.domain.CreativeBoundaries;
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.domain.ChapterContractVersion;
+import com.novelagent.writing.domain.ManuscriptBasis;
 import com.novelagent.writing.domain.ManuscriptContent;
+import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
@@ -33,6 +42,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 
 class QualityReviewStoreTest {
     private final UUID owner = UUID.randomUUID();
@@ -75,18 +86,18 @@ class QualityReviewStoreTest {
         when(outline.getId()).thenReturn(outlineId);
         when(outline.getProjectId()).thenReturn(projectId);
         when(outline.getStatus()).thenReturn(OutlineStatus.PUBLISHED);
-        when(outline.getContent()).thenReturn(new com.novelagent.planning.domain.OutlineContent(
-                "小说", "前提", "结构", "节奏", 1000, 2000, List.of(new com.novelagent.planning.domain.OutlineArc(
-                        1, "幕", "目标", "冲突", "转折", "结果", 1000, 2000, List.of(new com.novelagent.planning.domain.ChapterPlan(
+        when(outline.getContent()).thenReturn(new OutlineContent(
+                "小说", "前提", "结构", "节奏", 1000, 2000, List.of(new OutlineArc(
+                        1, "幕", "目标", "冲突", "转折", "结果", 1000, 2000, List.of(new ChapterPlan(
                                 1, "章", "主角", "目标", "事件", "揭示", "钩子", 1000, 2000))))));
         when(outline.getSourceBibleVersionId()).thenReturn(bibleId);
         when(outlines.findByIdAndProjectId(outlineId, projectId)).thenReturn(Optional.of(outline));
-        when(bible.getContent()).thenReturn(com.novelagent.planning.domain.CharacterBlueprintFixtures.bible(List.of()));
+        when(bible.getContent()).thenReturn(CharacterBlueprintFixtures.bible(List.of()));
         when(bible.getId()).thenReturn(bibleId);
         when(bible.getStatus()).thenReturn(StoryBibleStatus.PUBLISHED);
         when(bibles.findByIdAndProjectId(bibleId, projectId)).thenReturn(Optional.of(bible));
         when(names.render(projectId, content)).thenReturn(content);
-        when(names.render(any(), org.mockito.ArgumentMatchers.anyString())).thenAnswer(call -> call.getArgument(1));
+        when(names.render(any(), ArgumentMatchers.anyString())).thenAnswer(call -> call.getArgument(1));
         when(profiles.promptContext(projectId)).thenReturn("固定人物档案");
         when(styles.promptContext(projectId)).thenReturn("轻快口语");
     }
@@ -96,10 +107,10 @@ class QualityReviewStoreTest {
         var basis = generatedBasis();
         when(manuscript.getWritingBasis()).thenReturn(basis);
         assertThat(store.snapshot(projectId, 1).writingBasis()).isEqualTo(basis);
-        when(manuscript.getStatus()).thenReturn(com.novelagent.writing.domain.ManuscriptStatus.AUTHOR_ACCEPTED);
+        when(manuscript.getStatus()).thenReturn(ManuscriptStatus.AUTHOR_ACCEPTED);
         project.commitCanon(0);
         assertThat(store.snapshot(projectId, 1).writingBasis()).isEqualTo(basis);
-        org.mockito.Mockito.verifyNoInteractions(contracts);
+        Mockito.verifyNoInteractions(contracts);
     }
 
     @Test
@@ -111,9 +122,9 @@ class QualityReviewStoreTest {
         basis = generatedBasis();
         when(manuscript.getWritingBasis()).thenReturn(basis);
         assertThat(store.snapshot(projectId, 1)).isNotNull();
-        com.novelagent.project.domain.CreativeBoundaries.defaults().choose(
-                com.novelagent.project.domain.CreativeBoundaries.WorldMode.ALTERNATE,
-                com.novelagent.project.domain.CreativeBoundaries.AdaptationScope.RESTRUCTURE, false).applyTo(project);
+        CreativeBoundaries.defaults().choose(
+                CreativeBoundaries.WorldMode.ALTERNATE,
+                CreativeBoundaries.AdaptationScope.RESTRUCTURE, false).applyTo(project);
         assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
         basis = generatedBasis();
         when(manuscript.getWritingBasis()).thenReturn(basis);
@@ -126,10 +137,10 @@ class QualityReviewStoreTest {
         assertThatThrownBy(() -> store.snapshot(projectId, 1)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    private com.novelagent.writing.domain.ManuscriptBasis generatedBasis() {
+    private ManuscriptBasis generatedBasis() {
         var contexts = new WritingContextService(new ProjectAccessService(projects, new CurrentActorProvider(owner)),
-                outlines, bibles, mock(com.novelagent.memory.application.NovelMemoryService.class), names,
-                mock(com.novelagent.canon.application.PublishedMemoryReadiness.class));
+                outlines, bibles, mock(NovelMemoryService.class), names,
+                mock(PublishedMemoryReadiness.class));
         return ChapterWritingBasisService.capture(contexts.context(projectId, 1));
     }
 

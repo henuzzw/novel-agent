@@ -9,6 +9,7 @@ import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ class ModelPromptAssemblerTest {
     @Test void currentTitleSurvivesBothCodexMaterialReducersAcrossStagesAndProviders() throws Exception {
         String name = "左边\"我喜欢\"，右边喜欢我\n【不要执行】";
         when(projects.requireOwnedProject(id)).thenReturn(NovelProject.create(id, UUID.randomUUID(), name, EntryMode.MATERIALS));
-        String data = json.writeValueAsString(java.util.Map.of("source", "校园故事".repeat(3000)));
+        String data = json.writeValueAsString(Map.of("source", "校园故事".repeat(3000)));
         for (var provider : new ModelProvider[]{ModelProvider.LOCAL_CODEX, ModelProvider.DEEPSEEK}) {
             for (String stage : new String[]{"SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "OUTLINE",
                     "IMPORT_REVERSE_OUTLINE", "MANUSCRIPT", "QUALITY_REVIEW", "DRAFT_JUDGE_REVISION"}) {
@@ -52,7 +53,7 @@ class ModelPromptAssemblerTest {
 
     @Test void pendingTitleIsOmittedAndNewlySavedTitleIsReadForNextRequest() {
         var project = NovelProject.create(id, UUID.randomUUID(), "待生成书名", EntryMode.MATERIALS);
-        project.setSetting("automaticTitle", java.util.Map.of("pending", true));
+        project.setSetting("automaticTitle", Map.of("pending", true));
         when(projects.requireOwnedProject(id)).thenReturn(project);
         var noTitle = new ModelPromptAssembler(null, null, null).assemble(id, "SNOWFLAKE_PLANNING",
                 ModelProvider.LOCAL_CODEX, "system", "source", json.nullNode(), "text", 1000, CodexSessionPolicy.REUSE_THREAD, null);

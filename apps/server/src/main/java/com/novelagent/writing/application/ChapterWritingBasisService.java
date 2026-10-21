@@ -6,6 +6,7 @@ import com.novelagent.writing.domain.ManuscriptBasis;
 import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 正文写作依据的确定性转换与校验。将当前发布章节计划冻结为正文来源，历史合同仅用于追溯旧稿。
@@ -41,7 +42,7 @@ public final class ChapterWritingBasisService {
                         context.outline().getContent().readerExperiencePlans().stream()
                                 .filter(
                                         seed ->
-                                                java.util.Objects.equals(
+                                                Objects.equals(
                                                         seed.plannedChapter(), chapter.number()))
                                 .map(
                                         seed ->

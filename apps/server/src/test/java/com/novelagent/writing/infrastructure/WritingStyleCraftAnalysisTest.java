@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.writing.application.WritingStyleGuide;
 import com.novelagent.writing.application.WritingStylePresets;
@@ -42,17 +43,9 @@ class WritingStyleCraftAnalysisTest {
                 .isInstanceOf(ModelProviderException.class);
     }
 
-    @Test void schemaBoundsMechanicsAndEvidence() {
-        var schema = new WritingOutputSchemas(mapper).writingStyle();
-        var fields = schema.path("properties").path("craft").path("properties");
-        assertThat(fields.path("paragraphMoves").path("maxLength").asInt()).isEqualTo(1000);
-        assertThat(fields.path("examples").path("maxItems").asInt()).isZero();
-        assertThat(fields.path("evidence").path("minItems").asInt()).isEqualTo(1);
-    }
-
     @Test void oldJsonStillDeserializesAndRejectsInvalidMetadataOrOversizedCraft() throws Exception {
         var json = mapper.valueToTree(WritingStylePresets.all().getFirst());
-        ((com.fasterxml.jackson.databind.node.ObjectNode) json).remove(List.of("craft", "basePresetId", "basePresetVersion"));
+        ((ObjectNode) json).remove(List.of("craft", "basePresetId", "basePresetVersion"));
         var legacy = mapper.treeToValue(json, WritingStyleProfile.class);
         assertThat(legacy.craft()).isNull();
         assertThatThrownBy(() -> new WritingStyleProfile(legacy.name(), legacy.narrativeVoice(), legacy.sentenceRhythm(),

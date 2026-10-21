@@ -20,12 +20,13 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class ChatGptResponsesClientTest {
     @Test void actualHttpPayloadCarriesStrictJsonSchemaAndKeepsStreaming() throws Exception {
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        var captured = new java.util.concurrent.atomic.AtomicReference<JsonNode>();
+        var captured = new AtomicReference<JsonNode>();
         server.createContext("/responses", exchange -> {
             captured.set(json.readTree(exchange.getRequestBody()));
             byte[] bytes = completed("report").getBytes(StandardCharsets.UTF_8);
@@ -178,7 +179,7 @@ class ChatGptResponsesClientTest {
             assertThatThrownBy(() -> client.request("test", json.createArrayNode(), settings,
                     ChatGptResponsesClient.accountBinding(credentials), ignored -> {})).hasMessageContaining("空闲等待超时");
             assertThat(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - start)).isLessThan(3);
-            var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+            var failure = new AtomicReference<Throwable>();
             var worker = Thread.ofVirtual().start(() -> {
                 try { client.request("test", json.createArrayNode(), settings, ChatGptResponsesClient.accountBinding(credentials), ignored -> {}); }
                 catch (Throwable error) { failure.set(error); }

@@ -1,5 +1,19 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.novelagent.agent.application.AgentRunOutputBuffer;
+import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
+import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
+import com.novelagent.agent.application.AgentRunRecorder.Usage;
+import com.novelagent.agent.application.AgentRunRecorder.UsageCarrier;
+import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
+import com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool;
+import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore;
+import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.project.application.GlobalModelSettingsService;
 import jakarta.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -7,16 +21,16 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
-import java.util.Comparator;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Deque;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -28,24 +42,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-import com.novelagent.project.application.GlobalModelSettingsService;
-import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
-import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
-import com.novelagent.agent.application.AgentRunRecorder.Usage;
-import com.novelagent.agent.application.AgentRunRecorder.UsageCarrier;
-import com.novelagent.planning.application.ModelProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
 
 @Component
-@org.springframework.context.annotation.Primary
+@Primary
 public class CodexAppServerClient {
 
     private static final Logger log = LoggerFactory.getLogger(CodexAppServerClient.class);
@@ -205,12 +210,12 @@ public class CodexAppServerClient {
     }
 
     protected ArrayNode dynamicTools() {
-        return com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool.definitions(objectMapper);
+        return CodexMaterialReadTool.definitions(objectMapper);
     }
     protected boolean externalAuthorization() { return false; }
     protected JsonNode handleDynamicTool(JsonNode params) {
         var scope = materialScopes.get(params.path("threadId").asText());
-        return com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool.respond(objectMapper, params,
+        return CodexMaterialReadTool.respond(objectMapper, params,
                 scope == null ? Set.of() : scope.ids(), id -> readMaterialFile(scope.project(), id));
     }
     public boolean supportsMaterialTool(String threadId) { return materialToolThreads.contains(threadId); }
@@ -238,7 +243,7 @@ public class CodexAppServerClient {
                 if (metadata == null || !"session_meta".equals(metadata.path("type").asText())
                         || !threadId.equals(metadata.at("/payload/id").asText())) return;
                 for (var tool : metadata.at("/payload/dynamic_tools")) {
-                    if (com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool.NAME.equals(tool.path("name").asText())) {
+                    if (CodexMaterialReadTool.NAME.equals(tool.path("name").asText())) {
                         materialToolThreads.add(threadId);
                         return;
                     }
@@ -258,7 +263,7 @@ public class CodexAppServerClient {
                     || !file.toRealPath().startsWith(directory.toRealPath()))
                 throw new IOException("Unsafe material path");
             String text = Files.readString(file, StandardCharsets.UTF_8);
-            if (!id.equals(com.novelagent.modelaccess.infrastructure.CodexMaterialDelta.fingerprint(text)))
+            if (!id.equals(CodexMaterialDelta.fingerprint(text)))
                 throw new IOException("Material identity changed");
             return text;
         } catch (IOException error) {
@@ -278,21 +283,21 @@ public class CodexAppServerClient {
             if (Files.isSymbolicLink(workspace) || Files.isSymbolicLink(directory))
                 throw new IOException("Symbolic material directory rejected");
             Files.createDirectories(directory);
-            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(directory, true);
+            PrivateOAuthStore.protect(directory, true);
             for (var entry : materials.entrySet()) {
                 String id = entry.getKey();
                 if (!id.matches("[a-f0-9]{64}")
-                        || !id.equals(com.novelagent.modelaccess.infrastructure.CodexMaterialDelta.fingerprint(entry.getValue())))
+                        || !id.equals(CodexMaterialDelta.fingerprint(entry.getValue())))
                     throw new IOException("Invalid material identity");
                 Path target = directory.resolve(id + ".txt");
                 if (Files.isSymbolicLink(target)) throw new IOException("Symbolic material file rejected");
                 if (Files.exists(target)) {
-                    com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(target, false);
+                    PrivateOAuthStore.protect(target, false);
                     if (Files.readString(target, StandardCharsets.UTF_8).equals(entry.getValue())) continue;
                 }
                 Path temporary = Files.createTempFile(directory, ".material-", ".tmp");
                 try {
-                    com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(temporary, false);
+                    PrivateOAuthStore.protect(temporary, false);
                     Files.writeString(temporary, entry.getValue(), StandardCharsets.UTF_8);
                     Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
                 } finally { Files.deleteIfExists(temporary); }
@@ -592,9 +597,9 @@ public class CodexAppServerClient {
         Files.createDirectories(codexHome);
         Files.createDirectories(stateRoot);
         if (externalAuthorization()) {
-            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(runtimeRoot, true);
-            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(codexHome, true);
-            com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.protect(stateRoot, true);
+            PrivateOAuthStore.protect(runtimeRoot, true);
+            PrivateOAuthStore.protect(codexHome, true);
+            PrivateOAuthStore.protect(stateRoot, true);
             return;
         }
         Path target = codexHome.resolve("auth.json");
@@ -1025,7 +1030,7 @@ public class CodexAppServerClient {
             if (delta.isEmpty()) return;
             markActivity();
             if (!itemId.equals(id)) { itemId = id; partial.setLength(0); }
-            int available = com.novelagent.agent.application.AgentRunOutputBuffer.MAX_CHARACTERS + 1 - partial.length();
+            int available = AgentRunOutputBuffer.MAX_CHARACTERS + 1 - partial.length();
             if (available > 0) partial.append(delta, 0, Math.min(delta.length(), available));
             publish(partial.toString());
         }

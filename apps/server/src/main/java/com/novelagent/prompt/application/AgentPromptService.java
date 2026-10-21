@@ -1,13 +1,14 @@
 package com.novelagent.prompt.application;
 
 import com.novelagent.planning.application.CharacterBlueprintGuide;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.prompt.domain.PromptConfiguration;
 import com.novelagent.prompt.domain.PromptRevision;
 import com.novelagent.prompt.infrastructure.AgentPromptRepository;
-import com.novelagent.platform.support.Sha256;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -208,7 +209,7 @@ public class AgentPromptService {
         String versions =
                 bank.stream()
                         .filter(value -> keys.contains(value.key()))
-                        .sorted(java.util.Comparator.comparing(PromptConfiguration::key))
+                        .sorted(Comparator.comparing(PromptConfiguration::key))
                         .map(value -> value.key() + ":" + value.version())
                         .collect(Collectors.joining("\n"));
         return "planning:" + Sha256.ofUtf8(AgentPromptDefaults.RELEASE + "\n" + versions);

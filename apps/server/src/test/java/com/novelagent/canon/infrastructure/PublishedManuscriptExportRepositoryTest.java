@@ -1,20 +1,22 @@
 package com.novelagent.canon.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.sql.DriverManager;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 /** 只在单连接临时表验证真实PostgreSQL筛选，不启动应用或写入小说业务表。 */
-@EnabledIfEnvironmentVariable(named = "NOVEL_EXPORT_DB_TEST", matches = "true")
+@DatabaseTest
 class PublishedManuscriptExportRepositoryTest {
     @Test void selectsOnlyActiveAcceptedSourceWithFullyCompletedMemoryInChapterOrder() throws Exception {
-        String url = "jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432") + "/" + env("DB_NAME", "novel_agent");
+        String url = TestDatabase.url();
         try (var connection = DriverManager.getConnection(url, env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", ""))) {
             connection.setAutoCommit(false);
             var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
@@ -49,5 +51,4 @@ class PublishedManuscriptExportRepositoryTest {
         jdbc.update("INSERT INTO canon_commit VALUES (?,?,?,?,?)", commit, project, chapter, manuscript, active);
         if (memoryState != null) jdbc.update("INSERT INTO canon_memory_job VALUES (?,?,?)", commit, project, memoryState);
     }
-    private static String env(String key, String fallback) { return System.getenv().getOrDefault(key, fallback); }
 }

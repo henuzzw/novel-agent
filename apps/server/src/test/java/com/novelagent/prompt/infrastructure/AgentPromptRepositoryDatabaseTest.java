@@ -1,18 +1,20 @@
 package com.novelagent.prompt.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 
-import com.novelagent.prompt.application.AgentPromptCatalog;
-import com.novelagent.prompt.application.AgentPromptService;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ResourceVersionConflictException;
+import com.novelagent.prompt.application.AgentPromptCatalog;
+import com.novelagent.prompt.application.AgentPromptService;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -20,7 +22,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 隔离 PostgreSQL schema 验证真实迁移、乐观并发、用户范围与配置/历史原子性。 */
-@EnabledIfEnvironmentVariable(named = "NOVEL_PROMPT_DB_TEST", matches = "true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AgentPromptRepositoryDatabaseTest {
     private final String schema = "prompt_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -29,8 +31,7 @@ class AgentPromptRepositoryDatabaseTest {
     private TransactionTemplate transaction;
 
     @BeforeAll void migrateIsolatedSchema() throws Exception {
-        var datasource = new DriverManagerDataSource("jdbc:postgresql://" + env("DB_HOST", "localhost") + ":" + env("DB_PORT", "5432")
-                + "/" + env("DB_NAME", "novel_agent") + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
+        var datasource = new DriverManagerDataSource(TestDatabase.url() + "?currentSchema=" + schema + "&sslmode=" + env("DB_SSL_MODE", "disable"),
                 env("DB_USERNAME", "novel_app"), env("DB_PASSWORD", "change-me"));
         jdbc = new JdbcTemplate(datasource);
         jdbc.execute("CREATE SCHEMA " + schema);
@@ -95,5 +96,4 @@ class AgentPromptRepositoryDatabaseTest {
         if (jdbc != null && schema.matches("prompt_test_[a-f0-9]{32}")) jdbc.execute("DROP SCHEMA " + schema + " CASCADE");
     }
 
-    private String env(String key, String fallback) { return System.getenv().getOrDefault(key, fallback); }
 }

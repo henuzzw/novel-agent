@@ -7,6 +7,7 @@ import com.novelagent.writing.domain.FirstThreeChaptersReport;
 import com.novelagent.writing.domain.FirstThreeChaptersSource;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -136,7 +137,7 @@ public class FirstThreeChaptersService {
     private static List<UUID> selection(List<UUID> value) {
         if (value == null || value.isEmpty()) return List.of();
         if (value.size() != 3
-                || value.stream().anyMatch(java.util.Objects::isNull)
+                || value.stream().anyMatch(Objects::isNull)
                 || value.stream().distinct().count() != 3)
             throw new IllegalArgumentException("请按章序选择三个不同正文版本");
         return List.copyOf(value);

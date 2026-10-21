@@ -1,5 +1,6 @@
 package com.novelagent.platform.web;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -29,7 +30,7 @@ public class HttpLogSanitizer {
             String json = mapper.writeValueAsString(safe);
             // Never truncate before redacting: a cut JSON value could conceal its sensitive key.
             return json.length() <= 4000 ? json : json.substring(0, 4000) + "...[TRUNCATED]";
-        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException error) {
+        } catch (RuntimeException | JsonProcessingException error) {
             return "[UNAVAILABLE]";
         }
     }

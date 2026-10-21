@@ -9,15 +9,13 @@ class ChapterPlanTest {
     private final ChapterPlan plan = new ChapterPlan(14, "被叫去谈话",
             "视角：周启\n字数要求：2500字\n行动：询问谈话的原因。\n场景：教室，B收回温柔。", ChapterPlanStatus.PLANNED);
 
-    @Test void roundTripStoresOneBlockWithoutLiteraryFields() throws Exception {
+    @Test void roundTripStoresOneBlockAndJoinsOldProseWithoutLoss() throws Exception {
         var json = mapper.valueToTree(plan);
         assertThat(json.size()).isEqualTo(5);
         assertThat(json.has("pov") || json.has("sceneOutline") || json.has("suggestedMinWords")).isFalse();
         assertThat(mapper.treeToValue(json, ChapterPlan.class)).isEqualTo(plan);
         assertThat(plan.withStatus(ChapterPlanStatus.OCCURRED).content()).isEqualTo(plan.content());
-    }
 
-    @Test void oldProseIsJoinedWithoutLossButNotSerializedAsOldFields() throws Exception {
         var old = mapper.readTree("""
                 {"number":14,"title":"被叫去谈话","pov":"周启","objective":"询问",
                 "coreEvent":"谈话","reveal":"收回温柔","endingHook":"家长","status":"PLANNED",

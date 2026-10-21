@@ -1,28 +1,36 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
+import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.canon.infrastructure.OutboxPublisher;
-import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
-import com.novelagent.ingest.domain.ImportPlanningMode;
-import com.novelagent.ingest.application.WorkImportService;
-import com.novelagent.ingest.application.ImportAnalysisStore;
 import com.novelagent.ingest.application.ImportAnalysisRunner;
+import com.novelagent.ingest.application.ImportAnalysisStore;
+import com.novelagent.ingest.application.WorkImportService;
+import com.novelagent.ingest.domain.ImportPlanningMode;
+import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.SnowflakeStep;
+import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.infrastructure.CodexAppServerClient;
 import com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -37,7 +45,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(properties = {"spring.kafka.listener.auto-startup=false", "spring.kafka.admin.auto-create=false",
         "logging.file.name=target/source-flow-integration.log"})
 @AutoConfigureMockMvc
-@EnabledIfEnvironmentVariable(named="NOVEL_SOURCE_DB_TEST", matches="true")
+@DatabaseTest
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class StorySourceFlowIntegrationTest {
     private static final String SCHEMA = "source_flow_test_" + UUID.randomUUID().toString().replace("-", "");
@@ -53,20 +61,19 @@ class StorySourceFlowIntegrationTest {
     @MockitoBean private SemanticEmbeddingBackfill embeddings;
 
     @DynamicPropertySource static void database(DynamicPropertyRegistry properties) {
-        properties.add("spring.datasource.url", () -> "jdbc:postgresql://" + env("DB_HOST","localhost") + ":"
-                + env("DB_PORT","5432") + "/" + env("DB_NAME","novel_agent") + "?currentSchema=" + SCHEMA
+        properties.add("spring.datasource.url", () -> TestDatabase.url() + "?currentSchema=" + SCHEMA
                 + ",public&sslmode=" + env("DB_SSL_MODE","disable"));
         properties.add("spring.flyway.default-schema", () -> SCHEMA);
         properties.add("spring.flyway.schemas", () -> SCHEMA);
         properties.add("spring.jpa.properties.hibernate.default_schema", () -> SCHEMA);
     }
     @Test void sourceCreationResumeConfirmationAndOutlineUseSnowflakeWithoutDirections() throws Exception {
-        var stopCharacters = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var stopCharacters = new AtomicBoolean(true);
         when(deepSeek.effectiveSettings()).thenReturn(new EffectiveSettings(ModelProvider.DEEPSEEK, "fake-model", "none", 0L));
         when(deepSeek.request(anyString(), anyString(), anyString(), eq(NullNode.getInstance()), anyInt(), any()))
                 .thenAnswer(call -> {
                     if (call.getArgument(0).equals("snowflake_character_materials") && stopCharacters.getAndSet(false)) {
-                        throw new com.novelagent.agent.application.GenerationStoppedException();
+                        throw new GenerationStoppedException();
                     }
                     return new DeepSeekStructuredOutputClient.ResponseResult(switch ((String) call.getArgument(0)) {
                     case "snowflake_book_title" -> "全班都知道她喜欢我";
@@ -138,7 +145,7 @@ class StorySourceFlowIntegrationTest {
         verifyNoInteractions(codex);
     }
     @Test void unreadableOutputIsFailedAndExplicitResumeRepairsTheSavedDependencySuffix() throws Exception {
-        var refuse = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var refuse = new AtomicBoolean(true);
         when(deepSeek.effectiveSettings()).thenReturn(new EffectiveSettings(ModelProvider.DEEPSEEK, "fake-model", "none", 0L));
         when(deepSeek.request(anyString(), anyString(), anyString(), eq(NullNode.getInstance()), anyInt(), any()))
                 .thenAnswer(call -> new DeepSeekStructuredOutputClient.ResponseResult(switch ((String) call.getArgument(0)) {
@@ -191,7 +198,7 @@ class StorySourceFlowIntegrationTest {
     @Test void invalidSourcesRollBackTheProjectAndNeverCallAModel() throws Exception {
         int before = jdbc.queryForObject("SELECT count(*) FROM novel_project", Integer.class);
         mvc.perform(multipart("/api/v1/projects/from-story")).andExpect(status().isBadRequest());
-        mvc.perform(multipart("/api/v1/projects/from-story").file(new MockMultipartFile("file","source.txt","text/plain","文件".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+        mvc.perform(multipart("/api/v1/projects/from-story").file(new MockMultipartFile("file","source.txt","text/plain","文件".getBytes(StandardCharsets.UTF_8)))
                 .param("text","文字")).andExpect(status().isBadRequest());
         mvc.perform(multipart("/api/v1/projects/from-story").file(new MockMultipartFile("file","source.exe","application/octet-stream",new byte[]{1,2})))
                 .andExpect(status().isBadRequest());
@@ -199,9 +206,9 @@ class StorySourceFlowIntegrationTest {
         verifyNoInteractions(deepSeek, codex);
     }
     private String materialText() throws Exception {
-        var content = new com.novelagent.planning.domain.StoryBibleContent("许言川主动回应", "成长", "校园", List.of("不得替别人选择"),
+        var content = new StoryBibleContent("许言川主动回应", "成长", "校园", List.of("不得替别人选择"),
                 "许言川", "学会承担", List.of(), List.of("许言川与同学尚有误解"), "误会", "信任", "清楚", "共同选择", List.of(), List.of());
-        var node = (com.fasterxml.jackson.databind.node.ObjectNode) json.valueToTree(content);
+        var node = (ObjectNode) json.valueToTree(content);
         node.remove("developmentNotes");
         var properties = new StoryBibleOutputSchema(json).value().at("/properties/content/properties/characterBlueprints/items/properties");
         var character = node.putArray("characterBlueprints").addObject();
@@ -233,7 +240,7 @@ class StorySourceFlowIntegrationTest {
                 .append("## @content/arcs/1/chapters/1/status\nPLANNED\n## @content/readerExperiencePlans\n无\n## @changeSummary\n无\n").toString();
     }
 
-    private static void appendSections(com.fasterxml.jackson.databind.JsonNode node, String path, StringBuilder text) {
+    private static void appendSections(JsonNode node, String path, StringBuilder text) {
         if (node.isObject()) node.fields().forEachRemaining(entry -> appendSections(entry.getValue(), path + "/" + entry.getKey(), text));
         else if (node.isArray() && !node.isEmpty() && node.get(0).isObject()) {
             for (int i = 0; i < node.size(); i++) appendSections(node.get(i), path + "/" + (i + 1), text);
@@ -248,5 +255,4 @@ class StorySourceFlowIntegrationTest {
     @AfterAll void cleanup() {
         if(SCHEMA.matches("source_flow_test_[a-f0-9]{32}")) jdbc.execute("DROP SCHEMA " + SCHEMA + " CASCADE");
     }
-    private static String env(String key, String fallback) { return System.getenv().getOrDefault(key,fallback); }
 }

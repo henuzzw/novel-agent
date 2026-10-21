@@ -3,9 +3,11 @@ package com.novelagent.writing.application;
 import com.novelagent.agent.application.GenerationControlRegistry;
 import com.novelagent.agent.application.GenerationStopConflictException;
 import com.novelagent.agent.application.GenerationStoppedException;
+import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.domain.DraftLoopRun;
 import com.novelagent.writing.infrastructure.DraftLoopModel;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,9 +124,7 @@ public class DraftLoopService {
      * @param progress 每阶段执行前后的父任务状态与额度回调
      */
     public DraftLoopRun runForAutomation(
-            com.novelagent.agent.domain.AutomationRun parent,
-            boolean writeFirst,
-            Progress progress) {
+            AutomationRun parent, boolean writeFirst, Progress progress) {
         UUID projectId = parent.getProjectId();
         int chapter = parent.getCurrentChapter();
         var retry = store.retryForAutomation(parent);
@@ -152,7 +152,7 @@ public class DraftLoopService {
         UUID key =
                 UUID.nameUUIDFromBytes(
                         (parent.getId() + ":" + parent.getAttempt() + ":" + chapter)
-                                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                                .getBytes(StandardCharsets.UTF_8));
         var run =
                 store.createForAutomation(
                         projectId,

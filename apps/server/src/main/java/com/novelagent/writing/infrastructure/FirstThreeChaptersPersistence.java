@@ -1,8 +1,7 @@
 package com.novelagent.writing.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.planning.domain.OutlineContent;
@@ -11,15 +10,19 @@ import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.platform.support.Json;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
+import com.novelagent.writing.api.QualityReviewResponse;
+import com.novelagent.writing.application.ChapterWritingBasisService;
 import com.novelagent.writing.application.FirstThreeChaptersStore;
 import com.novelagent.writing.application.QualityReviewStore;
+import com.novelagent.writing.application.WritingContextService;
+import com.novelagent.writing.application.WritingMaterialSelection;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
 import com.novelagent.writing.application.WritingStyleService;
-import com.novelagent.writing.application.WritingMaterialSelection;
-import com.novelagent.writing.api.QualityReviewResponse;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.FirstThreeChaptersBudget;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
@@ -31,8 +34,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.stereotype.Component;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -129,8 +132,8 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
                 reasons.add("第" + number + "章来自旧大纲，来源过期");
             var plan = outline == null ? null : outline.getContent().arcs().stream()
                     .flatMap(value -> value.chapters().stream()).filter(value -> value.number() == chapterNumber).findFirst().orElse(null);
-            var writingPlan = plan == null || bible == null ? null : com.novelagent.writing.application.ChapterWritingBasisService.capture(
-                    new com.novelagent.writing.application.WritingContextService.Context(outline, bible,
+            var writingPlan = plan == null || bible == null ? null : ChapterWritingBasisService.capture(
+                    new WritingContextService.Context(outline, bible,
                             outline.getContent().arcs().stream().filter(value -> value.chapters().contains(plan)).findFirst().orElseThrow(), plan)).plan();
             var text = manuscript == null ? null : names.render(projectId, manuscript.getContent());
             var review = qualityReports.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(projectId, number)
@@ -212,8 +215,7 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
     }
 
     private String json(Object value) {
-        try { return mapper.writer().with(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).writeValueAsString(value); }
-        catch (JsonProcessingException e) { throw new IllegalStateException("无法序列化通读依据", e); }
+        return Json.call(() -> mapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).writeValueAsString(value), "无法序列化通读依据");
     }
     private static String hash(String value) {
         return Sha256.ofUtf8(value);

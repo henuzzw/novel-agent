@@ -798,7 +798,7 @@ AI 完成开发时，必须检查是否需要更新本文件：
 - `STYLE_PREVIEW` 独立 Graph 使用候选风格、所选大纲第一章、关联圣经和人物档案；不读取已应用项目风格、不召回后续章节记忆、不复用正式正文线程，试写正文限制 6000 字符。表达服从人物/视角/事实约束；目标字数为模型参考，不作精确字数保证，文学效果未评测。
 - `STYLE_PREVIEW_REVIEW` 输出复用 QualityReviewContent，严格核验证据在源 body 中；`STYLE_PREVIEW_REVISION` 输出复用 title/body Schema。StylePreviewEditingService 不开启长事务，StylePreviewReviewStore 负责权限、短读取、锁定保存/认领及返回前来源复核。指纹包括大纲 ID/版本、圣经 ID/版本/内容、卷章、人物档案、当前姓名渲染、候选风格指南及完整样例；不依赖已应用风格。报告保存样例仅作编辑依据，不是 manuscript_version，也没有正史审批职责。现无历史列表/恢复 API，样例/Prompt 按私有手稿保护，不输出日志。
 - LOCAL_TEMPLATE 的质量报告评分为 null，仅检测重复段落、连接词堆积与连续标点；样本分析只统计句式指标。模板修订只用于版本流程验证，不承诺语义改写与文学质量。
-- 自动任务验证：领域状态机、版本关联决策、编排服务和 Controller 单元测试；`NOVEL_AUTOMATION_DB_TEST=true` 时运行 `AutomationPersistenceTest`，验证真实 PostgreSQL、幂等/权限和本地模板两章完整链路，使用独立随机 Schema 并在结束后清理；测试关闭 Kafka 消费并替换 Outbox 发布与 Embedding 定时回填。
+- 自动任务验证：领域状态机、版本关联决策、编排服务和 Controller 单元测试；`NOVEL_DB_TEST=true` 时运行全部 `@DatabaseTest`（含 `AutomationPersistenceTest`），验证真实 PostgreSQL、幂等/权限和本地模板两章完整链路，使用独立随机 Schema 并在结束后清理；测试关闭 Kafka 消费并替换 Outbox 发布与 Embedding 定时回填。
 
 - V013：已有作品导入。`WorkImportService` 使用 Apache Tika 抽取文本，原文件和解析结果在作者确认前独立保存。
 - V014：向量列统一为 1024 维。`TextEmbeddingService` 默认由本地特征实现提供；`EMBEDDING_PROVIDER=remote` 时使用 `OpenAiCompatibleEmbeddingService`。

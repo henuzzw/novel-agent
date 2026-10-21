@@ -7,13 +7,24 @@ import static org.mockito.Mockito.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.NullNode;
-import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.RequestSnapshot;
+import com.novelagent.agent.application.AgentRunRecorder;
+import com.novelagent.ingest.infrastructure.ImportAnalysisPrompt;
+import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.ModelContextProperties;
+import com.novelagent.modelaccess.application.ChatGptDirectGateway;
+import com.novelagent.modelaccess.application.ChatGptTransportService;
+import com.novelagent.modelaccess.application.CodexProjectGateway;
+import com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.prompt.application.AgentPromptService;
+import com.novelagent.project.application.CreativeBoundaryService;
+import com.novelagent.project.application.CurrentActorProvider;
+import com.novelagent.prompt.application.AgentPromptCatalog;
 import com.novelagent.prompt.application.AgentPromptDefaults;
+import com.novelagent.prompt.application.AgentPromptService;
+import com.novelagent.prompt.infrastructure.AgentPromptRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -33,7 +44,7 @@ class StructuredModelGatewayTest {
                 .thenReturn(new CodexAppServerClient.TurnResult("turn", "{\"text\":\"报告\"}"));
         when(deepSeek.request(eq("draft_loop_c"), anyString(), anyString(), eq(contract), eq(4000), eq(deepSettings)))
                 .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("{\"text\":\"报告\"}", null));
-        for (var provider : java.util.List.of(ModelProvider.LOCAL_CODEX, ModelProvider.DEEPSEEK)) {
+        for (var provider : List.of(ModelProvider.LOCAL_CODEX, ModelProvider.DEEPSEEK)) {
             assertThat(gateway.requestJsonWithBoundaries(project, "DRAFT_JUDGE_REVISION", provider,
                     AgentPromptDefaults.system("DRAFT_JUDGE_REVISION"), "user", contract, "draft_loop_c", 4000,
                     CodexSessionPolicy.NEW_THREAD, null, "")).isEqualTo("{\"text\":\"报告\"}");
@@ -79,7 +90,7 @@ class StructuredModelGatewayTest {
     private final StructuredModelGateway gateway = gateway(new ModelContextProperties(), null);
 
     private StructuredModelGateway gateway(ModelContextProperties context, AgentPromptService prompts) {
-        return new StructuredModelGateway(java.util.List.of(
+        return new StructuredModelGateway(List.of(
                 new LegacyCodexExecutor(runs, context, codex, new LegacyCodexPromptGateway(codex, sessions, mapper, context)),
                 new DeepSeekExecutor(runs, context, deepSeek)), new ModelPromptAssembler(prompts, null, null), null);
     }
@@ -102,19 +113,19 @@ class StructuredModelGatewayTest {
                 .thenReturn(new CodexAppServerClient.TurnResult("turn", "正文文本"));
     }
     @Test void oauthCodexSharesPlanningAndWritingButKeepsReviewIsolatedAndRecordsActualDelta() {
-        var transport = mock(com.novelagent.modelaccess.application.ChatGptTransportService.class);
-        when(transport.get()).thenReturn(new com.novelagent.modelaccess.application.ChatGptTransportService.Choice(
-                com.novelagent.modelaccess.application.ChatGptTransportService.Transport.SIWC_CODEX, 1));
-        var direct = mock(com.novelagent.modelaccess.application.ChatGptDirectGateway.class);
+        var transport = mock(ChatGptTransportService.class);
+        when(transport.get()).thenReturn(new ChatGptTransportService.Choice(
+                ChatGptTransportService.Transport.SIWC_CODEX, 1));
+        var direct = mock(ChatGptDirectGateway.class);
         when(direct.effectiveSettings()).thenReturn(settings);
-        var projectGateway = mock(com.novelagent.modelaccess.application.CodexProjectGateway.class);
-        var prepared = mock(com.novelagent.modelaccess.application.CodexProjectGateway.Prepared.class);
+        var projectGateway = mock(CodexProjectGateway.class);
+        var prepared = mock(CodexProjectGateway.Prepared.class);
         when(projectGateway.prepare(eq(project), anyString(), anyBoolean(), anyString())).thenReturn(prepared);
         when(prepared.instructions(anyString())).thenAnswer(call -> call.getArgument(0) + "\nread rules");
         when(prepared.wireInput()).thenReturn("current instructions and material_id=exact-data-reference");
         when(prepared.run(anyString(), eq(settings), eq(4000), any()))
                 .thenReturn(new CodexAppServerClient.TurnResult("turn", "正文文本"));
-        var selectedGateway = new StructuredModelGateway(java.util.List.of(
+        var selectedGateway = new StructuredModelGateway(List.of(
                 new ProjectCodexExecutor(runs, new ModelContextProperties(), projectGateway, direct)),
                 new ModelPromptAssembler(null, null, null), transport);
         for (String workflow : new String[]{"SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "OUTLINE", "MANUSCRIPT", "QUALITY_REVIEW"})
@@ -156,7 +167,7 @@ class StructuredModelGatewayTest {
         verify(codex, times(6)).runStructuredTurn(eq("shared"), eq(project), prompt.capture(), isNull(), eq(settings), any());
         assertThat(prompt.getAllValues()).hasSize(6);
         for (int i = 0; i < prompt.getAllValues().size(); i++) {
-            String extra = i == 1 ? com.novelagent.ingest.infrastructure.ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "";
+            String extra = i == 1 ? ImportAnalysisPrompt.WORLD_ASSESSMENT_RULES : "";
             assertThat(prompt.getAllValues().get(i)).isEqualTo("【本轮服务端执行规范】\nsystem" + extra
                     + new PlainTextOutputProtocol(schema).instructions() + "\n【本轮创作资料】\nuser");
         }
@@ -216,9 +227,9 @@ class StructuredModelGatewayTest {
     }
 
     @Test void currentProjectBoundariesReachWireAndFrozenCallsNeverReadMutableSettings() {
-        var boundaries = mock(com.novelagent.project.application.CreativeBoundaryService.class);
+        var boundaries = mock(CreativeBoundaryService.class);
         when(boundaries.promptContext(project)).thenReturn("\n项目边界快照");
-        var gateway = new StructuredModelGateway(java.util.List.of(new DeepSeekExecutor(runs, new ModelContextProperties(), deepSeek)),
+        var gateway = new StructuredModelGateway(List.of(new DeepSeekExecutor(runs, new ModelContextProperties(), deepSeek)),
                 new ModelPromptAssembler(null, boundaries, null), null);
         when(deepSeek.request(anyString(), anyString(), anyString(), eq(absentSchema), anyInt(), any()))
                 .thenReturn(new DeepSeekStructuredOutputClient.ResponseResult("文本", null));
@@ -236,9 +247,9 @@ class StructuredModelGatewayTest {
     }
 
     @Test void snowflakeDefaultPairReachesProviderAndRecorderAsPlainText() {
-        var prompts = new AgentPromptService(new com.novelagent.prompt.application.AgentPromptCatalog(),
-                mock(com.novelagent.prompt.infrastructure.AgentPromptRepository.class),
-                new com.novelagent.project.application.CurrentActorProvider(UUID.randomUUID()));
+        var prompts = new AgentPromptService(new AgentPromptCatalog(),
+                mock(AgentPromptRepository.class),
+                new CurrentActorProvider(UUID.randomUUID()));
         String stage = AgentPromptDefaults.system("SNOWFLAKE_PLANNING");
         String role = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
         String system = role + "\n\n" + AgentPromptService.protectedRules("SNOWFLAKE_PLANNING");
@@ -288,7 +299,7 @@ class StructuredModelGatewayTest {
     }
     @Test void outputAndSafetyReservationsCountAtExactCapacityBoundary() {
         var context = new ModelContextProperties();
-        int input = com.novelagent.memory.application.MemoryBudgetAllocator.estimateTokens(wireSystem + "\n\n" + wireUser + "\n\n" + absentSchema);
+        int input = MemoryBudgetAllocator.estimateTokens(wireSystem + "\n\n" + wireUser + "\n\n" + absentSchema);
         var capacity = new ModelContextProperties.Capacity(input + 19, 10);
         context.getModels().put(ModelProvider.DEEPSEEK, capacity);
         var bounded = gateway(context, null);
@@ -343,19 +354,19 @@ class StructuredModelGatewayTest {
     }
 
     @Test void explicitHttpEntryRecordsCompleteHistoryAndOnlyAcceptsAfterBusinessSave() {
-        var transport = mock(com.novelagent.modelaccess.application.ChatGptTransportService.class);
-        when(transport.get()).thenReturn(new com.novelagent.modelaccess.application.ChatGptTransportService.Choice(
-                com.novelagent.modelaccess.application.ChatGptTransportService.Transport.SIWC_HTTP, 1));
-        var direct = mock(com.novelagent.modelaccess.application.ChatGptDirectGateway.class);
-        var prepared = mock(com.novelagent.modelaccess.application.ChatGptDirectGateway.Prepared.class);
+        var transport = mock(ChatGptTransportService.class);
+        when(transport.get()).thenReturn(new ChatGptTransportService.Choice(
+                ChatGptTransportService.Transport.SIWC_HTTP, 1));
+        var direct = mock(ChatGptDirectGateway.class);
+        var prepared = mock(ChatGptDirectGateway.Prepared.class);
         when(direct.effectiveSettings()).thenReturn(settings);
         when(direct.prepare(eq(project), eq(PlanningConversationPolicy.KEY), eq(wireSystem), eq(wireUser),
                 eq(CodexSessionPolicy.REUSE_THREAD), eq(PlanningConversationPolicy.REVISION), eq(4000))).thenReturn(prepared);
         when(prepared.wireInput()).thenReturn("[full history and current input]");
         when(prepared.budget()).thenReturn(new AgentRunRecorder.ContextBudget(128000, 4000, 20, 4000));
-        var result = new com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient.Result("response", "text", null, mapper.createArrayNode());
+        var result = new ChatGptResponsesClient.Result("response", "text", null, mapper.createArrayNode());
         when(prepared.run(eq(settings), any())).thenReturn(result);
-        var selected = new StructuredModelGateway(java.util.List.of(new ChatGptHttpExecutor(runs, new ModelContextProperties(), direct)),
+        var selected = new StructuredModelGateway(List.of(new ChatGptHttpExecutor(runs, new ModelContextProperties(), direct)),
                 new ModelPromptAssembler(null, null, null), transport);
         selected.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,
                 CodexSessionPolicy.REUSE_THREAD, output -> verify(prepared, never()).accept(any()));
@@ -368,10 +379,10 @@ class StructuredModelGatewayTest {
     }
 
     @Test void missingSelectedEntryNeverFallsBackToAnotherProvider() {
-        var transport = mock(com.novelagent.modelaccess.application.ChatGptTransportService.class);
-        when(transport.get()).thenReturn(new com.novelagent.modelaccess.application.ChatGptTransportService.Choice(
-                com.novelagent.modelaccess.application.ChatGptTransportService.Transport.SIWC_CODEX, 1));
-        var selected = new StructuredModelGateway(java.util.List.of(new DeepSeekExecutor(runs, new ModelContextProperties(), deepSeek)),
+        var transport = mock(ChatGptTransportService.class);
+        when(transport.get()).thenReturn(new ChatGptTransportService.Choice(
+                ChatGptTransportService.Transport.SIWC_CODEX, 1));
+        var selected = new StructuredModelGateway(List.of(new DeepSeekExecutor(runs, new ModelContextProperties(), deepSeek)),
                 new ModelPromptAssembler(null, null, null), transport);
         assertThatThrownBy(() -> selected.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema,
                 "schema", 4000, CodexSessionPolicy.REUSE_THREAD)).hasMessageContaining("未初始化");

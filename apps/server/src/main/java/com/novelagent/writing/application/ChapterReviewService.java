@@ -26,6 +26,7 @@ import com.novelagent.writing.infrastructure.ChapterReviewVersionRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -171,7 +172,7 @@ public class ChapterReviewService {
         for (String id : selected) {
             ReviewIssue issue =
                     review.getContent().issues().stream()
-                            .filter(item -> java.util.Objects.equals(item.id(), id))
+                            .filter(item -> Objects.equals(item.id(), id))
                             .findFirst()
                             .orElseThrow(() -> new IllegalArgumentException("审稿问题不存在：" + id));
             if ((issue.description() == null || issue.description().isBlank())

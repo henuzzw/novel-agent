@@ -12,22 +12,25 @@ import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
+import com.novelagent.writing.infrastructure.WritingStylePresetCatalog;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 class WritingStyleServiceTest {
     @Test void roundTripsProfileWithoutRemovingOtherSettingsAndAllowsClearing() {
         UUID id = UUID.randomUUID();
         UUID owner = UUID.randomUUID();
         var project = NovelProject.create(id, owner, "小说", EntryMode.IDEA);
-        project.setSetting("unrelated", java.util.Map.of("enabled", true));
+        project.setSetting("unrelated", Map.of("enabled", true));
         var repo = mock(NovelProjectRepository.class);
         var actors = mock(CurrentActorProvider.class);
         when(repo.findById(id)).thenReturn(Optional.of(project));
         when(actors.currentUserId()).thenReturn(owner);
-        var catalog = mock(com.novelagent.writing.infrastructure.WritingStylePresetCatalog.class);
-        when(catalog.resolve(org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
+        var catalog = mock(WritingStylePresetCatalog.class);
+        when(catalog.resolve(ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
         var service = new WritingStyleService(repo, new ProjectAccessService(repo, actors), new ObjectMapper(), catalog);
         var profile = WritingStylePresets.all().getFirst();
         service.apply(id, profile, 0);
@@ -38,7 +41,7 @@ class WritingStyleServiceTest {
         service.apply(id, null, 0);
         assertThat(service.get(id).profile()).isNull();
         assertThat(service.promptContext(id)).isEqualTo("未指定；沿用故事圣经中的叙事风格。");
-        assertThat(project.getSetting("unrelated")).isEqualTo(java.util.Map.of("enabled", true));
+        assertThat(project.getSetting("unrelated")).isEqualTo(Map.of("enabled", true));
         when(actors.currentUserId()).thenReturn(UUID.randomUUID());
         assertThatThrownBy(() -> service.get(id)).isInstanceOf(ProjectNotFoundException.class);
         assertThatThrownBy(() -> service.apply(id, profile, 0)).isInstanceOf(ProjectNotFoundException.class);

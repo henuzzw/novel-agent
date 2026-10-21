@@ -1,8 +1,9 @@
 package com.novelagent.modelaccess.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
+import com.novelagent.agent.application.AgentRunRecorder;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient;
@@ -10,6 +11,7 @@ import com.novelagent.modelaccess.infrastructure.HttpConversationStore;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.project.application.GlobalModelSettingsService;
+import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -37,7 +39,7 @@ public class ChatGptDirectGateway {
         return prepare(project, workflow, instructions, user, policy, revision, outputReserve, null);
     }
     public Prepared prepare(UUID project, String workflow, String instructions, String user, CodexSessionPolicy policy,
-            String revision, int outputReserve, com.fasterxml.jackson.databind.JsonNode schema) {
+            String revision, int outputReserve, JsonNode schema) {
         String binding = ChatGptResponsesClient.accountBinding(auth.authorization());
         var lease = conversations.claim(project, workflow, binding, revision, policy == CodexSessionPolicy.NEW_THREAD);
         try {
@@ -66,10 +68,10 @@ public class ChatGptDirectGateway {
             return run(selected, progress, null, null);
         }
         public ChatGptResponsesClient.Result run(EffectiveSettings selected, Consumer<String> progress,
-                String schemaName, com.fasterxml.jackson.databind.JsonNode schema) {
+                String schemaName, JsonNode schema) {
             var renewed = new AtomicLong(System.nanoTime());
             Runnable renew = () -> {
-                if (System.nanoTime() - renewed.get() > java.time.Duration.ofMinutes(1).toNanos()) {
+                if (System.nanoTime() - renewed.get() > Duration.ofMinutes(1).toNanos()) {
                     conversations.renew(lease); renewed.set(System.nanoTime());
                 }
             };

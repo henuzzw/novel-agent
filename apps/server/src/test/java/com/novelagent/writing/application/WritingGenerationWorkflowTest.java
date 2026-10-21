@@ -9,8 +9,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.canon.application.EntityCatalogContext;
+import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class WritingGenerationWorkflowTest {
     private WritingGenerationGateway gateway;
@@ -82,7 +83,7 @@ class WritingGenerationWorkflowTest {
         assertThatThrownBy(() -> workflow.generateStylePreview(UUID.randomUUID(), bible(), arc(), chapter(),
                 WritingStylePresets.all().getFirst(), ModelProvider.LOCAL_TEMPLATE, 200, null))
                 .hasStackTraceContaining("300 至 1500");
-        org.mockito.Mockito.verifyNoInteractions(gateway);
+        Mockito.verifyNoInteractions(gateway);
     }
 
     private ChapterPlan chapter() {

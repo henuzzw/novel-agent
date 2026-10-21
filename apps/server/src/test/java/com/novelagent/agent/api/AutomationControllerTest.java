@@ -9,14 +9,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AutomationService;
 import com.novelagent.agent.domain.AutomationRun;
-import com.novelagent.platform.api.ApiExceptionHandler;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.platform.api.ApiExceptionHandler;
 import com.novelagent.project.application.ProjectNotFoundException;
 import java.util.UUID;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -53,10 +57,10 @@ class AutomationControllerTest {
         mvc.perform(post(path()).contentType(MediaType.APPLICATION_JSON).header("Idempotency-Key", UUID.randomUUID())
                 .content("{\"firstChapter\":1,\"lastChapter\":1,\"qualityReviewEnabled\":true}"))
                 .andExpect(status().isAccepted());
-        var input = org.mockito.ArgumentCaptor.forClass(CreateAutomationRunRequest.class);
-        org.mockito.Mockito.verify(service).create(eq(projectId), any(), input.capture());
-        org.assertj.core.api.Assertions.assertThat(input.getValue().qualityReviewEnabled()).isTrue();
-        org.assertj.core.api.Assertions.assertThat(new com.fasterxml.jackson.databind.ObjectMapper()
+        var input = ArgumentCaptor.forClass(CreateAutomationRunRequest.class);
+        Mockito.verify(service).create(eq(projectId), any(), input.capture());
+        Assertions.assertThat(input.getValue().qualityReviewEnabled()).isTrue();
+        Assertions.assertThat(new ObjectMapper()
                 .readValue("{\"firstChapter\":1,\"lastChapter\":1}", CreateAutomationRunRequest.class).qualityReviewEnabled()).isFalse();
     }
 
@@ -84,14 +88,14 @@ class AutomationControllerTest {
         mvc.perform(post(path()).contentType(MediaType.APPLICATION_JSON).header("Idempotency-Key", UUID.randomUUID())
                 .content("{\"firstChapter\":1,\"lastChapter\":1,\"provider\":\"DEEPSEEK\",\"qualityReviewEnabled\":true,\"maxAutoRevisionRounds\":2,\"maxGenerationSteps\":30}"))
                 .andExpect(status().isAccepted());
-        var input = org.mockito.ArgumentCaptor.forClass(CreateAutomationRunRequest.class);
-        org.mockito.Mockito.verify(service).create(eq(projectId), any(), input.capture());
-        org.assertj.core.api.Assertions.assertThat(input.getValue().maxAutoRevisionRounds()).isEqualTo(2);
-        org.assertj.core.api.Assertions.assertThat(input.getValue().generationStepLimit()).isEqualTo(30);
-        var legacy = new com.fasterxml.jackson.databind.ObjectMapper()
+        var input = ArgumentCaptor.forClass(CreateAutomationRunRequest.class);
+        Mockito.verify(service).create(eq(projectId), any(), input.capture());
+        Assertions.assertThat(input.getValue().maxAutoRevisionRounds()).isEqualTo(2);
+        Assertions.assertThat(input.getValue().generationStepLimit()).isEqualTo(30);
+        var legacy = new ObjectMapper()
                 .readValue("{\"firstChapter\":1,\"lastChapter\":1}", CreateAutomationRunRequest.class);
-        org.assertj.core.api.Assertions.assertThat(legacy.maxAutoRevisionRounds()).isZero();
-        org.assertj.core.api.Assertions.assertThat(legacy.generationStepLimit()).isEqualTo(100);
+        Assertions.assertThat(legacy.maxAutoRevisionRounds()).isZero();
+        Assertions.assertThat(legacy.generationStepLimit()).isEqualTo(100);
         for (String invalid : new String[] {"\"maxAutoRevisionRounds\":4", "\"maxAutoRevisionRounds\":-1",
                 "\"maxGenerationSteps\":0", "\"maxGenerationSteps\":501"}) {
             mvc.perform(post(path()).contentType(MediaType.APPLICATION_JSON).header("Idempotency-Key", UUID.randomUUID())

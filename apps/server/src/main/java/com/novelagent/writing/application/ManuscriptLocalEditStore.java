@@ -8,6 +8,7 @@ import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.writing.api.ManuscriptLocalEditRequest;
 import com.novelagent.writing.api.ManuscriptResponse;
+import com.novelagent.writing.domain.ManuscriptBasis;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ManuscriptLocalEditSelection;
 import com.novelagent.writing.domain.ManuscriptVersion;
@@ -54,7 +55,7 @@ public class ManuscriptLocalEditStore {
 
     public record Snapshot(UUID projectId, int chapter, UUID sourceId, long sourceRowVersion,
             UUID contractId, ManuscriptContent rendered, String context, String fingerprint,
-            com.novelagent.writing.domain.ManuscriptBasis writingBasis) {
+            ManuscriptBasis writingBasis) {
     }
 
     /**

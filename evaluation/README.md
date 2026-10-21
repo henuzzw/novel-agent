@@ -15,7 +15,7 @@
 在 `apps/server` 目录运行，输出目录必须尚不存在：
 
 ```powershell
-.\mvnw.cmd -q test '-Dtest=WritingEvaluationBaselineTest,WritingPromptRevisionTest,PlanningPromptConstraintTest' '-Dnovel.evaluation.output=../../evaluation/runs/current-v1'
+.\mvnw.cmd -q test '-Dtest=WritingEvaluationBaselineTest,WritingModelOutputParserTest,PlanningPromptConstraintTest' '-Dnovel.evaluation.output=../../evaluation/runs/current-v1'
 ```
 
 不传 `novel.evaluation.output` 时只执行验证；显式导出用例会跳过。修改模板前先导出 `current-v1`，修改后用新目录导出 `candidate-v1`。禁止覆盖旧基线。

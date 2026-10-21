@@ -4,6 +4,7 @@ import com.novelagent.planning.application.GeneratedOutline;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.OutlineGenerator;
 import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
@@ -72,7 +73,7 @@ public class LocalOutlineGenerator implements OutlineGenerator {
                 + "\n字数要求：" + budget.recommendedChapterMinWords() + "～" + budget.recommendedChapterMaxWords() + "字"
                 + "\n场景展开：在当前目标的阻碍下行动，依靠既有条件改变处境。"
                 + "\n道具、地点与时间压力：待作者设计；本地模板仅验证流程。",
-                com.novelagent.planning.domain.ChapterPlanStatus.PLANNED);
+                ChapterPlanStatus.PLANNED);
     }
 
     private static String arcTitle(int index, int total) {

@@ -9,9 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.application.AgentRunStreamService;
+import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AgentRunOutputControllerTest {
@@ -45,9 +47,9 @@ class AgentRunOutputControllerTest {
         var response = mvc.perform(asyncDispatch(request)).andExpect(status().isOk()).andReturn().getResponse();
         assertThat(response.getContentType()).contains("text/event-stream");
         assertThat(response.getHeader("X-Accel-Buffering")).isEqualTo("no");
-        assertThat(response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8)).contains("event:output", "partial", "TIMEOUT", "600 秒");
-        org.mockito.Mockito.clearInvocations(queries);
+        assertThat(response.getContentAsString(StandardCharsets.UTF_8)).contains("event:output", "partial", "TIMEOUT", "600 秒");
+        Mockito.clearInvocations(queries);
         streams.tick();
-        org.mockito.Mockito.verifyNoInteractions(queries);
+        Mockito.verifyNoInteractions(queries);
     }
 }

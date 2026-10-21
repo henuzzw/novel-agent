@@ -50,7 +50,7 @@ class AutomationRunTest {
     }
 
     @Test
-    void cancellationFinishesInFlightArtifactAndStopsAtCheckpoint() {
+    void cancellationStopsAtCheckpointAndWaitingTasksImmediately() {
         AutomationRun run = run(1, 1);
         run.start(Instant.now());
         run.beginStep("MANUSCRIPT");
@@ -60,6 +60,16 @@ class AutomationRunTest {
         assertThat(run.checkpoint()).isFalse();
         assertThat(run.getStatus()).isEqualTo(AutomationStatus.CANCELLED);
         assertThatThrownBy(() -> run.start(Instant.now())).isInstanceOf(IllegalStateException.class);
+
+        AutomationRun waiting = run(1, 1);
+        waiting.start(Instant.now());
+        waiting.waitForUser("确认合同");
+        waiting.cancel();
+        assertThat(waiting.getStatus()).isEqualTo(AutomationStatus.CANCELLED);
+        assertThatThrownBy(() -> run(0, 3)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> run(4, 3)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> run(1, 21)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(run(1, 20).getLastChapter()).isEqualTo(20);
     }
 
     @Test
@@ -73,24 +83,11 @@ class AutomationRunTest {
         assertThat(run.getSteps().getFirst().status()).isEqualTo("FAILED");
     }
 
-    @Test
-    void cancelsWaitingTaskImmediatelyAndValidatesChapterLimits() {
-        AutomationRun run = run(1, 1);
-        run.start(Instant.now());
-        run.waitForUser("确认合同");
-        run.cancel();
-        assertThat(run.getStatus()).isEqualTo(AutomationStatus.CANCELLED);
-        assertThatThrownBy(() -> run(0, 3)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> run(4, 3)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> run(1, 21)).isInstanceOf(IllegalArgumentException.class);
-        assertThat(run(1, 20).getLastChapter()).isEqualTo(20);
-    }
-
     private static AutomationRun run(int first, int last) {
         return AutomationRun.create(UUID.randomUUID(), UUID.randomUUID(), first, last, ModelProvider.LOCAL_TEMPLATE, null);
     }
 
-    @Test void generationLimitCountsFailedAndInterruptedWorkAcrossResumes() {
+    @Test void limitsCountFailedInterruptedAndRevisionWorkAcrossResumes() {
         var run = limited(1, 2);
         run.start(Instant.now());
         run.beginStep("CONTRACT");
@@ -106,21 +103,19 @@ class AutomationRunTest {
         run.beginStep("QUALITY_REVIEW");
         assertThat(run.getUsedGenerationSteps()).isEqualTo(2);
         assertThat(run.getStatus()).isEqualTo(AutomationStatus.WAITING_FOR_USER);
-    }
 
-    @Test void revisionLimitCountsFailuresPerChapterAndRequiresRecheckCapacity() {
-        var run = limited(1, 10);
-        run.start(Instant.now());
-        run.beginStep("QUALITY_REVISION");
-        run.fail("MODEL_FAILURE");
-        run.start(Instant.now());
-        run.beginStep("QUALITY_REVISION");
-        assertThat(run.getStatus()).isEqualTo(AutomationStatus.WAITING_FOR_USER);
-        assertThat(run.getUsedAutoRevisionRounds()).isEqualTo(1);
-        run.start(Instant.now());
-        run.advanceChapter();
-        assertThat(run.getUsedAutoRevisionRounds()).isZero();
-        assertThat(run.getUsedGenerationSteps()).isEqualTo(1);
+        var revising = limited(1, 10);
+        revising.start(Instant.now());
+        revising.beginStep("QUALITY_REVISION");
+        revising.fail("MODEL_FAILURE");
+        revising.start(Instant.now());
+        revising.beginStep("QUALITY_REVISION");
+        assertThat(revising.getStatus()).isEqualTo(AutomationStatus.WAITING_FOR_USER);
+        assertThat(revising.getUsedAutoRevisionRounds()).isEqualTo(1);
+        revising.start(Instant.now());
+        revising.advanceChapter();
+        assertThat(revising.getUsedAutoRevisionRounds()).isZero();
+        assertThat(revising.getUsedGenerationSteps()).isEqualTo(1);
         var insufficient = limited(1, 1);
         insufficient.start(Instant.now());
         insufficient.beginStep("QUALITY_REVISION");

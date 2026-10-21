@@ -1,13 +1,14 @@
 package com.novelagent.canon.domain;
 
 import com.novelagent.writing.domain.FactProposal;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -110,7 +111,7 @@ public class CanonCommit {
     /** Derived memory can be added only while this published source remains active. */
     public void addMemoryFacts(List<FactProposal> facts) {
         if (!active) throw new IllegalStateException("这条正史已被替换");
-        var combined = new java.util.ArrayList<>(acceptedFacts);
+        var combined = new ArrayList<>(acceptedFacts);
         for (var fact : facts) {
             if (combined.stream().anyMatch(existing -> existing.id().equals(fact.id()))) {
                 throw new IllegalStateException("记忆条目已保存");

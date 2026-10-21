@@ -81,7 +81,7 @@ class CreativeBoundaryServiceTest {
         var normalized = ImportAnalysis.normalizeBatch(batch, slice, chapters);
         assertThat(normalized.worldAssessment().evidence().getFirst().occurrence()).isZero();
         var invalid = new ImportAnalysis.Batch("解析", List.of(), assessment(WorldMode.ALTERNATE));
-        assertThatThrownBy(() -> ImportAnalysis.normalizeBatch(invalid, slice, chapters)).hasMessageContaining("连续原文");
+        assertThatThrownBy(() -> ImportAnalysis.normalizeBatch(invalid, slice, chapters)).hasMessageContaining("连续逐字引文");
         assertThatThrownBy(() -> new ImportAnalysis.WorldAssessment(WorldMode.ALTERNATE, "无依据", List.of()))
                 .hasMessageContaining("原文依据");
     }

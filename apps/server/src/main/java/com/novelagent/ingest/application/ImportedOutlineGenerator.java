@@ -6,10 +6,10 @@ import com.novelagent.planning.application.GeneratedOutline;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.ScenePlanningGuide;
 import com.novelagent.planning.application.SnowflakePlanningService;
-import com.novelagent.planning.domain.OutlineContent;
-import com.novelagent.planning.domain.OutlineArc;
-import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.ChapterPlanStatus;
+import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineModelOutputParser;
@@ -17,9 +17,11 @@ import com.novelagent.planning.infrastructure.OutlineOutputSchema;
 import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.prompt.application.AgentPromptDefaults;
-import java.util.UUID;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 
 /** Reuses the exact confirmed import and saved snowflake, never a different latest run. */
@@ -49,7 +51,7 @@ public class ImportedOutlineGenerator {
         int occurred = mode == ImportPlanningMode.CONTINUE_MANUSCRIPT ? source.path("sourceChapterCount").asInt() : 0;
         String key = occurred > 0 ? "IMPORT_REVERSE_OUTLINE_CONTINUE" : "IMPORT_REVERSE_OUTLINE_ADAPT";
         String notes = plan.context();
-        String prompt = "【作者本次要求】\n" + java.util.Objects.toString(instruction, "")
+        String prompt = "【作者本次要求】\n" + Objects.toString(instruction, "")
                 + "\n【已确认雪花资料投影】\n" + bible.getContent().withoutRepeatedDevelopmentNotes(notes)
                 + "\n【篇幅预算】\n" + budget + "\n【确切来源及作者确认处理】\n" + source
                 + "\n【保存的九步底稿】\n" + notes
@@ -57,7 +59,7 @@ public class ImportedOutlineGenerator {
                 + "\n续写时前 " + occurred + " 章必须忠实保留原文事件并标记 OCCURRED，其余 PLANNED；改编全部 PLANNED。"
                 + "未来设计不等于已发生事实，不把已知结局提前泄露。"
                 + CreativeStrategyGuide.render(strategy) + CreativeStrategyGuide.outlineRules(strategy) + ScenePlanningGuide.planningRules();
-        var result = new java.util.concurrent.atomic.AtomicReference<GeneratedOutline>();
+        var result = new AtomicReference<GeneratedOutline>();
         models.request(projectId, "IMPORT_REVERSE_OUTLINE", provider, AgentPromptDefaults.system(key), prompt,
                 schema.value(), "imported_outline", 16000, raw -> {
                     check.run();

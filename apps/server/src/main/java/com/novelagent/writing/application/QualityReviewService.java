@@ -2,10 +2,11 @@ package com.novelagent.writing.application;
 
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.memory.application.ContextBudgetPlanner;
-import com.novelagent.memory.application.NovelMemoryService;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.NovelMemoryContext;
+import com.novelagent.memory.application.NovelMemoryService;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.planning.domain.CharacterBlueprint;
 import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.QualityReviewResponse;
 import com.novelagent.writing.api.ReviseQualityRequest.Scope;
@@ -92,7 +93,7 @@ public class QualityReviewService {
                         budget,
                         source.bible().getId(),
                         materials.characterBlueprints().stream()
-                                .map(com.novelagent.planning.domain.CharacterBlueprint::name)
+                                .map(CharacterBlueprint::name)
                                 .filter(
                                         name ->
                                                 source.rendered().body().contains(name)

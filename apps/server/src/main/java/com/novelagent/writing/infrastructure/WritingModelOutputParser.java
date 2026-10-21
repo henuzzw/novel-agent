@@ -3,17 +3,18 @@ package com.novelagent.writing.infrastructure;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProviderException;
+import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.application.GeneratedManuscript;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
 import com.novelagent.writing.domain.ManuscriptContent;
-import com.novelagent.writing.domain.ReviewIssue;
 import com.novelagent.writing.domain.QualityReviewContent;
-import com.novelagent.writing.domain.WritingStyleProfile;
+import com.novelagent.writing.domain.ReviewIssue;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
+import com.novelagent.writing.domain.WritingStyleProfile;
 import com.novelagent.writing.domain.WritingStyleRecommendationContent;
-import com.novelagent.planning.domain.StoryBibleContent;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -27,7 +28,7 @@ class WritingModelOutputParser {
     GeneratedManuscript manuscript(String output) {
         GeneratedManuscript generated = read(output, GeneratedManuscript.class);
         return new GeneratedManuscript(generated.content(), generated.changeSummary() == null
-                ? java.util.List.of()
+                ? List.of()
                 : generated.changeSummary().stream().filter(value -> value != null && !value.isBlank())
                         .map(String::trim).toList());
     }
@@ -78,7 +79,7 @@ class WritingModelOutputParser {
     }
 
     WritingStyleRecommendationContent styleRecommendation(String output, StoryBibleContent bible,
-            java.util.List<WritingStyleProfile> presets) {
+            List<WritingStyleProfile> presets) {
         WritingStyleRecommendationContent content = read(output, WritingStyleRecommendationContent.class);
         try {
             content.requireEvidenceIn(bible);

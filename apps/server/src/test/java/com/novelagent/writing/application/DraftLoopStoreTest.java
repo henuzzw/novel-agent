@@ -3,6 +3,7 @@ package com.novelagent.writing.application;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.infrastructure.AutomationRunRepository;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.application.ModelProvider;
@@ -11,11 +12,13 @@ import com.novelagent.project.domain.NovelProject;
 import com.novelagent.writing.domain.*;
 import com.novelagent.writing.infrastructure.*;
 import jakarta.persistence.EntityManager;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class DraftLoopStoreTest {
@@ -81,7 +84,7 @@ class DraftLoopStoreTest {
     }
     @Test void validRevisionCreatesDraftKeepsBaselineAndMarksCapUnverified() {
         store.checked(project, run.getId(), before, report()); store.judged(project, run.getId(), judgment());
-        var saved = org.mockito.ArgumentCaptor.forClass(ManuscriptVersion.class);
+        var saved = ArgumentCaptor.forClass(ManuscriptVersion.class);
         verify(manuscripts).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getStatus()).isEqualTo(ManuscriptStatus.DRAFT);
         assertThat(saved.getValue().getBaseManuscriptVersionId()).isEqualTo(source.getId());
@@ -96,8 +99,8 @@ class DraftLoopStoreTest {
     }
 
     @Test void parentCancellationOrChangedAttemptRejectsLateOutput() {
-        var parent = com.novelagent.agent.domain.AutomationRun.create(project, UUID.randomUUID(), 1, 1, ModelProvider.DEEPSEEK, null);
-        parent.start(java.time.Instant.now()); parent.bindLoop(run.getId(), parent.getAttempt(), 1);
+        var parent = AutomationRun.create(project, UUID.randomUUID(), 1, 1, ModelProvider.DEEPSEEK, null);
+        parent.start(Instant.now()); parent.bindLoop(run.getId(), parent.getAttempt(), 1);
         run.attachAutomation(parent.getId(), parent.getAttempt());
         when(automations.findLocked(project, parent.getId())).thenReturn(Optional.of(parent));
         parent.cancel(); parent.checkpoint();
@@ -106,13 +109,13 @@ class DraftLoopStoreTest {
         verifyNoInteractions(contexts, manuscripts);
     }
 
-    private com.novelagent.agent.domain.AutomationRun failedParent() {
-        var parent = com.novelagent.agent.domain.AutomationRun.create(project, run.getBasis().writingBasis().outlineId(), 1, 1, ModelProvider.DEEPSEEK, null);
-        parent.configureLoop(1); parent.start(java.time.Instant.now()); parent.bindLoop(run.getId(), parent.getAttempt(), 1);
+    private AutomationRun failedParent() {
+        var parent = AutomationRun.create(project, run.getBasis().writingBasis().outlineId(), 1, 1, ModelProvider.DEEPSEEK, null);
+        parent.configureLoop(1); parent.start(Instant.now()); parent.bindLoop(run.getId(), parent.getAttempt(), 1);
         run.attachAutomation(parent.getId(), parent.getAttempt());
         when(automations.findLocked(project, parent.getId())).thenReturn(Optional.of(parent));
         store.checked(project, run.getId(), before, report());
-        run.fail("C输出格式错误"); parent.fail("DRAFT_LOOP_FAILED"); parent.start(java.time.Instant.now());
+        run.fail("C输出格式错误"); parent.fail("DRAFT_LOOP_FAILED"); parent.start(Instant.now());
         return parent;
     }
     @Test void retriesExactFailedCWithCurrentParentAttemptAndPreservedSource() {

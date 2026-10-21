@@ -1,17 +1,19 @@
 package com.novelagent.agent.tool;
 
+import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.assertThat;
+import com.novelagent.support.DatabaseTest;
+import com.novelagent.support.TestDatabase;
 import java.sql.DriverManager;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
-@EnabledIfEnvironmentVariable(named="NOVEL_MEMORY_DB_TEST", matches="true")
+@DatabaseTest
 class RelatedCanonFactsPersistenceTest {
     @Test void recallsAuthoritativeFactsWithRevisionAndChapterBoundariesWithoutNeo4j() throws Exception {
-        try (var connection=DriverManager.getConnection("jdbc:postgresql://"+env("DB_HOST","localhost")+":"+env("DB_PORT","5432")+"/"+env("DB_NAME","novel_agent"),env("DB_USERNAME","novel_app"),env("DB_PASSWORD",""))) {
+        try (var connection=DriverManager.getConnection(TestDatabase.url(),env("DB_USERNAME","novel_app"),env("DB_PASSWORD",""))) {
             var jdbc=new JdbcTemplate(new SingleConnectionDataSource(connection,true));
             jdbc.execute("CREATE TEMP TABLE canon_commit(id uuid,project_id uuid,chapter_number int,canon_version bigint,active boolean)");
             jdbc.execute("CREATE TEMP TABLE story_fact(id uuid,project_id uuid,source_commit_id uuid,subject_text text,predicate text,object_text text,evidence_ref text,canon_version_from bigint,canon_version_to bigint,subject_entity_id uuid)");
@@ -38,5 +40,4 @@ class RelatedCanonFactsPersistenceTest {
     private void insert(JdbcTemplate jdbc,UUID project,UUID commit,String object,long from,Long to) {
         jdbc.update("INSERT INTO story_fact VALUES (?,?,?,'江澈','关系',?,'原文',?,?,NULL)",UUID.randomUUID(),project,commit,object,from,to);
     }
-    private static String env(String key,String fallback) { return System.getenv().getOrDefault(key,fallback); }
 }

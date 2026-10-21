@@ -1,20 +1,21 @@
 package com.novelagent.writing.infrastructure;
 
-import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.canon.application.EntityCatalogContext;
+import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.writing.application.GeneratedManuscript;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.QualityReviewContent;
-import com.novelagent.writing.domain.WritingStyleProfile;
-import com.novelagent.writing.domain.WritingStylePreviewContent;
-import com.novelagent.writing.domain.WritingStyleRecommendationContent;
 import com.novelagent.writing.domain.StylePreviewSource;
-import com.novelagent.writing.application.GeneratedManuscript;
+import com.novelagent.writing.domain.WritingStylePreviewContent;
+import com.novelagent.writing.domain.WritingStyleProfile;
+import com.novelagent.writing.domain.WritingStyleRecommendationContent;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -54,7 +55,7 @@ public class WritingGenerationGateway {
             EntityCatalogContext catalog, ModelProvider provider, String identityContext) {
         if (provider == ModelProvider.LOCAL_TEMPLATE) {
             return new ChapterReviewContent("本地模板不执行语义事实抽取；已发布正文可直接用于后续写作。",
-                    java.util.List.of(), java.util.List.of());
+                    List.of(), List.of());
         }
         String output = models.request(projectId, "CHAPTER_REVIEW", provider,
                 prompts.publishedMemory(projectId, manuscript, catalog, identityContext), schemas.review(), "chapter_review", 5000);
@@ -109,7 +110,7 @@ public class WritingGenerationGateway {
             ModelProvider provider, String instruction) {
         if (provider == ModelProvider.LOCAL_TEMPLATE) {
             return new WritingStyleRecommendationContent("本地模板不判断故事与文风的语义适配，请选择 Codex 或 DeepSeek 分析。",
-                    java.util.List.of());
+                    List.of());
         }
         var presets = prompts.stylePresets(projectId);
         if (presets.isEmpty()) throw new IllegalArgumentException("尚无可用风格预设");
@@ -135,7 +136,7 @@ public class WritingGenerationGateway {
 
     public QualityReviewContent reviewStylePreview(UUID projectId, StoryBibleContent bible, OutlineArc arc,
             ChapterPlan chapter, StylePreviewSource source) {
-        var manuscript = new ManuscriptContent(source.content().title(), source.content().body(), "试写样例", java.util.List.of());
+        var manuscript = new ManuscriptContent(source.content().title(), source.content().body(), "试写样例", List.of());
         var provider = ModelProvider.valueOf(source.provider());
         if (provider == ModelProvider.LOCAL_TEMPLATE) return qualityRules.review(manuscript);
         String output = models.request(projectId, "STYLE_PREVIEW_REVIEW", provider,

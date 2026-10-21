@@ -4,10 +4,12 @@ import com.novelagent.writing.domain.ChapterContractContent;
 import java.sql.Array;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,9 +36,7 @@ public class EntityCatalogService {
     @Transactional(readOnly = true)
     public EntityCatalogContext forReview(UUID projectId, ChapterContractContent contract) {
         Set<String> relevantNames =
-                java.util.stream.Stream.concat(
-                                java.util.stream.Stream.of(contract.pov()),
-                                contract.locations().stream())
+                Stream.concat(Stream.of(contract.pov()), contract.locations().stream())
                         .filter(value -> value != null && !value.isBlank())
                         .collect(Collectors.toSet());
         return catalog(projectId, relevantNames);
@@ -81,12 +81,12 @@ public class EntityCatalogService {
                         },
                         projectId);
         entries.sort(
-                java.util.Comparator.comparing(
+                Comparator.comparing(
                                 EntityCatalogContext.EntityCatalogEntry::chapterRelevant,
-                                java.util.Comparator.reverseOrder())
+                                Comparator.reverseOrder())
                         .thenComparing(
                                 EntityCatalogContext.EntityCatalogEntry::recentMentionCount,
-                                java.util.Comparator.reverseOrder())
+                                Comparator.reverseOrder())
                         .thenComparing(EntityCatalogContext.EntityCatalogEntry::name));
         return new EntityCatalogContext(List.copyOf(entries));
     }

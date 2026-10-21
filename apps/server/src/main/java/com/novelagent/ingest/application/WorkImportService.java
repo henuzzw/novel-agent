@@ -3,12 +3,16 @@ package com.novelagent.ingest.application;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.ingest.api.ImportedChapterResponse;
 import com.novelagent.ingest.api.WorkImportResponse;
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.ProjectAccessService;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,6 +21,7 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.sax.BodyContentHandler;
@@ -50,8 +55,7 @@ public class WorkImportService {
     @Transactional
     public WorkImportResponse paste(UUID projectId, String text) {
         if (text == null || text.isBlank()) throw new IllegalArgumentException("请粘贴故事文字");
-        return upload(
-                projectId, new PastedStory(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        return upload(projectId, new PastedStory(text.getBytes(StandardCharsets.UTF_8)));
     }
 
     private record PastedStory(byte[] bytes) implements MultipartFile {
@@ -86,13 +90,13 @@ public class WorkImportService {
         }
 
         @Override
-        public java.io.InputStream getInputStream() {
+        public InputStream getInputStream() {
             return new ByteArrayInputStream(bytes);
         }
 
         @Override
-        public void transferTo(java.io.File dest) throws IOException {
-            java.nio.file.Files.write(dest.toPath(), bytes);
+        public void transferTo(File dest) throws IOException {
+            Files.write(dest.toPath(), bytes);
         }
     }
 
@@ -301,36 +305,21 @@ public class WorkImportService {
                         importId,
                         projectId);
         if (!"CONFIRMED".equals(status)) throw new IllegalArgumentException("请先确认导入结果，再反推规划");
-        List<ImportedChapterResponse> selected =
-                jdbc.query(
-                        """
-                SELECT id, ordinal, title, content, character_count, content_type, selected
-                  FROM imported_chapter WHERE import_id = ? AND selected = TRUE ORDER BY ordinal
-                """,
-                        (rs, row) ->
-                                new ImportedChapterResponse(
-                                        rs.getObject("id", UUID.class),
-                                        rs.getInt("ordinal"),
-                                        rs.getString("title"),
-                                        rs.getString("content"),
-                                        rs.getInt("character_count"),
-                                        rs.getString("content_type"),
-                                        rs.getBoolean("selected")),
-                        importId);
+        List<ImportedChapterResponse> selected = chapters(importId, true);
         if (selected.isEmpty()) throw new IllegalArgumentException("没有选中可用于反推规划的章节");
-        StringBuilder text = new StringBuilder();
-        for (ImportedChapterResponse chapter : selected) {
-            String block =
-                    "\n\n## 已写第 "
-                            + chapter.ordinal()
-                            + " 章："
-                            + chapter.title()
-                            + "\n"
-                            + chapter.content();
-            text.append(block);
-        }
+        String text =
+                selected.stream()
+                        .map(
+                                chapter ->
+                                        "\n\n## 已写第 "
+                                                + chapter.ordinal()
+                                                + " 章："
+                                                + chapter.title()
+                                                + "\n"
+                                                + chapter.content())
+                        .collect(Collectors.joining());
         return new PlanningSource(
-                text.toString().strip(),
+                text.strip(),
                 selected.size(),
                 selected.stream().mapToInt(ImportedChapterResponse::characterCount).sum(),
                 false);
@@ -399,10 +388,14 @@ public class WorkImportService {
     }
 
     private List<ImportedChapterResponse> chapters(UUID importId) {
+        return chapters(importId, false);
+    }
+
+    private List<ImportedChapterResponse> chapters(UUID importId, boolean selectedOnly) {
         return jdbc.query(
                 """
                 SELECT id, ordinal, title, content, character_count, content_type, selected
-                FROM imported_chapter WHERE import_id = ? ORDER BY ordinal
+                FROM imported_chapter WHERE import_id = ? AND (? = FALSE OR selected = TRUE) ORDER BY ordinal
                 """,
                 (rs, row) ->
                         new ImportedChapterResponse(
@@ -413,7 +406,8 @@ public class WorkImportService {
                                 rs.getInt("character_count"),
                                 rs.getString("content_type"),
                                 rs.getBoolean("selected")),
-                importId);
+                importId,
+                selectedOnly);
     }
 
     private List<String> warnings(String json) {

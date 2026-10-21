@@ -3,6 +3,7 @@ package com.novelagent.canon.infrastructure;
 import com.novelagent.canon.api.CharacterProfileResponse;
 import com.novelagent.canon.api.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterProfileStore;
+import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -119,7 +120,7 @@ public class JdbcCharacterProfileStore implements CharacterProfileStore {
         return jdbc.query(REFERENCES_SQL, (rs, number) -> {
             List<String> forms = new ArrayList<>(Arrays.asList(rs.getString("canonical_name"),
                     rs.getString("source_name"), rs.getString("nickname"), rs.getString("title_name")));
-            java.sql.Array aliases = rs.getArray("aliases");
+            Array aliases = rs.getArray("aliases");
             if (aliases != null && aliases.getArray() instanceof String[] values) {
                 forms.addAll(Arrays.asList(values));
             }

@@ -3,6 +3,7 @@ package com.novelagent.canon.infrastructure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.writing.domain.FactProposal;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -200,7 +201,7 @@ class GraphProjectionConsumer {
     }
 
     Object neo4jValue(Object value) {
-        if (value instanceof java.math.BigDecimal decimal) return decimal.doubleValue();
+        if (value instanceof BigDecimal decimal) return decimal.doubleValue();
         return value instanceof UUID uuid ? uuid.toString() : value;
     }
 

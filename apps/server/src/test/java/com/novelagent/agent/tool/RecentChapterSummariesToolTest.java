@@ -9,18 +9,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.memory.application.NovelMemoryContext;
+import com.novelagent.agent.application.AgentStage;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.MemoryBudgetPlan;
-import com.novelagent.agent.application.AgentStage;
+import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.memory.application.NovelMemoryService;
 import com.novelagent.planning.application.ModelProvider;
-import java.util.UUID;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import com.novelagent.planning.domain.ChapterPlan;
+import com.novelagent.planning.domain.OutlineArc;
+import com.novelagent.planning.domain.OutlineContent;
 import java.sql.ResultSet;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -63,7 +68,7 @@ class RecentChapterSummariesToolTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         plan(jdbc, 1, 2, 3, 4);
         AtomicInteger calls = new AtomicInteger();
-        when(jdbc.query(org.mockito.ArgumentMatchers.contains("SELECT chapter_number"), any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
+        when(jdbc.query(ArgumentMatchers.contains("SELECT chapter_number"), any(RowMapper.class), any(Object[].class))).thenAnswer(invocation -> {
             if (calls.getAndIncrement() > 0) return List.of();
             ResultSet row = mock(ResultSet.class);
             when(row.getInt("chapter_number")).thenReturn(2);
@@ -144,7 +149,7 @@ class RecentChapterSummariesToolTest {
         for (long canonVersion : List.of(0L, -1L)) {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             plan(jdbc, 1, 2);
-            when(jdbc.query(org.mockito.ArgumentMatchers.contains("SELECT chapter_number"), any(RowMapper.class), any(Object[].class)))
+            when(jdbc.query(ArgumentMatchers.contains("SELECT chapter_number"), any(RowMapper.class), any(Object[].class)))
                     .thenAnswer(invocation -> {
                         ResultSet row = mock(ResultSet.class);
                         when(row.getInt("chapter_number")).thenReturn(1);
@@ -166,16 +171,16 @@ class RecentChapterSummariesToolTest {
     }
 
     private void plan(JdbcTemplate jdbc, int... numbers) throws Exception {
-        var chapters = java.util.Arrays.stream(numbers).mapToObj(number -> new com.novelagent.planning.domain.ChapterPlan(
+        var chapters = Arrays.stream(numbers).mapToObj(number -> new ChapterPlan(
                 number, "章" + number, "主角", "目标", "未来事件" + number, "揭示", "钩子", 2000, 3000)).toList();
         int split = Math.max(1, chapters.size() / 2);
-        String outlineJson = new ObjectMapper().writeValueAsString(new com.novelagent.planning.domain.OutlineContent(
+        String outlineJson = new ObjectMapper().writeValueAsString(new OutlineContent(
                 "小说", "前提", "结构", "节奏", 4000, 6000, List.of(
-                new com.novelagent.planning.domain.OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果", 2000, 3000,
+                new OutlineArc(1, "第一卷", "目标", "冲突", "转折", "结果", 2000, 3000,
                         chapters.subList(0, split)),
-                new com.novelagent.planning.domain.OutlineArc(2, "第二卷", "目标", "冲突", "转折", "结果", 2000, 3000,
+                new OutlineArc(2, "第二卷", "目标", "冲突", "转折", "结果", 2000, 3000,
                         chapters.subList(split, chapters.size())))));
-        when(jdbc.query(org.mockito.ArgumentMatchers.contains("SELECT o.id"), any(RowMapper.class), any(Object[].class)))
+        when(jdbc.query(ArgumentMatchers.contains("SELECT o.id"), any(RowMapper.class), any(Object[].class)))
                 .thenAnswer(invocation -> {
                     ResultSet row = mock(ResultSet.class);
                     when(row.getString("outline_id")).thenReturn("outline-1");

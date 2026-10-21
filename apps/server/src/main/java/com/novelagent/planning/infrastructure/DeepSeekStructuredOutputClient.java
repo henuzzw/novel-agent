@@ -1,17 +1,19 @@
 package com.novelagent.planning.infrastructure;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.novelagent.planning.application.ModelProviderException;
-import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
 import com.novelagent.agent.application.AgentRunRecorder.Usage;
 import com.novelagent.agent.application.AgentRunRecorder.UsageCarrier;
+import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.project.application.GlobalModelSettingsService;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -28,7 +30,7 @@ public class DeepSeekStructuredOutputClient {
             @Value("${app.ai.deepseek.base-url}") String baseUrl,
             GlobalModelSettingsService settings) {
         this(apiKey, RestClient.builder().baseUrl(baseUrl)
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory()).build(), settings);
+                .requestFactory(new JdkClientHttpRequestFactory()).build(), settings);
     }
 
     DeepSeekStructuredOutputClient(String apiKey, RestClient restClient, GlobalModelSettingsService settings) {
@@ -49,7 +51,7 @@ public class DeepSeekStructuredOutputClient {
     public ResponseResult request(String schemaName, String instructions, String input, JsonNode schema,
             int maxOutputTokens, EffectiveSettings frozenSettings) {
         if (apiKey == null || apiKey.isBlank()) throw new IllegalArgumentException("尚未配置 DeepSeek API Key");
-        Map<String, Object> request = new java.util.LinkedHashMap<>(Map.of(
+        Map<String, Object> request = new LinkedHashMap<>(Map.of(
                 "model", frozenSettings.model(), "instructions", instructions, "input", input,
                 "reasoning", Map.of("effort", "none"),
                 "max_output_tokens", maxOutputTokens, "stream", false));

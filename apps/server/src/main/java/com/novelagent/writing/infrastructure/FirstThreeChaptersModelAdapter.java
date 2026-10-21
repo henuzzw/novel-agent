@@ -1,14 +1,15 @@
 package com.novelagent.writing.infrastructure;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.prompt.application.AgentPromptDefaults;
 import com.novelagent.writing.application.FirstThreeChaptersModel;
 import com.novelagent.writing.domain.FirstThreeChaptersBudget;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
@@ -16,12 +17,14 @@ import com.novelagent.writing.domain.FirstThreeChaptersSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 @Component
 public class FirstThreeChaptersModelAdapter implements FirstThreeChaptersModel {
     private static final int MAX_OUTPUT = 6000;
-    private static final String SYSTEM = com.novelagent.prompt.application.AgentPromptDefaults.system("FIRST_THREE_CHAPTERS_REVIEW");
+    private static final String SYSTEM = AgentPromptDefaults.system("FIRST_THREE_CHAPTERS_REVIEW");
     private final StructuredModelGateway models;
     private final ModelContextProperties capacities;
     private final ObjectMapper mapper;
@@ -49,7 +52,7 @@ public class FirstThreeChaptersModelAdapter implements FirstThreeChaptersModel {
                 "仅核对完整三章、来源与版本；未完成文学通读，未判断吸引力、因果或兑现。",
                 Arrays.stream(FirstThreeChaptersContent.Dimension.values()).map(d -> new FirstThreeChaptersContent.Assessment(
                         d, FirstThreeChaptersContent.Status.NOT_ASSESSED, "本地规则无法作文学判断，需明确选择模型后检查。", List.of())).toList(), List.of());
-        var result = new java.util.concurrent.atomic.AtomicReference<FirstThreeChaptersContent>();
+        var result = new AtomicReference<FirstThreeChaptersContent>();
         models.request(source.projectId(), "FIRST_THREE_CHAPTERS_REVIEW", provider,
                 SYSTEM, user(source, instruction), schema, "opening_review_v1", MAX_OUTPUT, CodexSessionPolicy.NEW_THREAD,
                 output -> result.set(parse(output, source)));
@@ -66,7 +69,7 @@ public class FirstThreeChaptersModelAdapter implements FirstThreeChaptersModel {
         } catch (JsonProcessingException e) {
             String field = e instanceof JsonMappingException mapping ? mapping.getPath().stream()
                     .map(reference -> reference.getFieldName() == null ? "[" + reference.getIndex() + "]" : reference.getFieldName())
-                    .collect(java.util.stream.Collectors.joining(".")) : "";
+                    .collect(Collectors.joining(".")) : "";
             // Jackson messages can contain private prose; return only the field location.
             throw new IllegalArgumentException("三章报告输出校验失败：" + (field.isEmpty() ? "报告" : field)
                     + " 字段格式或类型不符合返回协议", e);

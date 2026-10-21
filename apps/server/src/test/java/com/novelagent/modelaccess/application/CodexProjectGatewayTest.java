@@ -2,6 +2,7 @@ package com.novelagent.modelaccess.application;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.CodexConversationStore;
@@ -19,7 +20,7 @@ class CodexProjectGatewayTest {
         var project = UUID.randomUUID(); var lease = new CodexConversationStore.Lease(project, "QUALITY_REVIEW", UUID.randomUUID(), null, Set.of(), 0);
         when(codex.authorize()).thenReturn("account"); when(store.claim(project, "QUALITY_REVIEW", "account", true)).thenReturn(lease);
         when(codex.startThread(eq(project), anyString(), any())).thenReturn("new-review-thread");
-        var schema = new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[],\"properties\":{}}");
+        var schema = new ObjectMapper().readTree("{\"type\":\"object\",\"additionalProperties\":false,\"required\":[],\"properties\":{}}");
         var settings = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "test", "high", 1L);
         when(codex.runStructuredTurn(eq("new-review-thread"), eq(project), anyString(), eq(schema), eq(settings), any()))
                 .thenReturn(new CodexAppServerClient.TurnResult("turn", "{}"));

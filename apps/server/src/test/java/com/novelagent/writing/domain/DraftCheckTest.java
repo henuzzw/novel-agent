@@ -2,6 +2,7 @@ package com.novelagent.writing.domain;
 
 import static org.assertj.core.api.Assertions.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,7 @@ class DraftCheckTest {
         var report = new DraftCheck("检查", List.of(new DraftCheck.Issue("B-LOGIC-001", QualityDimension.LOGIC,
                 "检查意见", "她收回本子。", "依据", "", "", "", "澄清")));
         var json = mapper.valueToTree(report);
-        ((com.fasterxml.jackson.databind.node.ObjectNode) json.path("issues").get(0)).put("evidence", "她收回本子。");
+        ((ObjectNode) json.path("issues").get(0)).put("evidence", "她收回本子。");
         var restored = mapper.treeToValue(json, DraftCheck.class);
         restored.requireEvidenceIn("她收回本子。");
         assertThat(restored.issues().getFirst().evidence()).containsExactly(new DraftCheck.Evidence("她收回本子。"));

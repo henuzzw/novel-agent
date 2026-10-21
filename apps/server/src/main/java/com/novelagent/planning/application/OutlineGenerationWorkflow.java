@@ -9,11 +9,11 @@ import com.alibaba.cloud.ai.graph.KeyStrategyFactoryBuilder;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.OutlineContent;
+import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.platform.support.Json;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import java.util.Map;
 import java.util.UUID;
@@ -90,11 +90,9 @@ public class OutlineGenerationWorkflow {
         return state.value(key, String.class).orElseThrow(() -> new IllegalStateException("Agent Graph 状态缺少字段：" + key));
     }
     private String write(Object value) {
-        try { return mapper.writeValueAsString(value); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("Agent Graph 状态序列化失败", exception); }
+        return Json.call(() -> mapper.writeValueAsString(value), "Agent Graph 状态序列化失败");
     }
     private <T> T read(String value, Class<T> type) {
-        try { return mapper.readValue(value, type); }
-        catch (JsonProcessingException exception) { throw new IllegalStateException("Agent Graph 状态反序列化失败", exception); }
+        return Json.call(() -> mapper.readValue(value, type), "Agent Graph 状态反序列化失败");
     }
 }

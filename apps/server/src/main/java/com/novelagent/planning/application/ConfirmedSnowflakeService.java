@@ -5,10 +5,15 @@ import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.ingest.application.ImportedPlanningSources;
 import com.novelagent.planning.api.StoryBibleResponse;
 import com.novelagent.planning.domain.StoryBibleContent;
+import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.SnowflakePlanStore;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
+import com.novelagent.project.application.CreativeBoundaryGuide;
+import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.project.application.ProjectAccessService;
+import com.novelagent.project.domain.CreativeBoundaries;
+import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import java.util.List;
 import java.util.Optional;
@@ -72,12 +77,8 @@ public class ConfirmedSnowflakeService {
         if (!plan.invalidSteps().isEmpty())
             throw new IllegalArgumentException("雪花规划包含资料读取失败说明，不能确认，请重新生成");
         var input = plans.input(projectId, planId);
-        String boundaries =
-                com.novelagent.project.application.CreativeBoundaryGuide.render(
-                        com.novelagent.project.domain.CreativeBoundaries.from(project));
-        String strategy =
-                com.novelagent.project.application.CreativeStrategyGuide.render(
-                        com.novelagent.project.domain.CreativeStrategyPolicy.from(project));
+        String boundaries = CreativeBoundaryGuide.render(CreativeBoundaries.from(project));
+        String strategy = CreativeStrategyGuide.render(CreativeStrategyPolicy.from(project));
         if (!boundaries.equals(input.path("creativeBoundarySnapshot").asText())
                 || !strategy.equals(input.path("creativeStrategySnapshot").asText())) {
             throw new IllegalArgumentException("创作边界或策略已改变，请重新生成雪花规划");
@@ -163,11 +164,7 @@ public class ConfirmedSnowflakeService {
         return snapshots
                 .findByIdAndProjectId(project.getCurrentBibleVersionId(), projectId)
                 .filter(value -> value.getSourceSnowflakeId() != null)
-                .filter(
-                        value ->
-                                value.getStatus()
-                                        == com.novelagent.planning.domain.StoryBibleStatus
-                                                .PUBLISHED)
+                .filter(value -> value.getStatus() == StoryBibleStatus.PUBLISHED)
                 .map(
                         value ->
                                 StoryBibleResponse.from(

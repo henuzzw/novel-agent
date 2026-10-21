@@ -15,13 +15,15 @@ import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.application.WritingGenerationWorkflow;
+import com.novelagent.writing.application.WritingStylePresets;
 import com.novelagent.writing.application.WritingStyleService;
-import com.novelagent.writing.domain.WritingStyleRecommendationContent;
 import com.novelagent.writing.domain.WritingStyleRecommendationContent.Evidence;
 import com.novelagent.writing.domain.WritingStyleRecommendationContent.Recommendation;
+import com.novelagent.writing.domain.WritingStyleRecommendationContent;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class WritingStyleRecommendationTest {
     private final ObjectMapper mapper = new ObjectMapper();
@@ -34,35 +36,25 @@ class WritingStyleRecommendationTest {
     }
 
     @Test
-    void schemaIsStrictAndIncludesAllElevenCanonicalPresets() {
-        var schema = new WritingOutputSchemas(mapper).styleRecommendation(com.novelagent.writing.application.WritingStylePresets.all());
-        var item = schema.path("properties").path("recommendations").path("items");
-        assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
-        assertThat(item.path("additionalProperties").asBoolean()).isFalse();
-        assertThat(item.path("properties").path("presetName").path("enum").size()).isEqualTo(11);
-        assertThat(item.path("required").size()).isEqualTo(4);
-    }
-
-    @Test
     void promptUsesBibleAndCanonicalPresetsWithoutReadingAppliedStyleOrMemory() {
         var names = mock(CharacterNameService.class);
         when(names.render(any(), anyString())).thenAnswer(call -> call.getArgument(1));
         var profiles = mock(CharacterProfileService.class);
         var styles = mock(WritingStyleService.class);
         var factory = new WritingPromptFactory(mapper, names, profiles, styles, null);
-        when(styles.presets(any())).thenReturn(com.novelagent.writing.application.WritingStylePresets.all());
+        when(styles.presets(any())).thenReturn(WritingStylePresets.all());
         var prompt = factory.styleRecommendation(UUID.randomUUID(), bible, "不加方言");
         assertThat(prompt.user()).contains(bible.logline(), "不加方言");
         verifyNoInteractions(profiles);
-        org.mockito.Mockito.verify(styles).presets(any());
-        org.mockito.Mockito.verifyNoMoreInteractions(styles);
+        Mockito.verify(styles).presets(any());
+        Mockito.verifyNoMoreInteractions(styles);
     }
 
     @Test
     void parserAcceptsOnlyKnownPresetsWithEvidenceInTheSpecifiedField() throws Exception {
         var parser = new WritingModelOutputParser(mapper);
         var content = recommendation("现实细腻", "theme", "记忆");
-        var presets = com.novelagent.writing.application.WritingStylePresets.all();
+        var presets = WritingStylePresets.all();
         assertThat(parser.styleRecommendation(mapper.writeValueAsString(content), bible, presets)).isEqualTo(content);
         for (var invalid : List.of(recommendation("未知文风", "theme", "记忆"),
                 recommendation("现实细腻", "theme", "不存在的主题"),

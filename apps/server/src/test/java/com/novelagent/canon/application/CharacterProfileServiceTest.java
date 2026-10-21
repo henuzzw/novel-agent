@@ -8,14 +8,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.canon.infrastructure.JdbcCharacterProfileStore;
+import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.domain.ChapterContractContent;
+import java.sql.Array;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -158,7 +159,7 @@ class CharacterProfileServiceTest {
                 when(rs.getString("nickname")).thenReturn(character.nickname());
                 when(rs.getString("title_name")).thenReturn(character.title());
                 when(rs.getString("identity_text")).thenReturn(character.details() ? "档案" + character.name() : null);
-                java.sql.Array aliases = mock(java.sql.Array.class);
+                Array aliases = mock(Array.class);
                 when(aliases.getArray()).thenReturn(character.aliases().toArray(String[]::new));
                 when(rs.getArray("aliases")).thenReturn(aliases);
                 result.add(mapper.mapRow(rs, result.size()));
