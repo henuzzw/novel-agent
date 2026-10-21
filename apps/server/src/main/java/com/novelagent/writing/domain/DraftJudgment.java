@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,7 +32,7 @@ public record DraftJudgment(Action action, List<Decision> decisions, ManuscriptC
         Set<String> actual = new HashSet<>();
         for (var decision : decisions) {
             if (decision == null || decision.issueId() == null || !actual.add(decision.issueId())
-                    || decision.verdict() == null || decision.reason() == null || decision.reason().isBlank()) {
+                    || decision.verdict() == null || isBlank(decision.reason())) {
                 throw new IllegalArgumentException("裁决必须逐项给出唯一编号、结论和原因");
             }
         }
@@ -44,8 +46,8 @@ public record DraftJudgment(Action action, List<Decision> decisions, ManuscriptC
     }
 
     public static void requireContent(ManuscriptContent content) {
-        if (content == null || content.title() == null || content.title().isBlank()
-                || content.body() == null || content.body().isBlank() || content.summary() == null || content.summary().isBlank()
+        if (content == null || isBlank(content.title())
+                || isBlank(content.body()) || isBlank(content.summary())
                 || content.continuityNotes() == null) throw new IllegalArgumentException("模型缺少完整标题、正文或摘要");
     }
 }

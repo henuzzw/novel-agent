@@ -1,5 +1,7 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.api.CharacterKnowledgeResponse;
@@ -48,7 +50,7 @@ public class TypedCanonQueryService {
     @Transactional(readOnly = true)
     public List<StoryEntityResponse> entities(UUID projectId, String type) {
         access.requireOwnedProject(projectId);
-        if (type == null || type.isBlank()) {
+        if (isBlank(type)) {
             return jdbc.query(
                     """
                     SELECT id, entity_type, canonical_name, status, canon_version_from

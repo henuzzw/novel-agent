@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.List;
 import java.util.Set;
 
@@ -50,7 +52,7 @@ public record CharacterBlueprint(
     }
 
     private static String required(String value, String field, int limit) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("人物底稿缺少" + field);
+        if (isBlank(value)) throw new IllegalArgumentException("人物底稿缺少" + field);
         String result = value.trim();
         if (result.length() > limit) throw new IllegalArgumentException("人物底稿" + field + "过长");
         return result;
@@ -73,5 +75,4 @@ public record CharacterBlueprint(
         if (result.length() > limit) throw new IllegalArgumentException("人物底稿" + field + "不能超过 " + limit + " 字符");
         return result;
     }
-
 }

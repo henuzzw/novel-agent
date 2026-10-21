@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.List;
 
 public record WritingStyleCraft(String narratorPosition, String paragraphMoves, String sentenceMoves,
@@ -41,7 +43,7 @@ public record WritingStyleCraft(String narratorPosition, String paragraphMoves, 
     }
 
     private static void require(String value, int limit) {
-        if (value == null || value.isBlank() || value.length() > limit) {
+        if (isBlank(value) || value.length() > limit) {
             throw new IllegalArgumentException("风格技法字段为空或超长");
         }
     }

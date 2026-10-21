@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.List;
 
 public record WritingStyleProfile(String name, String narrativeVoice, String sentenceRhythm,
@@ -34,6 +36,6 @@ public record WritingStyleProfile(String name, String narrativeVoice, String sen
     }
 
     private static void require(String value, int limit) {
-        if (value == null || value.isBlank() || value.length() > limit) throw new IllegalArgumentException("写作风格字段为空或超长");
+        if (isBlank(value) || value.length() > limit) throw new IllegalArgumentException("写作风格字段为空或超长");
     }
 }

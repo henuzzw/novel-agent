@@ -36,15 +36,12 @@ public final class CodexMaterialDelta {
     }
     private static void append(String block, Set<String> sent, StringBuilder text, Map<String, String> materials) {
         if (block.length() < 1000) { text.append(block); return; }
-        String id = fingerprint(block);
+        String id = Sha256.ofUtf8(block);
         materials.put(id, block);
         if (sent.contains(id) || block.length() > 8000) {
             text.append("资料引用 material_id=").append(id).append("；字符数=").append(block.length())
                     .append(sent.contains(id) ? "；此前提供过，同一完整版本。\n" : "；首次提供，须使用只读工具读取。\n");
         } else text.append(block);
-    }
-    public static String fingerprint(String text) {
-        return Sha256.ofUtf8(text);
     }
     public record Result(String text, Map<String, String> materials) { }
 }

@@ -1,5 +1,8 @@
 package com.novelagent.agent.application;
 
+import static java.util.Objects.requireNonNullElse;
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
@@ -175,8 +178,9 @@ public class AgentRunRecorder {
             Integer maxOutputTokens, String sessionPolicy, ContextBudget contextBudget) {
         public static RequestSnapshot capture(EffectiveSettings settings, String systemPrompt,
                 String userPrompt, JsonNode schema, String schemaName, int maxOutputTokens, String sessionPolicy) {
-            return new RequestSnapshot(settings, hash(systemPrompt), hash(userPrompt),
-                    schema == null || schema.isNull() ? null : hash(schema.toString()),
+            return new RequestSnapshot(settings, Sha256.ofUtf8(requireNonNullElse(systemPrompt, "")),
+                    Sha256.ofUtf8(requireNonNullElse(userPrompt, "")),
+                    schema == null || schema.isNull() ? null : Sha256.ofUtf8(schema.toString()),
                     schemaName, maxOutputTokens,
                     settings.provider() == ModelProvider.DEEPSEEK ? maxOutputTokens : null, sessionPolicy, null);
         }
@@ -184,10 +188,6 @@ public class AgentRunRecorder {
         public RequestSnapshot withContextBudget(ContextBudget budget) {
             return new RequestSnapshot(effectiveSettings, systemPromptHash, userPromptHash, schemaHash,
                     schemaName, requestedMaxOutputTokens, maxOutputTokens, sessionPolicy, budget);
-        }
-
-        private static String hash(String text) {
-            return Sha256.ofUtf8(text == null ? "" : text);
         }
     }
 
@@ -222,7 +222,7 @@ public class AgentRunRecorder {
     }
 
     private long estimateTokens(String value) {
-        if (value == null || value.isBlank()) return 0;
+        if (isBlank(value)) return 0;
         long cjk = value.codePoints().filter(code -> code >= 0x2E80 && code <= 0x9FFF).count();
         long other = value.codePointCount(0, value.length()) - cjk;
         return cjk + Math.max(1, Math.round(other / 4.0));

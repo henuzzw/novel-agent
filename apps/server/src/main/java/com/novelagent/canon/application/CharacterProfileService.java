@@ -1,5 +1,8 @@
 package com.novelagent.canon.application;
 
+import com.novelagent.platform.support.Text;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.canon.api.CharacterProfileResponse;
 import com.novelagent.canon.api.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterProfileStore.CharacterReference;
@@ -155,8 +158,7 @@ public class CharacterProfileService {
             references.add(contract.hook());
         }
         addReferences(references, relatedReferences);
-        references =
-                references.stream().filter(CharacterProfileService::hasText).distinct().toList();
+        references = references.stream().filter(Text::hasText).distinct().toList();
         if (references.isEmpty() && ids.isEmpty()) return "暂无本章相关人物档案";
 
         List<CharacterReference> characters = store.references(projectId);
@@ -269,7 +271,7 @@ public class CharacterProfileService {
                         value.behaviorBoundaries(),
                         value.notes())
                 .stream()
-                .anyMatch(CharacterProfileService::hasText);
+                .anyMatch(Text::hasText);
     }
 
     private CharacterProfileResponse requireProfile(UUID projectId, UUID characterId) {
@@ -279,9 +281,5 @@ public class CharacterProfileService {
 
     private static void append(StringBuilder target, String label, String value) {
         if (hasText(value)) target.append("；").append(label).append("：").append(value.trim());
-    }
-
-    private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
     }
 }

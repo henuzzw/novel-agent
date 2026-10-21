@@ -1,5 +1,7 @@
 package com.novelagent.memory.application;
 
+import com.novelagent.platform.support.Sha256;
+import static java.util.Objects.requireNonNullElse;
 import static com.novelagent.memory.application.MemoryTextBudget.trimParagraphTail;
 import static com.novelagent.memory.application.MemoryTextBudget.trimToTokens;
 
@@ -21,7 +23,7 @@ public class MemoryBudgetAllocator {
             NovelMemoryContext.SemanticMemory future, MemoryBudgetPlan plan) {
         List<NovelMemoryContext.SemanticMemory> candidates = new ArrayList<>(recalled.semanticMemories());
         candidates.add(future);
-        String fingerprint = NovelMemoryContext.fingerprint(recalled.boundaryFingerprint() + "\n"
+        String fingerprint = Sha256.ofUtf8(recalled.boundaryFingerprint() + "\n"
                 + future.summary() + "\n" + future.content());
         return new MemoryBudgetAllocator().allocate(candidates, recalled.graphFacts(), plan,
                 recalled.usage() == null ? List.of() : recalled.usage().toolsUsed(), recalled.trimmedSources(), fingerprint,
@@ -42,7 +44,7 @@ public class MemoryBudgetAllocator {
             String content = trimToTokens(candidate.content(), Math.max(0, limit - estimateTokens(candidate.summary()) - 60));
             future.add(new NovelMemoryContext.SemanticMemory(candidate.chapterNumber(), candidate.canonVersion(),
                     candidate.similarity(), candidate.summary(), content));
-            if (!content.equals(nullToEmpty(candidate.content()).strip())) trimmedSources.add("下一章计划已裁剪");
+            if (!content.equals(requireNonNullElse(candidate.content(), "").strip())) trimmedSources.add("下一章计划已裁剪");
         }
         LinkedHashMap<Integer, NovelMemoryContext.SemanticMemory> recent = new LinkedHashMap<>();
         semanticCandidates.stream().filter(candidate -> candidate.recentChapter() && !candidate.futurePlan())
@@ -77,20 +79,20 @@ public class MemoryBudgetAllocator {
                         Math.min(contractCap, Math.max(0, contentBudget - estimateTokens(body) - 25)));
                 excerpt = (body.isBlank() ? "" : "前章正文：" + body + "\n")
                         + (contract.isBlank() ? "" : "前章合同：" + contract);
-                truncated |= !contract.equals(nullToEmpty(candidate.chapterContract()).strip())
-                        || !body.equals(nullToEmpty(candidate.chapterBody()).strip());
-                if (!body.equals(nullToEmpty(candidate.chapterBody()).strip())) {
+                truncated |= !contract.equals(requireNonNullElse(candidate.chapterContract(), "").strip())
+                        || !body.equals(requireNonNullElse(candidate.chapterBody(), "").strip());
+                if (!body.equals(requireNonNullElse(candidate.chapterBody(), "").strip())) {
                     trimmedSources.add("第" + candidate.chapterNumber() + "章正文已裁剪，仅保留完整尾段"
                             + (body.isBlank() ? "（预算内无完整段落）" : ""));
                 }
-                if (!contract.equals(nullToEmpty(candidate.chapterContract()).strip())) {
+                if (!contract.equals(requireNonNullElse(candidate.chapterContract(), "").strip())) {
                     trimmedSources.add("第" + candidate.chapterNumber() + "章合同已裁剪");
                 }
             } else {
                 // Located source chunks are omitted, not turned into partial evidence, when the budget is too small.
                 excerpt = candidate.sourceKey() == null ? trimToTokens(candidate.content(), contentBudget)
-                        : estimateTokens(candidate.content()) <= contentBudget ? nullToEmpty(candidate.content()) : "";
-                truncated |= !excerpt.equals(nullToEmpty(candidate.content()).strip());
+                        : estimateTokens(candidate.content()) <= contentBudget ? requireNonNullElse(candidate.content(), "") : "";
+                truncated |= !excerpt.equals(requireNonNullElse(candidate.content(), "").strip());
                 if (candidate.sourceKey() != null && excerpt.isBlank()) {
                     trimmedSources.add("定位片段未纳入预算：" + candidate.sourceKey());
                     truncated = true;
@@ -99,7 +101,7 @@ public class MemoryBudgetAllocator {
             }
             if (summary.isBlank() && excerpt.isBlank()) break;
             remaining -= estimateTokens(summary) + estimateTokens(excerpt) + 50;
-            truncated |= !summary.equals(nullToEmpty(candidate.summary()).strip());
+            truncated |= !summary.equals(requireNonNullElse(candidate.summary(), "").strip());
             semantic.add(new NovelMemoryContext.SemanticMemory(candidate.chapterNumber(), candidate.canonVersion(),
                     candidate.similarity(), summary, excerpt, candidate.recentChapter(), contract, body, candidate.sourceKey()));
             if (remaining <= 0) break;
@@ -115,7 +117,7 @@ public class MemoryBudgetAllocator {
                 int evidenceBudget = Math.min(120, Math.max(0, remaining - factTokens));
                 String evidence = trimToTokens(candidate.evidence(), evidenceBudget);
                 remaining -= factTokens + estimateTokens(evidence);
-                truncated |= !evidence.equals(nullToEmpty(candidate.evidence()));
+                truncated |= !evidence.equals(requireNonNullElse(candidate.evidence(), ""));
                 facts.add(new NovelMemoryContext.GraphFact(candidate.canonVersion(), candidate.subject(),
                         candidate.predicate(), candidate.object(), evidence));
                 if (remaining <= 0) break;
@@ -197,7 +199,7 @@ public class MemoryBudgetAllocator {
                     .append('\n').append(candidate.summary())
                     .append('\n').append(candidate.content());
         }
-        return NovelMemoryContext.fingerprint(sources.toString());
+        return Sha256.ofUtf8(sources.toString());
     }
 
     public static int estimateTokens(String value) {
@@ -205,16 +207,12 @@ public class MemoryBudgetAllocator {
     }
 
     private static String trimSummary(String value, int maxTokens) {
-        String normalized = nullToEmpty(value).strip();
+        String normalized = requireNonNullElse(value, "").strip();
         if (!normalized.startsWith("来源项目=")) return trimToTokens(normalized, maxTokens);
         int newline = normalized.indexOf('\n');
         if (newline < 0) return normalized;
         String provenance = normalized.substring(0, newline);
         return provenance + "\n" + trimToTokens(normalized.substring(newline + 1),
                 Math.max(0, maxTokens - estimateTokens(provenance) - 1));
-    }
-
-    private static String nullToEmpty(String value) {
-        return value == null ? "" : value;
     }
 }

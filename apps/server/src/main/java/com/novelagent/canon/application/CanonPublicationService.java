@@ -1,5 +1,7 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.agent.infrastructure.AutomationRunRepository;
@@ -9,7 +11,6 @@ import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.infrastructure.ManuscriptVersionRepository;
@@ -87,10 +88,7 @@ public class CanonPublicationService {
         if (previous != null && previous.getManuscriptVersionId().equals(manuscript.getId())) {
             return CanonCommitResponse.from(previous);
         }
-        if (manuscript.getRowVersion() != request.expectedManuscriptVersion()) {
-            throw new ResourceVersionConflictException(
-                    request.expectedManuscriptVersion(), manuscript.getRowVersion());
-        }
+        checkVersion(request.expectedManuscriptVersion(), manuscript.getRowVersion());
         var latest =
                 manuscripts
                         .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(

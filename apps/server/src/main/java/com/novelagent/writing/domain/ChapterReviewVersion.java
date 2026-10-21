@@ -1,5 +1,8 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -62,7 +65,7 @@ public class ChapterReviewVersion {
         status = ReviewStatus.RETURNED;
     }
     private static ChapterReviewContent validate(ChapterReviewContent value) {
-        if (value == null || value.summary() == null || value.summary().isBlank())
+        if (value == null || isBlank(value.summary()))
             throw new IllegalArgumentException("审稿摘要不能为空");
         if (value.issues() == null || value.factProposals() == null)
             throw new IllegalArgumentException("审稿问题和候选事实不能为空");
@@ -84,11 +87,11 @@ public class ChapterReviewVersion {
     }
     private boolean pronounWithoutId(String mention, String entityId) {
         return mention != null && PRONOUNS.contains(mention.strip())
-                && (entityId == null || entityId.isBlank());
+                && (isBlank(entityId));
     }
     private String firstText(String... values) {
         for (String value : values) {
-            if (value != null && !value.isBlank()) return value;
+            if (hasText(value)) return value;
         }
         return null;
     }

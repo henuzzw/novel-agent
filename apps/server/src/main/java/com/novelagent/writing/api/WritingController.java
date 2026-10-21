@@ -1,10 +1,10 @@
 package com.novelagent.writing.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.writing.application.WritingService;
 import com.novelagent.platform.api.ContentUpdateRequest;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
-import java.net.URI;
 import java.util.UUID;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
@@ -36,9 +36,8 @@ public class WritingController {
     @GetMapping("/contracts/latest")
     public ResponseEntity<ChapterContractResponse> latestContract(
             @PathVariable UUID projectId, @PathVariable int chapterNumber) {
-        return service.latestContract(projectId, chapterNumber)
-                .map(value -> ResponseEntity.ok().eTag(tag(value.version())).body(value))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.versionedOrNoContent(
+                service.latestContract(projectId, chapterNumber), value -> value.version());
     }
 
     /**
@@ -76,9 +75,8 @@ public class WritingController {
     @GetMapping("/contract-reviews/latest")
     public ResponseEntity<ChapterContractReviewResponse> latestContractReview(
             @PathVariable UUID projectId, @PathVariable int chapterNumber) {
-        return service.latestContractReview(projectId, chapterNumber)
-                .map(value -> ResponseEntity.ok().eTag(tag(value.version())).body(value))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.versionedOrNoContent(
+                service.latestContractReview(projectId, chapterNumber), value -> value.version());
     }
 
     /** 兼容退役合同动作：先校验项目归属，再返回 410，不解析旧请求体或版本参数。 */
@@ -111,9 +109,8 @@ public class WritingController {
     @GetMapping("/manuscripts/latest")
     public ResponseEntity<ManuscriptResponse> latestManuscript(
             @PathVariable UUID projectId, @PathVariable int chapterNumber) {
-        return service.latestManuscript(projectId, chapterNumber)
-                .map(value -> ResponseEntity.ok().eTag(tag(value.version())).body(value))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.versionedOrNoContent(
+                service.latestManuscript(projectId, chapterNumber), value -> value.version());
     }
 
     /**
@@ -155,16 +152,15 @@ public class WritingController {
             @PathVariable int chapterNumber,
             @RequestBody GenerateWritingRequest request) {
         ManuscriptResponse value = service.generateManuscript(projectId, chapterNumber, request);
-        return ResponseEntity.created(
-                        URI.create(
-                                "/api/v1/projects/"
-                                        + projectId
-                                        + "/chapters/"
-                                        + chapterNumber
-                                        + "/manuscripts/"
-                                        + value.id()))
-                .eTag(tag(value.version()))
-                .body(value);
+        return ApiResponses.created(
+                "/api/v1/projects/"
+                        + projectId
+                        + "/chapters/"
+                        + chapterNumber
+                        + "/manuscripts/"
+                        + value.id(),
+                value,
+                value.version());
     }
 
     /**
@@ -182,8 +178,9 @@ public class WritingController {
             @RequestHeader("If-Match") String match,
             @RequestBody ContentUpdateRequest<ManuscriptContent> request) {
         ManuscriptResponse value =
-                service.updateManuscript(projectId, id, parse(match), request.content());
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
+                service.updateManuscript(
+                        projectId, id, ApiResponses.expectedVersion(match), request.content());
+        return ApiResponses.versioned(value, value.version());
     }
 
     /**
@@ -201,17 +198,17 @@ public class WritingController {
             @PathVariable UUID id,
             @RequestHeader("If-Match") String match) {
         ManuscriptResponse value =
-                service.createManuscriptRevision(projectId, chapterNumber, id, parse(match));
-        return ResponseEntity.created(
-                        URI.create(
-                                "/api/v1/projects/"
-                                        + projectId
-                                        + "/chapters/"
-                                        + chapterNumber
-                                        + "/manuscripts/"
-                                        + value.id()))
-                .eTag(tag(value.version()))
-                .body(value);
+                service.createManuscriptRevision(
+                        projectId, chapterNumber, id, ApiResponses.expectedVersion(match));
+        return ApiResponses.created(
+                "/api/v1/projects/"
+                        + projectId
+                        + "/chapters/"
+                        + chapterNumber
+                        + "/manuscripts/"
+                        + value.id(),
+                value,
+                value.version());
     }
 
     /**
@@ -226,8 +223,9 @@ public class WritingController {
             @PathVariable UUID projectId,
             @PathVariable UUID id,
             @RequestHeader("If-Match") String match) {
-        ManuscriptResponse value = service.acceptManuscript(projectId, id, parse(match));
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
+        ManuscriptResponse value =
+                service.acceptManuscript(projectId, id, ApiResponses.expectedVersion(match));
+        return ApiResponses.versioned(value, value.version());
     }
 
     /**
@@ -255,9 +253,8 @@ public class WritingController {
     @GetMapping("/reviews/latest")
     public ResponseEntity<ChapterReviewResponse> latestReview(
             @PathVariable UUID projectId, @PathVariable int chapterNumber) {
-        return service.latestReview(projectId, chapterNumber)
-                .map(value -> ResponseEntity.ok().eTag(tag(value.version())).body(value))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.versionedOrNoContent(
+                service.latestReview(projectId, chapterNumber), value -> value.version());
     }
 
     /**
@@ -273,16 +270,15 @@ public class WritingController {
             @PathVariable int chapterNumber,
             @RequestBody GenerateWritingRequest request) {
         ChapterReviewResponse value = service.generateReview(projectId, chapterNumber, request);
-        return ResponseEntity.created(
-                        URI.create(
-                                "/api/v1/projects/"
-                                        + projectId
-                                        + "/chapters/"
-                                        + chapterNumber
-                                        + "/reviews/"
-                                        + value.id()))
-                .eTag(tag(value.version()))
-                .body(value);
+        return ApiResponses.created(
+                "/api/v1/projects/"
+                        + projectId
+                        + "/chapters/"
+                        + chapterNumber
+                        + "/reviews/"
+                        + value.id(),
+                value,
+                value.version());
     }
 
     /**
@@ -300,8 +296,9 @@ public class WritingController {
             @RequestHeader("If-Match") String match,
             @RequestBody ContentUpdateRequest<ChapterReviewContent> request) {
         ChapterReviewResponse value =
-                service.updateReview(projectId, id, parse(match), request.content());
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
+                service.updateReview(
+                        projectId, id, ApiResponses.expectedVersion(match), request.content());
+        return ApiResponses.versioned(value, value.version());
     }
 
     /**
@@ -320,8 +317,11 @@ public class WritingController {
             @RequestBody(required = false) ContentUpdateRequest<ChapterReviewContent> request) {
         ChapterReviewResponse value =
                 service.approveReview(
-                        projectId, id, parse(match), request == null ? null : request.content());
-        return ResponseEntity.ok().eTag(tag(value.version())).body(value);
+                        projectId,
+                        id,
+                        ApiResponses.expectedVersion(match),
+                        request == null ? null : request.content());
+        return ApiResponses.versioned(value, value.version());
     }
 
     /**
@@ -341,24 +341,16 @@ public class WritingController {
             @RequestHeader("If-Match") String match,
             @RequestBody ReturnReviewRequest request) {
         ManuscriptResponse value =
-                service.returnReviewToWriting(projectId, chapterNumber, id, parse(match), request);
-        return ResponseEntity.created(
-                        URI.create(
-                                "/api/v1/projects/"
-                                        + projectId
-                                        + "/chapters/"
-                                        + chapterNumber
-                                        + "/manuscripts/"
-                                        + value.id()))
-                .eTag(tag(value.version()))
-                .body(value);
-    }
-
-    private static long parse(String value) {
-        return Long.parseLong(value.replace("\"", "").trim());
-    }
-
-    private static String tag(long value) {
-        return Long.toString(value);
+                service.returnReviewToWriting(
+                        projectId, chapterNumber, id, ApiResponses.expectedVersion(match), request);
+        return ApiResponses.created(
+                "/api/v1/projects/"
+                        + projectId
+                        + "/chapters/"
+                        + chapterNumber
+                        + "/manuscripts/"
+                        + value.id(),
+                value,
+                value.version());
     }
 }

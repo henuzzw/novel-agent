@@ -1,5 +1,7 @@
 package com.novelagent.ingest.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.project.domain.CreativeBoundaries;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -67,7 +69,7 @@ public final class ImportAnalysis {
     }
     public record Decision(String key, String action, String note) {
         public Decision {
-            if (key == null || key.isBlank() || !Set.of("KEEP", "REWORK", "DROP").contains(action == null ? "" : action)) invalid("请逐项选择处理方式");
+            if (isBlank(key) || !Set.of("KEEP", "REWORK", "DROP").contains(action == null ? "" : action)) invalid("请逐项选择处理方式");
             note = text(note, 1000, true);
             if ("REWORK".equals(action) && note.isBlank()) invalid("重构项须填写改编要求");
         }

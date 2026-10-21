@@ -1,6 +1,6 @@
 package com.novelagent.canon.infrastructure;
 
-import static com.novelagent.canon.infrastructure.CanonFactProjectionText.hasText;
+import static com.novelagent.platform.support.Text.hasText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
 
 import com.fasterxml.jackson.databind.ObjectMapper;

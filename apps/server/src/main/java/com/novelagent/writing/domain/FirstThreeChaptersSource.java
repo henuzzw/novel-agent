@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -9,7 +11,7 @@ public record FirstThreeChaptersSource(UUID projectId, UUID outlineId, long outl
         String outlineContext, String bibleContext, String styleContext, String profileContext,
         List<Chapter> chapters, List<String> unavailableReasons, String fingerprint) {
     public boolean available() { return unavailableReasons.isEmpty() && chapters.size() == 3
-            && chapters.stream().allMatch(c -> c.body() != null && !c.body().isBlank()); }
+            && chapters.stream().allMatch(c -> hasText(c.body())); }
     public record Version(UUID id, int versionNumber, long rowVersion, String status) { }
     public record Chapter(int chapterNumber, UUID manuscriptId, int versionNumber, long rowVersion,
             String status, String title, String body, UUID contractId, int contractVersionNumber,

@@ -1,10 +1,11 @@
 package com.novelagent.planning.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -38,7 +39,7 @@ class CodexSessionWireTest {
             var project = UUID.randomUUID();
             String thread = client.startThread(project, "资料读取任务");
             String content = "完整原文\r\n".repeat(1800);
-            String id = CodexMaterialDelta.fingerprint(content);
+            String id = Sha256.ofUtf8(content);
             client.saveMaterialFiles(project, Map.of(id, content));
             client.openMaterialScope(thread, project, Set.of(id));
             var first = json.readTree(client.runStructuredTurn(thread, project, "read-material:" + id + ":0", null).output());

@@ -1,5 +1,7 @@
 package com.novelagent.project.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.project.api.CreateProjectRequest;
 import com.novelagent.project.api.CreativeIntentRequest;
 import com.novelagent.project.api.ProjectResponse;
@@ -54,11 +56,9 @@ public class ProjectService {
                 NovelProject.create(
                         projectId,
                         actorProvider.currentUserId(),
-                        request.name() == null || request.name().isBlank()
-                                ? "待生成书名"
-                                : request.name(),
+                        isBlank(request.name()) ? "待生成书名" : request.name(),
                         request.entryMode());
-        if (request.name() == null || request.name().isBlank()) {
+        if (isBlank(request.name())) {
             project.setSetting("automaticTitle", Map.of("pending", true));
         }
         CreativeStrategyPolicy.of(request.creativeStrategy()).applyTo(project);

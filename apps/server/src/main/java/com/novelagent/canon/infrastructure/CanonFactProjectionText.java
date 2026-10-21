@@ -1,13 +1,11 @@
 package com.novelagent.canon.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.writing.domain.FactProposal;
 
 final class CanonFactProjectionText {
     private CanonFactProjectionText() {
-    }
-
-    static boolean hasText(String value) {
-        return value != null && !value.isBlank();
     }
 
     static String factSentence(FactProposal proposal) {
@@ -16,7 +14,7 @@ final class CanonFactProjectionText {
     }
 
     static String normalizedText(String value) {
-        if (value == null || value.isBlank()) {
+        if (isBlank(value)) {
             return "未命名";
         }
         return value.trim();

@@ -1,10 +1,10 @@
 package com.novelagent.planning.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.planning.application.OutlineService;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.platform.api.ContentUpdateRequest;
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -38,9 +38,8 @@ public class OutlineController {
      */
     @GetMapping("/latest")
     public ResponseEntity<OutlineResponse> latest(@PathVariable UUID projectId) {
-        return service.latest(projectId)
-                .map(value -> ResponseEntity.ok().eTag(Long.toString(value.version())).body(value))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.versionedOrNoContent(
+                service.latest(projectId), value -> value.version());
     }
 
     /**
@@ -50,9 +49,8 @@ public class OutlineController {
      */
     @GetMapping("/current")
     public ResponseEntity<OutlineResponse> current(@PathVariable UUID projectId) {
-        return service.current(projectId)
-                .map(value -> ResponseEntity.ok().eTag(Long.toString(value.version())).body(value))
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.versionedOrNoContent(
+                service.current(projectId), value -> value.version());
     }
 
     /**
@@ -87,10 +85,10 @@ public class OutlineController {
     public ResponseEntity<OutlineResponse> generate(
             @PathVariable UUID projectId, @Valid @RequestBody GenerateOutlineRequest request) {
         OutlineResponse value = service.generate(projectId, request);
-        return ResponseEntity.created(
-                        URI.create("/api/v1/projects/" + projectId + "/outlines/" + value.id()))
-                .eTag(Long.toString(value.version()))
-                .body(value);
+        return ApiResponses.created(
+                "/api/v1/projects/" + projectId + "/outlines/" + value.id(),
+                value,
+                value.version());
     }
 
     /**
@@ -108,8 +106,12 @@ public class OutlineController {
             @RequestHeader("If-Match") String ifMatch,
             @Valid @RequestBody ContentUpdateRequest<OutlineContent> request) {
         OutlineResponse value =
-                service.update(projectId, outlineId, parse(ifMatch), request.content());
-        return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
+                service.update(
+                        projectId,
+                        outlineId,
+                        ApiResponses.expectedVersion(ifMatch),
+                        request.content());
+        return ApiResponses.versioned(value, value.version());
     }
 
     /**
@@ -124,11 +126,8 @@ public class OutlineController {
             @PathVariable UUID projectId,
             @PathVariable UUID outlineId,
             @RequestHeader("If-Match") String ifMatch) {
-        OutlineResponse value = service.publish(projectId, outlineId, parse(ifMatch));
-        return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
-    }
-
-    private static long parse(String value) {
-        return Long.parseLong(value.replace("\"", "").trim());
+        OutlineResponse value =
+                service.publish(projectId, outlineId, ApiResponses.expectedVersion(ifMatch));
+        return ApiResponses.versioned(value, value.version());
     }
 }

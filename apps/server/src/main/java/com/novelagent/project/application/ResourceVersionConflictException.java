@@ -11,6 +11,13 @@ public class ResourceVersionConflictException extends RuntimeException {
         this.actualVersion = actualVersion;
     }
 
+    /** Rejects a stale write: the caller's expected row version must equal the stored one. */
+    public static void checkVersion(long expected, long actual) {
+        if (expected != actual) {
+            throw new ResourceVersionConflictException(expected, actual);
+        }
+    }
+
     public long getExpectedVersion() {
         return expectedVersion;
     }

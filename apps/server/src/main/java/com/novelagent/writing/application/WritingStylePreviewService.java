@@ -1,5 +1,8 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.trimToNull;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.api.GenerateStylePreviewRequest;
 import com.novelagent.writing.api.WritingStylePreviewResponse;
@@ -39,7 +42,7 @@ public class WritingStylePreviewService {
                 contexts.previewContext(projectId, request.outlineVersionId());
         WritingBasisSnapshot basis = WritingBasisSnapshot.capture(context);
         long sourceVersion = context.outline().getRowVersion();
-        WritingChecks.check(sourceVersion, request.expectedOutlineVersion());
+        checkVersion(request.expectedOutlineVersion(), sourceVersion);
         var profile = styles.resolveProfile(request.profile());
         WritingStylePreviewContent content =
                 workflow.generateStylePreview(
@@ -50,11 +53,10 @@ public class WritingStylePreviewService {
                         profile,
                         request.provider(),
                         request.effectiveTargetWords(),
-                        context.instructionWithPreparation(
-                                WritingChecks.normalize(request.instruction())));
+                        context.instructionWithPreparation(trimToNull(request.instruction())));
         WritingContextService.Context current =
                 contexts.previewContext(projectId, request.outlineVersionId());
-        WritingChecks.check(current.outline().getRowVersion(), sourceVersion);
+        checkVersion(sourceVersion, current.outline().getRowVersion());
         basis.requireUnchanged(current);
         return new WritingStylePreviewResponse(
                 context.outline().getId(),

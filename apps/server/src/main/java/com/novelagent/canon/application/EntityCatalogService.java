@@ -1,5 +1,7 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.writing.domain.ChapterContractContent;
 import java.sql.Array;
 import java.sql.SQLException;
@@ -37,7 +39,7 @@ public class EntityCatalogService {
     public EntityCatalogContext forReview(UUID projectId, ChapterContractContent contract) {
         Set<String> relevantNames =
                 Stream.concat(Stream.of(contract.pov()), contract.locations().stream())
-                        .filter(value -> value != null && !value.isBlank())
+                        .filter(value -> hasText(value))
                         .collect(Collectors.toSet());
         return catalog(projectId, relevantNames);
     }

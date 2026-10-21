@@ -1,5 +1,7 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.platform.support.Sha256;
@@ -52,7 +54,7 @@ public class StylePreviewReviewStore {
     @Transactional(readOnly = true)
     public Snapshot snapshot(UUID projectId, StylePreviewSource source) {
         var context = contexts.previewContext(projectId, source.outlineVersionId());
-        WritingChecks.check(context.outline().getRowVersion(), source.expectedOutlineVersion());
+        checkVersion(source.expectedOutlineVersion(), context.outline().getRowVersion());
         return capture(projectId, context, source);
     }
 
@@ -124,7 +126,7 @@ public class StylePreviewReviewStore {
         var context = contexts.previewContext(projectId, source.outlineVersionId());
         entities.refresh(context.outline(), LockModeType.PESSIMISTIC_READ);
         entities.refresh(context.bible(), LockModeType.PESSIMISTIC_READ);
-        WritingChecks.check(context.outline().getRowVersion(), source.expectedOutlineVersion());
+        checkVersion(source.expectedOutlineVersion(), context.outline().getRowVersion());
         return capture(projectId, context, source);
     }
 

@@ -1,5 +1,7 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,7 +46,7 @@ final class JsonSchemaOutputProtocol implements ModelOutputProtocol {
     }
 
     @Override public String decode(String raw) {
-        if (raw == null || raw.isBlank()) throw invalid("$", "未返回结果");
+        if (isBlank(raw)) throw invalid("$", "未返回结果");
         ModelOutputAvailability.requireAvailable(raw);
         JsonNode output;
         try { output = JSON.readTree(raw); }

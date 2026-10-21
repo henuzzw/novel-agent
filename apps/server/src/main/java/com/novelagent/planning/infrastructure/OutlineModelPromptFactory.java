@@ -1,7 +1,8 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.CharacterBlueprintGuide;
 import com.novelagent.planning.application.ReaderExperiencePlanningGuide;
 import com.novelagent.planning.application.ScenePlanningGuide;
 import com.novelagent.planning.domain.OutlineContent;
@@ -119,7 +120,7 @@ public class OutlineModelPromptFactory {
                 再核对是否保留作者指定的开场与叙事框架；不得用项目策略取代本轮要求，不因作者保留回忆框架就判定必须换场。
                 调整模式再对照选定基准大纲：未受影响的卷章、因果顺序和 status 必须保持原样，changeSummary 只列实际改动及原因。
                 按本次纯文本保存标题输出完整分层大纲和实际修改说明。
-                """.formatted(instruction == null || instruction.isBlank() ? "无" : instruction.trim(),
+                """.formatted(isBlank(instruction) ? "无" : instruction.trim(),
                 CreativeStrategyGuide.render(policy), json(bible),
                 budget.targetWords(), budget.acceptableMinWords(), budget.acceptableMaxWords(),
                 budget.recommendedVolumeCount(), budget.recommendedChapterCount(),

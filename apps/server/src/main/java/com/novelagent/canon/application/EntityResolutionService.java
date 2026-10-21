@@ -1,5 +1,8 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.requireText;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -49,8 +52,8 @@ public class EntityResolutionService {
             String mention,
             String requestedEntityId,
             String evidence) {
-        String name = required(mention, "实体名称");
-        String type = required(entityType, "实体类型").toUpperCase(Locale.ROOT);
+        String name = requireText(mention, "实体名称不能为空").trim();
+        String type = requireText(entityType, "实体类型不能为空").trim().toUpperCase(Locale.ROOT);
         UUID requestedId = parseId(requestedEntityId);
         Resolution resolution;
         if (requestedId != null) {
@@ -105,7 +108,7 @@ public class EntityResolutionService {
     }
 
     private UUID parseId(String value) {
-        if (value == null || value.isBlank()) return null;
+        if (isBlank(value)) return null;
         try {
             return UUID.fromString(value);
         } catch (IllegalArgumentException exception) {
@@ -115,11 +118,6 @@ public class EntityResolutionService {
 
     private IllegalArgumentException ambiguous(String mention) {
         return new IllegalArgumentException("实体名称或别名“" + mention + "”对应多个对象，请先完成实体消歧");
-    }
-
-    private String required(String value, String label) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(label + "不能为空");
-        return value.trim();
     }
 
     private record Resolution(UUID entityId, String method, double confidence) {}

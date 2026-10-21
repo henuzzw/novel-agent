@@ -1,5 +1,7 @@
 package com.novelagent.memory.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.memory.application.TextEmbeddingService;
 import java.nio.charset.StandardCharsets;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -39,7 +41,7 @@ public class LocalFeatureHashEmbeddingService implements TextEmbeddingService {
     @Override
     public float[] embed(String text) {
         float[] vector = new float[DIMENSIONS];
-        if (text == null || text.isBlank()) return vector;
+        if (isBlank(text)) return vector;
         String normalized = text.strip().toLowerCase();
         int codePoints = normalized.codePointCount(0, normalized.length());
         for (int size = 1; size <= 3; size++) {

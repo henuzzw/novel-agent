@@ -1,7 +1,7 @@
 package com.novelagent.canon.infrastructure;
 
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.factSentence;
-import static com.novelagent.canon.infrastructure.CanonFactProjectionText.hasText;
+import static com.novelagent.platform.support.Text.hasText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.truncate;
 

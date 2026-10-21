@@ -1,11 +1,12 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.platform.support.Json;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.writing.domain.ReaderExperienceEntry;
 import com.novelagent.writing.domain.ReaderExperienceMemory;
@@ -125,7 +126,7 @@ public class BookScanService {
                                                         List.of(plan.number()),
                                                         null,
                                                         "没有有效正史正文，仅有未来规划；未判断该章节奏或兑现。"));
-                                    else if (source.summary() == null || source.summary().isBlank())
+                                    else if (isBlank(source.summary()))
                                         observations.add(
                                                 new Observation(
                                                         "MISSING_SUMMARY",
@@ -183,14 +184,13 @@ public class BookScanService {
                 outlineId,
                 rowVersion,
                 canonVersion,
-                hash(List.of(outlineId, rowVersion, canonVersion, plans, memory, ledger)),
+                Json.sha256(
+                        mapper,
+                        List.of(outlineId, rowVersion, canonVersion, plans, memory, ledger),
+                        "全书来源无法生成指纹"),
                 plans.size(),
                 summaries.size(),
                 chapters,
                 List.copyOf(observations));
-    }
-
-    private String hash(Object value) {
-        return Json.call(() -> Sha256.ofBytes(mapper.writeValueAsBytes(value)), "全书来源无法生成指纹");
     }
 }

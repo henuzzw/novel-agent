@@ -1,5 +1,7 @@
 package com.novelagent.chat.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -176,7 +178,7 @@ public class ChatMaterials {
 
     public static void validateReplacement(ChatSource source, String replacement) {
         int limit = source.kind().equals("PROFILE") ? PROFILE_FIELDS.get(source.field()).limit() : 60000;
-        if (replacement == null || replacement.isBlank() || replacement.length() > limit)
+        if (isBlank(replacement) || replacement.length() > limit)
             throw new IllegalArgumentException("替换内容为空或超出字段长度上限：" + limit);
         if (replacement.equals(source.text())) throw new IllegalArgumentException("候选与原文相同，无需修改");
     }

@@ -1,5 +1,8 @@
 package com.novelagent.planning.application;
 
+import static com.novelagent.platform.support.Text.trimToNull;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.ingest.application.ImportedOutlineGenerator;
 import com.novelagent.planning.api.GenerateOutlineRequest;
@@ -16,7 +19,6 @@ import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.NovelProject;
@@ -121,7 +123,7 @@ public class OutlineService {
                                 budget,
                                 provider,
                                 previousContent,
-                                normalize(request.instruction()),
+                                trimToNull(request.instruction()),
                                 CreativeStrategyPolicy.from(project))
                         : workflow.generate(
                                 projectId,
@@ -129,7 +131,7 @@ public class OutlineService {
                                 budget,
                                 provider,
                                 previousContent,
-                                normalize(request.instruction()),
+                                trimToNull(request.instruction()),
                                 CreativeStrategyPolicy.from(project));
         int generation = latest.map(value -> value.getGenerationNumber() + 1).orElse(1);
         OutlineVersion version =
@@ -138,7 +140,7 @@ public class OutlineService {
                         projectId,
                         generation,
                         generated.generatorType(),
-                        normalize(request.instruction()),
+                        trimToNull(request.instruction()),
                         bibleId,
                         base == null ? null : base.getId(),
                         budget,
@@ -237,7 +239,7 @@ public class OutlineService {
             UUID projectId, UUID outlineId, long expectedVersion, OutlineContent content) {
         access.requireOwnedProject(projectId);
         OutlineVersion version = requireVersion(projectId, outlineId);
-        checkVersion(version, expectedVersion);
+        checkVersion(expectedVersion, version.getRowVersion());
         if (version.getStatus() == OutlineStatus.PUBLISHED)
             throw new IllegalArgumentException("已发布的大纲不能直接修改，请生成新版本");
         version.revise(content.reviewScenesAgainst(version.getContent(), false));
@@ -255,7 +257,7 @@ public class OutlineService {
     public OutlineResponse publish(UUID projectId, UUID outlineId, long expectedVersion) {
         NovelProject project = access.requireOwnedProject(projectId);
         OutlineVersion version = requireVersion(projectId, outlineId);
-        checkVersion(version, expectedVersion);
+        checkVersion(expectedVersion, version.getRowVersion());
         version.publish();
         project.publishOutline(version.getId());
         projects.save(project);
@@ -273,14 +275,5 @@ public class OutlineService {
                 characterNames.render(
                         value.getProjectId(), value.getContent(), OutlineContent.class);
         return OutlineResponse.from(value, content);
-    }
-
-    private static void checkVersion(OutlineVersion value, long expected) {
-        if (value.getRowVersion() != expected)
-            throw new ResourceVersionConflictException(expected, value.getRowVersion());
-    }
-
-    private static String normalize(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 }

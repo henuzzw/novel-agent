@@ -1,5 +1,7 @@
 package com.novelagent.writing.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -328,7 +330,7 @@ class WritingPromptFactory {
     }
 
     private static String value(String value) {
-        return value == null || value.isBlank() ? "无" : value;
+        return isBlank(value) ? "无" : value;
     }
 
     Prompt publishedMemory(UUID projectId, ManuscriptContent manuscript,

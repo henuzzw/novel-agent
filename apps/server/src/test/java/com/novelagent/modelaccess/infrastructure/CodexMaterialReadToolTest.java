@@ -1,6 +1,8 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,7 +13,7 @@ class CodexMaterialReadToolTest {
 
     @Test void pagesRecoverExactTextAndDoNotSplitUnicode() {
         String source = "字".repeat(5999) + "\uD83D\uDE00" + "\r\n后续原文".repeat(400);
-        String id = CodexMaterialDelta.fingerprint(source);
+        String id = Sha256.ofUtf8(source);
         var params = json.createObjectNode().put("tool", CodexMaterialReadTool.NAME);
         var args = params.putObject("arguments").put("material_id", id).put("offset", 0);
         StringBuilder recovered = new StringBuilder();

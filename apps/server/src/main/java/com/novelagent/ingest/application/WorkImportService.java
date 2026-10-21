@@ -1,6 +1,8 @@
 package com.novelagent.ingest.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.novelagent.platform.support.Json;
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.ingest.api.ImportedChapterResponse;
@@ -54,7 +56,7 @@ public class WorkImportService {
      */
     @Transactional
     public WorkImportResponse paste(UUID projectId, String text) {
-        if (text == null || text.isBlank()) throw new IllegalArgumentException("请粘贴故事文字");
+        if (isBlank(text)) throw new IllegalArgumentException("请粘贴故事文字");
         return upload(projectId, new PastedStory(text.getBytes(StandardCharsets.UTF_8)));
     }
 
@@ -411,11 +413,7 @@ public class WorkImportService {
     }
 
     private List<String> warnings(String json) {
-        try {
-            return mapper.readValue(json, new TypeReference<>() {});
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("导入报告损坏", exception);
-        }
+        return Json.call(() -> mapper.readValue(json, new TypeReference<>() {}), "导入报告损坏");
     }
 
     private static String safeFilename(String value) {

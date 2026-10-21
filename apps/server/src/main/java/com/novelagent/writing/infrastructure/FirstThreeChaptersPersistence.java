@@ -171,7 +171,7 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
                 WritingMaterialSelection.forOpening(bible.getContent()), StoryBibleContent.class));
         return new FirstThreeChaptersSource(projectId, project.getCurrentOutlineVersionId(), outline == null ? 0 : outline.getRowVersion(),
                 bible == null ? null : bible.getId(), bible == null ? 0 : bible.getRowVersion(), project.getCurrentCanonVersion(),
-                strategy, openingOutline, openingMaterials, style, profile, List.copyOf(chapters), List.copyOf(reasons), hash(json(dependencies)));
+                strategy, openingOutline, openingMaterials, style, profile, List.copyOf(chapters), List.copyOf(reasons), Sha256.ofUtf8(json(dependencies)));
     }
 
     /**
@@ -216,8 +216,5 @@ public class FirstThreeChaptersPersistence implements FirstThreeChaptersStore {
 
     private String json(Object value) {
         return Json.call(() -> mapper.writer().with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS).writeValueAsString(value), "无法序列化通读依据");
-    }
-    private static String hash(String value) {
-        return Sha256.ofUtf8(value);
     }
 }

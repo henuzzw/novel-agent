@@ -1,5 +1,6 @@
 package com.novelagent.platform.support;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.function.BiFunction;
 
@@ -18,6 +19,11 @@ public final class Json {
 
     public static <T> T call(Call<T> call, String message) {
         return call(call, message, IllegalStateException::new);
+    }
+
+    /** SHA-256 of the value's JSON form; equal values with equal serialization share a fingerprint. */
+    public static String sha256(ObjectMapper mapper, Object value, String message) {
+        return Sha256.ofUtf8(call(() -> mapper.writeValueAsString(value), message));
     }
 
     public static <T> T call(Call<T> call, String message,

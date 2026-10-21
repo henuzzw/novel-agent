@@ -1,5 +1,7 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static java.util.Objects.requireNonNullElse;
 import static com.alibaba.cloud.ai.graph.StateGraph.END;
 import static com.alibaba.cloud.ai.graph.StateGraph.START;
 import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
@@ -88,7 +90,7 @@ public class WritingGenerationWorkflow {
     public WritingStylePreviewContent reviseStylePreview(UUID projectId, StoryBibleContent bible, OutlineArc arc,
             ChapterPlan chapter, StylePreviewSource source, ModelProvider provider, String feedback) {
         var result = invoke(stylePreviewRevisionGraph, Map.of(PROJECT_ID, projectId.toString(), BIBLE, write(bible),
-                ARC, write(arc), CHAPTER, write(chapter), PREVIEW_SOURCE, write(source), PROVIDER, provider.name(), INSTRUCTION, value(feedback)));
+                ARC, write(arc), CHAPTER, write(chapter), PREVIEW_SOURCE, write(source), PROVIDER, provider.name(), INSTRUCTION, requireNonNullElse(feedback, "")));
         return read(result, GENERATED, WritingStylePreviewContent.class);
     }
 
@@ -128,7 +130,7 @@ public class WritingGenerationWorkflow {
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), ARC, write(arc), CHAPTER, write(chapter),
                 CONTRACT, write(contract), MEMORY, write(memory), PROVIDER, provider.name(),
                 PREVIOUS_MANUSCRIPT, previousManuscript == null ? "" : write(previousManuscript),
-                INSTRUCTION, value(instruction)));
+                INSTRUCTION, requireNonNullElse(instruction, "")));
         return read(result, GENERATED, GeneratedManuscript.class);
     }
 
@@ -139,7 +141,7 @@ public class WritingGenerationWorkflow {
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), CONTRACT, write(contract),
                 MANUSCRIPT, write(manuscript), MEMORY, write(memory), ENTITY_CATALOG, write(entityCatalog),
                 PROVIDER, provider.name(),
-                INSTRUCTION, value(instruction)));
+                INSTRUCTION, requireNonNullElse(instruction, "")));
         return read(result, GENERATED, ChapterReviewContent.class);
     }
 
@@ -149,7 +151,7 @@ public class WritingGenerationWorkflow {
         OverAllState result = invoke(qualityReviewGraph, Map.of(
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), CONTRACT, write(contract),
                 MANUSCRIPT, write(manuscript), MEMORY, write(memory), PROVIDER, provider.name(),
-                INSTRUCTION, value(instruction)));
+                INSTRUCTION, requireNonNullElse(instruction, "")));
         return read(result, GENERATED, QualityReviewContent.class);
     }
 
@@ -159,7 +161,7 @@ public class WritingGenerationWorkflow {
         OverAllState result = invoke(stylePreviewGraph, Map.of(
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), ARC, write(arc), CHAPTER, write(chapter),
                 STYLE, write(profile), PROVIDER, provider.name(), TARGET_WORDS, Integer.toString(targetWords),
-                INSTRUCTION, value(instruction)));
+                INSTRUCTION, requireNonNullElse(instruction, "")));
         return read(result, GENERATED, WritingStylePreviewContent.class);
     }
 
@@ -167,7 +169,7 @@ public class WritingGenerationWorkflow {
             ModelProvider provider, String instruction) {
         OverAllState result = invoke(styleRecommendationGraph, Map.of(
                 PROJECT_ID, projectId.toString(), BIBLE, write(bible), PROVIDER, provider.name(),
-                INSTRUCTION, value(instruction)));
+                INSTRUCTION, requireNonNullElse(instruction, "")));
         return read(result, GENERATED, WritingStyleRecommendationContent.class);
     }
 
@@ -331,12 +333,8 @@ public class WritingGenerationWorkflow {
         return value.isBlank() ? null : value;
     }
 
-    private static String value(String value) {
-        return value == null ? "" : value;
-    }
-
     private static void requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
+        if (isBlank(value)) {
             throw new IllegalStateException("模型输出缺少" + field);
         }
     }

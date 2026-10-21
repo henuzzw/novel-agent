@@ -1,5 +1,7 @@
 package com.novelagent.memory.application;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -14,7 +16,7 @@ public final class MemorySearchTerms {
 
     public static List<String> keywords(String query, List<String> explicit) {
         Set<String> terms = new LinkedHashSet<>();
-        explicit.stream().filter(value -> value != null && !value.isBlank() && value.length() <= 100)
+        explicit.stream().filter(value -> hasText(value) && value.length() <= 100)
                 .limit(12).forEach(terms::add);
         var matcher = WORDS.matcher(query == null ? "" : query.substring(0, Math.min(2000, query.length())));
         while (matcher.find() && terms.size() < 32) {

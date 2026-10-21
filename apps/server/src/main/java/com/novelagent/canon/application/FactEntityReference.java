@@ -1,5 +1,8 @@
 package com.novelagent.canon.application;
 
+import com.novelagent.platform.support.Text;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.writing.domain.FactProposal;
 import java.util.Arrays;
 
@@ -14,9 +17,9 @@ public record FactEntityReference(String type, String name, String id) {
                 first(p.sourceEntityName(), p.entityName(), fact.subject()), first(p.sourceEntityId(), p.entityId()));
         if ("KNOWLEDGE_CHANGE".equals(fact.factType())) return new FactEntityReference("CHARACTER",
                 first(p.characterName(), p.entityName(), fact.subject()), first(p.characterId(), p.entityId()));
-        if (present(p.entityName())) return new FactEntityReference(type, p.entityName(), p.entityId());
-        if (present(p.characterName())) return new FactEntityReference(type, p.characterName(), p.characterId());
-        if (present(p.sourceEntityName())) return new FactEntityReference(type, p.sourceEntityName(), p.sourceEntityId());
+        if (hasText(p.entityName())) return new FactEntityReference(type, p.entityName(), p.entityId());
+        if (hasText(p.characterName())) return new FactEntityReference(type, p.characterName(), p.characterId());
+        if (hasText(p.sourceEntityName())) return new FactEntityReference(type, p.sourceEntityName(), p.sourceEntityId());
         return new FactEntityReference(type, fact.subject(), first(p.entityId(), p.characterId(), p.sourceEntityId()));
     }
     public static FactEntityReference target(FactProposal fact) {
@@ -24,6 +27,5 @@ public record FactEntityReference(String type, String name, String id) {
         return new FactEntityReference("CHARACTER", p == null ? fact.object() : first(p.targetEntityName(), fact.object()),
                 p == null ? null : p.targetEntityId());
     }
-    private static String first(String... values) { return Arrays.stream(values).filter(FactEntityReference::present).findFirst().orElse(null); }
-    private static boolean present(String value) { return value != null && !value.isBlank(); }
+    private static String first(String... values) { return Arrays.stream(values).filter(Text::hasText).findFirst().orElse(null); }
 }

@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.Objects;
@@ -74,7 +76,7 @@ public class ChapterContractReviewVersion {
     }
 
     private static ChapterContractReviewContent validate(ChapterContractReviewContent value) {
-        if (value == null || value.summary() == null || value.summary().isBlank() || value.issues() == null) {
+        if (value == null || isBlank(value.summary()) || value.issues() == null) {
             throw new IllegalArgumentException("合同审阅摘要和问题清单不能为空");
         }
         return value;

@@ -1,6 +1,8 @@
 package com.novelagent.writing.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.novelagent.platform.support.Json;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.planning.domain.StoryBibleContent;
@@ -29,7 +31,7 @@ class WritingModelOutputParser {
         GeneratedManuscript generated = read(output, GeneratedManuscript.class);
         return new GeneratedManuscript(generated.content(), generated.changeSummary() == null
                 ? List.of()
-                : generated.changeSummary().stream().filter(value -> value != null && !value.isBlank())
+                : generated.changeSummary().stream().filter(value -> hasText(value))
                         .map(String::trim).toList());
     }
 
@@ -100,10 +102,7 @@ class WritingModelOutputParser {
     }
 
     private <T> T read(String value, Class<T> type) {
-        try {
-            return mapper.readValue(value, type);
-        } catch (JsonProcessingException exception) {
-            throw new ModelProviderException("模型返回内容不符合写作结构约束", exception);
-        }
+        return Json.call(
+                () -> mapper.readValue(value, type), "模型返回内容不符合写作结构约束", ModelProviderException::new);
     }
 }

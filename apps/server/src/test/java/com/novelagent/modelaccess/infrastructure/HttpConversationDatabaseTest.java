@@ -1,5 +1,6 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
 import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -90,7 +91,7 @@ class HttpConversationDatabaseTest {
         var codex = new CodexConversationStore(jdbc, json, new CurrentActorProvider(owner), manager);
         var first = codex.claim(project, "NOVEL_MAIN", "codex-account", false);
         assertThatThrownBy(() -> codex.claim(project, "QUALITY_REVIEW", "codex-account", true)).hasMessageContaining("正在生成");
-        String content = "完整资料，不是摘要"; String id = CodexMaterialDelta.fingerprint(content);
+        String content = "完整资料，不是摘要"; String id = Sha256.ofUtf8(content);
         codex.saveMaterials(first, Map.of(id, content)); codex.bind(first, "persisted-thread");
         assertThat(codex.readMaterial(first, id)).isEqualTo(content);
         codex.complete(first, Set.of(id), 120000);

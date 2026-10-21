@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.planning.domain.StoryBibleContent;
 import java.util.List;
 
@@ -57,7 +59,7 @@ public record WritingStyleRecommendationContent(String summary, List<Recommendat
     }
 
     private static void requireText(String value, int limit, String label) {
-        if (value == null || value.isBlank() || value.length() > limit) {
+        if (isBlank(value) || value.length() > limit) {
             throw new IllegalArgumentException(label + "不能为空且不能超过 " + limit + " 字符");
         }
     }

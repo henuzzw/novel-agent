@@ -1,5 +1,7 @@
 package com.novelagent.agent.tool;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.MemoryBudgetPlan;
@@ -83,7 +85,7 @@ public class AgentToolOrchestrator {
     private static NovelMemoryContext.SemanticMemory mergeMemory(
             NovelMemoryContext.SemanticMemory first,
             NovelMemoryContext.SemanticMemory second) {
-        String content = first.content() == null || first.content().isBlank() ? second.content() : first.content();
+        String content = isBlank(first.content()) ? second.content() : first.content();
         double similarity = Math.min(first.similarity(), second.similarity());
         if (first.similarity() == 1.0 && !first.recentChapter()) {
             similarity = second.similarity();

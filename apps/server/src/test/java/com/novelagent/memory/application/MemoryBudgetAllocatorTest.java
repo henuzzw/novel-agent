@@ -1,5 +1,6 @@
 package com.novelagent.memory.application;
 
+import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.novelagent.agent.application.AgentStage;
@@ -14,11 +15,11 @@ class MemoryBudgetAllocatorTest {
         var second = new NovelMemoryContext.SemanticMemory(2, 4, 0.8, "第二章摘要", "第二章正文");
         var allocator = new MemoryBudgetAllocator();
         var candidates = List.of(first, second);
-        String expected = NovelMemoryContext.fingerprint("\n1:3\n第一章摘要\n第一章正文\n2:4\n第二章摘要\n第二章正文");
+        String expected = Sha256.ofUtf8("\n1:3\n第一章摘要\n第一章正文\n2:4\n第二章摘要\n第二章正文");
         assertThat(allocator.allocate(candidates, List.of(), plan(80), List.of()).boundaryFingerprint()).isEqualTo(expected);
         assertThat(allocator.allocate(candidates, List.of(), plan(5000), List.of()).boundaryFingerprint()).isEqualTo(expected);
         assertThat(allocator.allocate(List.of(), List.of(), plan(80), List.of()).boundaryFingerprint())
-                .isEqualTo(NovelMemoryContext.fingerprint(""));
+                .isEqualTo(Sha256.ofUtf8(""));
     }
 
     @Test

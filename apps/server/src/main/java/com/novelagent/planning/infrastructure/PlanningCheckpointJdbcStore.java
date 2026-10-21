@@ -1,6 +1,5 @@
 package com.novelagent.planning.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
@@ -144,11 +143,8 @@ public class PlanningCheckpointJdbcStore {
      * @return 符合本方法项目、来源及状态条件的结果；无匹配项时为空列表。
      */
     private List<PlanningCheckpoint.Dependency> dependencies(String json) {
-        try {
-            return mapper.readValue(json, new TypeReference<List<PlanningCheckpoint.Dependency>>() { });
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("规划依赖不能解析", exception);
-        }
+        return Json.call(() -> mapper.readValue(json, new TypeReference<List<PlanningCheckpoint.Dependency>>() { }),
+                "规划依赖不能解析");
     }
 
     /**

@@ -1,5 +1,7 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.agent.application.GenerationControlRegistry;
 import com.novelagent.agent.application.GenerationStopConflictException;
 import com.novelagent.agent.application.GenerationStoppedException;
@@ -136,7 +138,7 @@ public class DraftLoopService {
         }
         if (writeFirst) contexts.requireReadyForWriting(projectId, chapter);
         var frozen = contexts.freeze(projectId, chapter, parent.getProvider());
-        if (parent.getInstruction() != null && !parent.getInstruction().isBlank()) {
+        if (hasText(parent.getInstruction())) {
             var basis = frozen.basis();
             frozen =
                     new DraftLoopContext.Source(

@@ -1,5 +1,7 @@
 package com.novelagent.project.application;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.ingest.application.WorkImportService;
 import com.novelagent.project.api.CreateProjectRequest;
 import com.novelagent.project.api.ProjectResponse;
@@ -56,7 +58,7 @@ public class StorySourceProjectService {
             CreativeBoundaries.WorldMode world,
             CreativeBoundaries.AdaptationScope scope) {
         boolean hasFile = file != null && !file.isEmpty();
-        boolean hasText = text != null && !text.isBlank();
+        boolean hasText = hasText(text);
         if (hasFile == hasText) throw new IllegalArgumentException("请选择导入文件或粘贴文字，且只提供一种来源");
         if (name != null && name.strip().length() > 200)
             throw new IllegalArgumentException("项目名称不能超过200字符");

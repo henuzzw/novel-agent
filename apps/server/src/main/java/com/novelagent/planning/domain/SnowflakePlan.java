@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.novelagent.agent.application.ModelOutputAvailability;
 import com.novelagent.planning.application.ModelProvider;
@@ -22,7 +24,7 @@ public record SnowflakePlan(UUID id, UUID projectId, String mode, ModelProvider 
         boolean contaminated = false;
         for (var stage : SnowflakeStep.values()) {
             String text = steps.get(stage.name());
-            if (text == null || text.isBlank()) continue;
+            if (isBlank(text)) continue;
             if (ModelOutputAvailability.unavailable(text)) contaminated = true;
             if (contaminated) invalid.put(stage.name(), "资料未读取或依赖无效底稿，继续时需重新生成");
         }

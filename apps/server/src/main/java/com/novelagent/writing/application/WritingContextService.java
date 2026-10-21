@@ -1,5 +1,6 @@
 package com.novelagent.writing.application;
 
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.PublishedMemoryReadiness;
@@ -234,8 +235,7 @@ public class WritingContextService {
      * @param recalled 按记忆策略召回的历史信息，不是新增正史事实。
      */
     public static String boundaryFingerprint(Context context, NovelMemoryContext recalled) {
-        return NovelMemoryContext.fingerprint(
-                context.boundaryFingerprint() + "\n" + recalled.boundaryFingerprint());
+        return Sha256.ofUtf8(context.boundaryFingerprint() + "\n" + recalled.boundaryFingerprint());
     }
 
     public record ChapterBoundary(OutlineArc arc, ChapterPlan chapter) {}
@@ -325,7 +325,7 @@ public class WritingContextService {
         }
 
         public String boundaryFingerprint() {
-            return NovelMemoryContext.fingerprint(
+            return Sha256.ofUtf8(
                     outline.getProjectId()
                             + "\n"
                             + outline.getId()

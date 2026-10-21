@@ -1,5 +1,7 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,7 +37,7 @@ public class ChatGptHttp {
         this.json = json;
         var builder = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(30))
                 .followRedirects(HttpClient.Redirect.NEVER);
-        if (proxy != null && !proxy.isBlank()) {
+        if (hasText(proxy)) {
             URI uri = URI.create(proxy);
             if (!"http".equals(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null)
                 throw new IllegalArgumentException("ChatGPT 直连代理需要无账号密码的 http://host:port 地址");

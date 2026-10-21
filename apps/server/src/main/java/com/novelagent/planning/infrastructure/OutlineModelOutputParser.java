@@ -1,5 +1,8 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.GeneratedOutline;
 import com.novelagent.planning.application.ModelProvider;
@@ -16,7 +19,7 @@ public class OutlineModelOutputParser {
         try {
             ModelOutput output = mapper.readValue(strip(raw), ModelOutput.class);
             OutlineContent content = output.content();
-            if (content.title() == null || content.title().isBlank() || content.arcs() == null
+            if (isBlank(content.title()) || content.arcs() == null
                     || content.arcs().isEmpty() || content.chapterCount() == 0) {
                 throw new IllegalArgumentException("大纲缺少必要内容");
             }
@@ -33,7 +36,7 @@ public class OutlineModelOutputParser {
 
     private static List<String> safe(List<String> values) {
         return values == null ? List.of() : values.stream()
-                .filter(value -> value != null && !value.isBlank()).map(String::trim).toList();
+                .filter(value -> hasText(value)).map(String::trim).toList();
     }
 
     private record ModelOutput(OutlineContent content, List<String> changeSummary) {

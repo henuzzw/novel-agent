@@ -1,5 +1,6 @@
 package com.novelagent.planning.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.planning.application.SnowflakePlanningService;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
 import com.novelagent.planning.domain.SnowflakePlan;
@@ -44,8 +45,6 @@ public class SnowflakePlanningController {
      */
     @GetMapping("/latest")
     public ResponseEntity<SnowflakePlan> latest(@PathVariable UUID projectId) {
-        return service.latest(projectId)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.okOrNoContent(service.latest(projectId));
     }
 }

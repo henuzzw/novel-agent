@@ -1,5 +1,8 @@
 package com.novelagent.canon.infrastructure;
 
+import static com.novelagent.platform.support.Text.hasText;
+import static com.novelagent.platform.support.Text.trimToNull;
+
 import com.novelagent.canon.api.CharacterProfileResponse;
 import com.novelagent.canon.api.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterProfileStore;
@@ -84,12 +87,12 @@ public class JdbcCharacterProfileStore implements CharacterProfileStore {
     @Override
     public int update(UUID projectId, UUID characterId, long expectedVersion, UpdateCharacterProfileRequest value) {
         return jdbc.update(UPDATE_SQL,
-                optional(value.gender()), optional(value.ageDescription()), optional(value.identity()),
-                optional(value.appearance()), optional(value.background()), optional(value.externalPersonality()),
-                optional(value.internalPersonality()), optional(value.coreDesire()), optional(value.fear()),
-                optional(value.flaw()), optional(value.values()), optional(value.speechStyle()),
-                optional(value.behaviorHabits()), optional(value.secret()), optional(value.characterArc()),
-                optional(value.behaviorBoundaries()), optional(value.notes()), characterId, projectId, expectedVersion);
+                trimToNull(value.gender()), trimToNull(value.ageDescription()), trimToNull(value.identity()),
+                trimToNull(value.appearance()), trimToNull(value.background()), trimToNull(value.externalPersonality()),
+                trimToNull(value.internalPersonality()), trimToNull(value.coreDesire()), trimToNull(value.fear()),
+                trimToNull(value.flaw()), trimToNull(value.values()), trimToNull(value.speechStyle()),
+                trimToNull(value.behaviorHabits()), trimToNull(value.secret()), trimToNull(value.characterArc()),
+                trimToNull(value.behaviorBoundaries()), trimToNull(value.notes()), characterId, projectId, expectedVersion);
     }
 
     @Override
@@ -125,7 +128,7 @@ public class JdbcCharacterProfileStore implements CharacterProfileStore {
                 forms.addAll(Arrays.asList(values));
             }
             return new CharacterReference(rs.getObject("id", UUID.class), rs.getString("role_key"),
-                    forms.stream().filter(value -> value != null && !value.isBlank()).map(String::trim).distinct().toList());
+                    forms.stream().filter(value -> hasText(value)).map(String::trim).distinct().toList());
         }, projectId);
     }
 
@@ -138,9 +141,5 @@ public class JdbcCharacterProfileStore implements CharacterProfileStore {
                 rs.getString("values_text"), rs.getString("speech_style"), rs.getString("behavior_habits"),
                 rs.getString("secret_text"), rs.getString("character_arc"),
                 rs.getString("behavior_boundaries"), rs.getString("notes"), rs.getLong("row_version"));
-    }
-
-    private static String optional(String value) {
-        return value != null && !value.isBlank() ? value.trim() : null;
     }
 }

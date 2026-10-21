@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.HashSet;
 import java.util.List;
 
@@ -11,12 +13,12 @@ public record FirstThreeChaptersContent(String summary, List<Assessment> assessm
     public record Issue(String id, Dimension dimension, String description, String suggestion, List<Evidence> evidence) { }
 
     public void validate(FirstThreeChaptersSource source, boolean local) {
-        if (summary == null || summary.isBlank() || assessments == null || issues == null || issues.size() > 24)
+        if (isBlank(summary) || assessments == null || issues == null || issues.size() > 24)
             throw new IllegalArgumentException("三章报告结构不完整");
         var dimensions = new HashSet<Dimension>();
         for (var item : assessments) {
             if (item == null || item.dimension() == null || !dimensions.add(item.dimension()) || item.status() == null
-                    || item.observation() == null || item.observation().isBlank() || item.evidence() == null)
+                    || isBlank(item.observation()) || item.evidence() == null)
                 throw new IllegalArgumentException("三章报告维度无效");
             if ((local && item.status() != Status.NOT_ASSESSED)
                     || (item.status() == Status.OBSERVATION && item.evidence().isEmpty()))
@@ -27,9 +29,9 @@ public record FirstThreeChaptersContent(String summary, List<Assessment> assessm
         var ids = new HashSet<String>();
         if (local && !issues.isEmpty()) throw new IllegalArgumentException("本地规则不作文学判断");
         for (var issue : issues) {
-            if (issue == null || issue.id() == null || issue.id().isBlank() || !ids.add(issue.id())
-                    || issue.dimension() == null || issue.description() == null || issue.description().isBlank()
-                    || issue.suggestion() == null || issue.suggestion().isBlank()
+            if (issue == null || isBlank(issue.id()) || !ids.add(issue.id())
+                    || issue.dimension() == null || isBlank(issue.description())
+                    || isBlank(issue.suggestion())
                     || issue.evidence() == null || issue.evidence().isEmpty())
                 throw new IllegalArgumentException("三章问题必须附正文证据和建议");
             evidence(issue.evidence(), source);
@@ -37,7 +39,7 @@ public record FirstThreeChaptersContent(String summary, List<Assessment> assessm
     }
     private static void evidence(List<Evidence> values, FirstThreeChaptersSource source) {
         for (var value : values) {
-            if (value == null || value.quote() == null || value.quote().isBlank() || value.quote().length() > 2000
+            if (value == null || isBlank(value.quote()) || value.quote().length() > 2000
                     || source.chapters().stream().noneMatch(c -> c.chapterNumber() == value.chapterNumber()
                     && c.body() != null && c.body().contains(value.quote())))
                 throw new IllegalArgumentException("证据必须是对应章节正文中的连续原文");

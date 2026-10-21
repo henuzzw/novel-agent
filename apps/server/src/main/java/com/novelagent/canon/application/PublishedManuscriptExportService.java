@@ -1,6 +1,6 @@
 package com.novelagent.canon.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.novelagent.platform.support.Json;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.infrastructure.PublishedManuscriptExportRepository;
 import com.novelagent.planning.domain.OutlineContent;
@@ -94,11 +94,8 @@ public class PublishedManuscriptExportService {
     }
 
     private ManuscriptContent readContent(String value) {
-        try {
-            return mapper.readValue(value, ManuscriptContent.class);
-        } catch (JsonProcessingException failure) {
-            throw new IllegalStateException("已发布正文存储格式异常，无法导出");
-        }
+        return Json.call(
+                () -> mapper.readValue(value, ManuscriptContent.class), "已发布正文存储格式异常，无法导出");
     }
 
     private static String heading(String value) {

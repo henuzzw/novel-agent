@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.requireText;
+
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,7 +43,7 @@ public class ManuscriptVersion {
         this.id = id; this.projectId = projectId; this.sourceContractVersionId = contractId;
         this.baseManuscriptVersionId = baseManuscriptVersionId;
         this.chapterNumber = chapterNumber; this.versionNumber = versionNumber; this.schemaVersion = "manuscript/1";
-        this.status = ManuscriptStatus.DRAFT; this.generatorType = required(generatorType, "generatorType");
+        this.status = ManuscriptStatus.DRAFT; this.generatorType = requireText(generatorType, "正文缺少字段：generatorType");
         this.authorInstruction = instruction; this.content = validate(content);
         this.changeSummary = changeSummary == null ? new ArrayList<>() : new ArrayList<>(changeSummary);
     }
@@ -84,11 +86,7 @@ public class ManuscriptVersion {
     }
     private static ManuscriptContent validate(ManuscriptContent value) {
         if (value == null) throw new IllegalArgumentException("正文不能为空");
-        required(value.title(), "title"); required(value.body(), "body"); required(value.summary(), "summary");
-        return value;
-    }
-    private static String required(String value, String field) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("正文缺少字段：" + field);
+        requireText(value.title(), "正文缺少字段：title"); requireText(value.body(), "正文缺少字段：body"); requireText(value.summary(), "正文缺少字段：summary");
         return value;
     }
     public UUID getId() { return id; } public UUID getProjectId() { return projectId; }

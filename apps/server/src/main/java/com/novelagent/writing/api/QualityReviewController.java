@@ -1,5 +1,6 @@
 package com.novelagent.writing.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.application.QualityReviewService;
 import jakarta.validation.Valid;
@@ -37,9 +38,7 @@ public class QualityReviewController {
     @GetMapping("/latest")
     public ResponseEntity<QualityReviewResponse> latest(
             @PathVariable UUID projectId, @PathVariable int chapterNumber) {
-        return service.latest(projectId, chapterNumber)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.noContent().build());
+        return ApiResponses.okOrNoContent(service.latest(projectId, chapterNumber));
     }
 
     /**

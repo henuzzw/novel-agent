@@ -1,5 +1,8 @@
 package com.novelagent.planning.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.agent.application.GenerationStoppedException;
@@ -89,7 +92,7 @@ public class SnowflakePlanningService {
             if (step == SnowflakeStep.SCENE_EXPANSION
                     && !frozen.path("expandScenes").asBoolean(false)) continue;
             String text = completed.get(step.name());
-            if (text == null || text.isBlank()) missing = true;
+            if (isBlank(text)) missing = true;
             else if (missing) throw new IllegalArgumentException("雪花步骤记录不连续，请重新生成");
         }
         if (plan.status().equals("SUCCEEDED")) {
@@ -116,7 +119,7 @@ public class SnowflakePlanningService {
                         && !frozen.path("expandScenes").asBoolean(false)) continue;
                 String stage = step.name();
                 String saved = completed.get(stage);
-                if (saved != null && !saved.isBlank()) {
+                if (hasText(saved)) {
                     prior += "\n\n【" + stage + "】\n" + saved;
                     continue;
                 }

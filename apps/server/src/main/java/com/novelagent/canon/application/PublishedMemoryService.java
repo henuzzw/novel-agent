@@ -1,5 +1,7 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -7,7 +9,6 @@ import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
 import com.novelagent.writing.domain.ManuscriptContent;
@@ -311,7 +312,7 @@ public class PublishedMemoryService {
                 tx -> {
                     requireCurrent(projectId, chapter, commitId);
                     var view = lockedView(commitId);
-                    check(view, version);
+                    checkVersion(version, view.version());
                     if (!List.of("FAILED", "SKIPPED", "NEEDS_CONFIRMATION").contains(view.status()))
                         throw new IllegalStateException("只有失败、待处理或未执行的记忆整理可以启动");
                     jdbc.update(
@@ -334,7 +335,7 @@ public class PublishedMemoryService {
                 tx -> {
                     var commit = requireCurrent(projectId, chapter, commitId);
                     var view = lockedView(commitId);
-                    check(view, request.version());
+                    checkVersion(request.version(), view.version());
                     if (!"NEEDS_CONFIRMATION".equals(view.status()))
                         throw new IllegalStateException("没有待核对的记忆条目");
                     String body =
@@ -395,7 +396,7 @@ public class PublishedMemoryService {
                 tx -> {
                     var commit = requireCurrent(projectId, chapter, commitId);
                     var view = lockedView(commitId);
-                    check(view, request.version());
+                    checkVersion(request.version(), view.version());
                     if (List.of("PENDING", "RUNNING", "SUPERSEDED").contains(view.status()))
                         throw new IllegalStateException("记忆正在整理或来源失效，暂不能修改");
                     String body =
@@ -532,11 +533,6 @@ public class PublishedMemoryService {
                                 rs.getString(3),
                                 rs.getLong(4)),
                 id);
-    }
-
-    private void check(View view, long version) {
-        if (version != view.version())
-            throw new ResourceVersionConflictException(version, view.version());
     }
 
     private void finish(UUID id, String state, List<FactProposal> facts) {

@@ -1,8 +1,10 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 public record ManuscriptLocalEditSelection(String text, int offset, int occurrence) {
     public static ManuscriptLocalEditSelection resolve(String body, String text, Integer offset, Integer occurrence) {
-        if (body == null || text == null || text.isBlank() || text.length() > 12000
+        if (body == null || isBlank(text) || text.length() > 12000
                 || (offset == null && occurrence == null) || (offset != null && offset < 0)
                 || (occurrence != null && occurrence < 1)) {
             throw new IllegalArgumentException("请选择精确原文并指定位置或第几处匹配");

@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.requireText;
+
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.UUID;
@@ -32,7 +34,7 @@ public class ChapterContractVersion {
         this.id = id; this.projectId = projectId; this.sourceOutlineVersionId = outlineId;
         this.baseContractVersionId = baseContractVersionId;
         this.chapterNumber = chapterNumber; this.versionNumber = versionNumber; this.schemaVersion = "chapter-contract/1";
-        this.status = ChapterContractStatus.DRAFT; this.generatorType = required(generatorType, "generatorType");
+        this.status = ChapterContractStatus.DRAFT; this.generatorType = requireText(generatorType, "章节合同缺少字段：generatorType");
         this.authorInstruction = instruction; this.content = validate(content);
     }
     public static ChapterContractVersion create(UUID id, UUID projectId, UUID outlineId, int chapterNumber,
@@ -55,14 +57,10 @@ public class ChapterContractVersion {
     public void approve() { status = ChapterContractStatus.APPROVED; }
     private static ChapterContractContent validate(ChapterContractContent value) {
         if (value == null) throw new IllegalArgumentException("章节合同不能为空");
-        required(value.chapterTitle(), "chapterTitle"); required(value.pov(), "pov");
-        required(value.objective(), "objective"); required(value.hook(), "hook");
+        requireText(value.chapterTitle(), "章节合同缺少字段：chapterTitle"); requireText(value.pov(), "章节合同缺少字段：pov");
+        requireText(value.objective(), "章节合同缺少字段：objective"); requireText(value.hook(), "章节合同缺少字段：hook");
         if (value.suggestedMinWords() <= 0 || value.suggestedMaxWords() <= value.suggestedMinWords())
             throw new IllegalArgumentException("章节建议字数区间无效");
-        return value;
-    }
-    private static String required(String value, String field) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("章节合同缺少字段：" + field);
         return value;
     }
     public UUID getId() { return id; } public UUID getProjectId() { return projectId; }

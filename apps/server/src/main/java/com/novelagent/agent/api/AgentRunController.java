@@ -1,5 +1,6 @@
 package com.novelagent.agent.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.agent.application.AgentRunQueryService;
 import java.util.List;
 import java.util.UUID;
@@ -62,9 +63,7 @@ public class AgentRunController {
     @GetMapping("/{runId}/prompt")
     public ResponseEntity<AgentRunPromptResponse> prompt(
             @PathVariable UUID projectId, @PathVariable UUID runId) {
-        return service.prompt(projectId, runId)
-                .map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ApiResponses.noStoreOrNotFound(service.prompt(projectId, runId));
     }
 
     /**
@@ -76,8 +75,6 @@ public class AgentRunController {
     @GetMapping("/{runId}/request-snapshot")
     public ResponseEntity<AgentRunResponse.RequestSnapshotResponse> requestSnapshot(
             @PathVariable UUID projectId, @PathVariable UUID runId) {
-        return service.requestSnapshot(projectId, runId)
-                .map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ApiResponses.noStoreOrNotFound(service.requestSnapshot(projectId, runId));
     }
 }

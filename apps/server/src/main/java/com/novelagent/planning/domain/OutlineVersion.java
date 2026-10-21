@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.requireText;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -49,7 +51,7 @@ public class OutlineVersion {
         this.generationNumber = generationNumber;
         this.schemaVersion = "outline/2";
         this.status = OutlineStatus.DRAFT;
-        this.generatorType = required(generatorType, "generatorType");
+        this.generatorType = requireText(generatorType, "大纲缺少字段：generatorType");
         this.authorInstruction = authorInstruction;
         this.sourceBibleVersionId = sourceBibleVersionId;
         this.baseOutlineVersionId = baseOutlineVersionId;
@@ -88,8 +90,8 @@ public class OutlineVersion {
 
     private static OutlineContent validate(OutlineContent value, OutlineWordBudget budget) {
         if (value == null) throw new IllegalArgumentException("大纲内容不能为空");
-        required(value.title(), "title");
-        required(value.premise(), "premise");
+        requireText(value.title(), "大纲缺少字段：title");
+        requireText(value.premise(), "大纲缺少字段：premise");
         if (value.arcs() == null || value.arcs().isEmpty()) throw new IllegalArgumentException("大纲至少需要一个卷或幕");
         if (value.chapterCount() == 0) throw new IllegalArgumentException("大纲至少需要一个章节计划");
         if (value.suggestedMinWords() < budget.acceptableMinWords()
@@ -97,11 +99,6 @@ public class OutlineVersion {
                 || value.suggestedMinWords() >= value.suggestedMaxWords()) {
             throw new IllegalArgumentException("大纲建议总字数必须位于作品可接受区间内");
         }
-        return value;
-    }
-
-    private static String required(String value, String field) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("大纲缺少字段：" + field);
         return value;
     }
 

@@ -1,5 +1,7 @@
 package com.novelagent.memory.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.memory.application.TextEmbeddingService;
 import java.util.Map;
@@ -60,7 +62,7 @@ public class OpenAiCompatibleEmbeddingService implements TextEmbeddingService {
      */
     @Override
     public float[] embed(String text) {
-        if (apiKey == null || apiKey.isBlank()) {
+        if (isBlank(apiKey)) {
             throw new IllegalStateException("已启用正式 Embedding，但未配置 EMBEDDING_API_KEY");
         }
         JsonNode response;

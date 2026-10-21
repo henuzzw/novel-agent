@@ -1,5 +1,7 @@
 package com.novelagent.memory.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,7 +14,7 @@ public final class MemoryTextChunks {
     public record Chunk(int ordinal, int start, int end, String content) { }
 
     public static List<Chunk> split(String text) {
-        if (text == null || text.isBlank()) return List.of();
+        if (isBlank(text)) return List.of();
         List<Chunk> result = new ArrayList<>();
         int start = 0;
         while (start < text.length()) {

@@ -1,5 +1,9 @@
 package com.novelagent.planning.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -9,7 +13,6 @@ import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
 import com.novelagent.agent.application.AgentRunRecorder.Usage;
 import com.novelagent.agent.application.AgentRunRecorder.UsageCarrier;
-import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
 import com.novelagent.modelaccess.infrastructure.CodexMaterialReadTool;
 import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore;
 import com.novelagent.planning.application.ModelProvider;
@@ -153,7 +156,7 @@ public class CodexAppServerClient {
             JsonNode result = request("model/list", params);
             for (JsonNode item : result.path("data")) models.add(item);
             cursor = result.path("nextCursor").asText(null);
-        } while (cursor != null && !cursor.isBlank());
+        } while (hasText(cursor));
         return models;
     }
 
@@ -263,7 +266,7 @@ public class CodexAppServerClient {
                     || !file.toRealPath().startsWith(directory.toRealPath()))
                 throw new IOException("Unsafe material path");
             String text = Files.readString(file, StandardCharsets.UTF_8);
-            if (!id.equals(CodexMaterialDelta.fingerprint(text)))
+            if (!id.equals(Sha256.ofUtf8(text)))
                 throw new IOException("Material identity changed");
             return text;
         } catch (IOException error) {
@@ -287,7 +290,7 @@ public class CodexAppServerClient {
             for (var entry : materials.entrySet()) {
                 String id = entry.getKey();
                 if (!id.matches("[a-f0-9]{64}")
-                        || !id.equals(CodexMaterialDelta.fingerprint(entry.getValue())))
+                        || !id.equals(Sha256.ofUtf8(entry.getValue())))
                     throw new IOException("Invalid material identity");
                 Path target = directory.resolve(id + ".txt");
                 if (Files.isSymbolicLink(target)) throw new IOException("Symbolic material file rejected");
@@ -361,7 +364,7 @@ public class CodexAppServerClient {
                 activeTurn.earlyEvents.clear();
             }
             String output = awaitTurnCompletion(activeTurn);
-            if (output == null || output.isBlank()) {
+            if (isBlank(output)) {
                 throw new CodexAppServerException("Codex 已结束生成，但没有返回正文内容");
             }
             log.info("Codex turn completed projectId={} threadId={} turnId={} durationMs={}",
@@ -542,7 +545,7 @@ public class CodexAppServerClient {
 
     static String resolveCommand(String configuredCommand, String localAppData) {
         if (!"codex.exe".equalsIgnoreCase(configuredCommand)
-                || localAppData == null || localAppData.isBlank()) {
+                || isBlank(localAppData)) {
             return configuredCommand;
         }
         Path bin = Path.of(localAppData, "OpenAI", "Codex", "bin");

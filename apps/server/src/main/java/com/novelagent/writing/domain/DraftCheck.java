@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -27,7 +29,7 @@ public record DraftCheck(String summary, List<Issue> issues) {
             String existingBasis, String gap, String candidateDesign, String impact, String suggestion) {
         public Issue {
             if (evidence == null || evidence.isEmpty() || evidence.size() > MAX_EVIDENCE_QUOTES
-                    || evidence.stream().anyMatch(e -> e == null || e.quote() == null || e.quote().isBlank())) {
+                    || evidence.stream().anyMatch(e -> e == null || isBlank(e.quote()))) {
                 throw new IllegalArgumentException("检查证据缺少原文引文或超过" + MAX_EVIDENCE_QUOTES + "段");
             }
             evidence = List.copyOf(evidence);
@@ -41,14 +43,14 @@ public record DraftCheck(String summary, List<Issue> issues) {
     }
 
     public DraftCheck {
-        if (summary == null || summary.isBlank() || issues == null || issues.size() > 20) {
+        if (isBlank(summary) || issues == null || issues.size() > 20) {
             throw new IllegalArgumentException("检查报告缺少摘要或问题清单（最多20条）");
         }
         var ids = new HashSet<String>();
         for (var issue : issues) {
-            if (issue == null || issue.id() == null || issue.id().isBlank() || !ids.add(issue.id())
-                    || issue.category() == null || issue.description() == null || issue.description().isBlank()
-                    || issue.suggestion() == null || issue.suggestion().isBlank()
+            if (issue == null || isBlank(issue.id()) || !ids.add(issue.id())
+                    || issue.category() == null || isBlank(issue.description())
+                    || isBlank(issue.suggestion())
                     || issue.existingBasis() == null || issue.gap() == null || issue.candidateDesign() == null || issue.impact() == null) {
                 throw new IllegalArgumentException("检查问题缺少编号、证据、依据或补丁说明");
             }

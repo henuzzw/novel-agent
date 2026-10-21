@@ -1,5 +1,7 @@
 package com.novelagent.planning.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.CharacterBlueprint;
@@ -290,7 +292,7 @@ public class PlanningMaterialSyncService {
 
     private void relationship(
             UUID projectId, UUID bibleId, UUID characterId, String key, String text) {
-        if (text == null || text.isBlank()) return;
+        if (isBlank(text)) return;
         jdbc.update(
                 """
                 INSERT INTO planning_relationship(id, project_id, source_bible_id, source_key, character_id, description)

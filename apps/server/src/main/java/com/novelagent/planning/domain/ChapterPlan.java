@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Objects;
@@ -8,7 +10,7 @@ import java.util.Objects;
 public record ChapterPlan(int number, String title, String content, ChapterPlanStatus status,
         boolean contentNeedsUpdate) {
     public ChapterPlan {
-        if (number < 1 || title == null || title.isBlank() || content == null || content.isBlank() || status == null)
+        if (number < 1 || isBlank(title) || isBlank(content) || status == null)
             throw new IllegalArgumentException("章节编号、标题、规划文字块和状态不能为空");
     }
 
@@ -49,7 +51,7 @@ public record ChapterPlan(int number, String title, String content, ChapterPlanS
         this(number, title, "视角：" + pov + "\n本章目标：" + objective + "\n核心事件：" + coreEvent
                 + "\n必要揭示：" + reveal + "\n章末期待：" + endingHook
                 + "\n字数要求：" + minWords + "～" + maxWords + "字"
-                + (scenes == null || scenes.isBlank() ? "" : "\n场景清单与关键场景展开：\n" + scenes), status, needsUpdate);
+                + (isBlank(scenes) ? "" : "\n场景清单与关键场景展开：\n" + scenes), status, needsUpdate);
     }
 
     public ChapterPlan(int number, String title, String pov, String objective, String coreEvent,

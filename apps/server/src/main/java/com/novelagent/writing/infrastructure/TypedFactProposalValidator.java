@@ -1,5 +1,7 @@
 package com.novelagent.writing.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.planning.application.ModelProviderException;
 import com.novelagent.writing.domain.FactProposal;
 import com.novelagent.writing.domain.TypedFactPayload;
@@ -22,7 +24,7 @@ final class TypedFactProposalValidator {
     }
 
     static void validate(FactProposal fact) {
-        if (fact == null || blank(fact.id()) || blank(fact.evidence())) {
+        if (fact == null || isBlank(fact.id()) || isBlank(fact.evidence())) {
             fail("候选事实缺少编号或正文证据");
         }
         if (fact.confidence() == null || fact.confidence() < 0 || fact.confidence() > 1) {
@@ -76,23 +78,19 @@ final class TypedFactProposalValidator {
     }
 
     private static void required(String value, String label) {
-        if (blank(value)) fail(label + "不能为空");
+        if (isBlank(value)) fail(label + "不能为空");
     }
 
     private static void member(String value, Set<String> values, String label) {
         if (value == null || !values.contains(value)) fail(label + "不在允许范围内");
     }
 
-    private static boolean blank(String value) {
-        return value == null || value.isBlank();
-    }
-
     private static String first(String preferred, String fallback) {
-        return blank(preferred) ? fallback : preferred;
+        return isBlank(preferred) ? fallback : preferred;
     }
 
     private static void uuid(String value, String label) {
-        if (blank(value)) return;
+        if (isBlank(value)) return;
         try {
             UUID.fromString(value);
         } catch (IllegalArgumentException exception) {

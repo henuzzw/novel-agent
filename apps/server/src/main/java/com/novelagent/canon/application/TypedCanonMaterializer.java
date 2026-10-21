@@ -1,5 +1,7 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.planning.application.PlanningMaterialSyncService;
 import com.novelagent.writing.domain.FactProposal;
 import java.util.LinkedHashMap;
@@ -70,6 +72,6 @@ public class TypedCanonMaterializer {
     }
 
     private String normalizedType(String value) {
-        return (value == null || value.isBlank() ? "未命名" : value.trim()).toUpperCase(Locale.ROOT);
+        return (isBlank(value) ? "未命名" : value.trim()).toUpperCase(Locale.ROOT);
     }
 }

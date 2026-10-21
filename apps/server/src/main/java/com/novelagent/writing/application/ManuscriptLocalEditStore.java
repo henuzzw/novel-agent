@@ -1,9 +1,11 @@
 package com.novelagent.writing.application;
 
+import com.novelagent.platform.support.Sha256;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
-import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.writing.api.ManuscriptLocalEditRequest;
@@ -77,7 +79,7 @@ public class ManuscriptLocalEditStore {
         ManuscriptVersion source = manuscripts.findByIdAndProjectIdAndChapterNumber(sourceId, projectId, chapter)
                 .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", sourceId));
         if (lock) entities.refresh(source, LockModeType.PESSIMISTIC_WRITE);
-        WritingChecks.check(source.getRowVersion(), expected);
+        checkVersion(expected, source.getRowVersion());
         WritingContextService.Context basis;
         try {
             basis = contexts.context(projectId, chapter);
@@ -102,7 +104,7 @@ public class ManuscriptLocalEditStore {
                 + "\n写作风格：" + styles.promptContext(projectId)
                 + "\n创作策略：" + basis.creativeStrategy()
                 + "\n正史水位：" + project.getCurrentCanonVersion();
-        String fingerprint = NovelMemoryContext.fingerprint(context + "\n" + mapper.valueToTree(rendered)
+        String fingerprint = Sha256.ofUtf8(context + "\n" + mapper.valueToTree(rendered)
                 + "\n" + mapper.valueToTree(source.getContent()) + "\n" + project.getRowVersion()
                 + "\n" + basis.boundaryFingerprint() + "\n" + mapper.valueToTree(basis.outline().getContent())
                 + "\n" + writingBasis);

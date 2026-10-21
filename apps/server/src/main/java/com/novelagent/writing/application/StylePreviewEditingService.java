@@ -1,5 +1,7 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.trimToNull;
+
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.writing.api.CheckStylePreviewRequest;
 import com.novelagent.writing.api.ReviseStylePreviewRequest;
@@ -42,7 +44,7 @@ public class StylePreviewEditingService {
                         input.profile(),
                         input.provider().name(),
                         input.effectiveTargetWords(),
-                        WritingChecks.normalize(input.instruction()),
+                        trimToNull(input.instruction()),
                         request.content());
         var snapshot = store.snapshot(projectId, source);
         var context = snapshot.context();
@@ -108,7 +110,7 @@ public class StylePreviewEditingService {
                     .append(issue.suggestion())
                     .append('\n');
         }
-        feedback.append("作者补充要求：").append(WritingChecks.normalize(request.instruction()));
+        feedback.append("作者补充要求：").append(trimToNull(request.instruction()));
         var snapshot = store.snapshot(projectId, report.getSource());
         store.claim(projectId, id, snapshot.hash());
         var context = snapshot.context();

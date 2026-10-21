@@ -1,8 +1,10 @@
 package com.novelagent.planning.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.novelagent.platform.support.Json;
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
@@ -12,7 +14,6 @@ import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.planning.infrastructure.PlanningCheckpointJdbcStore;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.NovelProject;
 import jakarta.persistence.EntityManager;
@@ -181,7 +182,7 @@ public class PlanningCheckpointService {
     public Claim claim(UUID projectId, UUID id, long expectedVersion) {
         NovelProject project = ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
         PlanningCheckpoint checkpoint = checkpoint(projectId, id, true);
-        requireVersion(checkpoint, expectedVersion);
+        checkVersion(expectedVersion, checkpoint.version());
         if (checkpoint.status() != PlanningCheckpoint.Status.PENDING)
             throw conflict("规划分块尚未等待执行，不能重复认领");
         StoryBibleVersion bible = requireSource(project, checkpoint);
@@ -235,7 +236,7 @@ public class PlanningCheckpointService {
         ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
         PlanningCheckpoint checkpoint = checkpoint(projectId, id, true);
         requireRunning(checkpoint, attempt);
-        if (reason == null || reason.isBlank() || reason.length() > 2000)
+        if (isBlank(reason) || reason.length() > 2000)
             throw new IllegalArgumentException("失败原因不能为空或过长");
         change(checkpoint, PlanningCheckpoint.Status.FAILED, attempt, null, reason.strip());
         return checkpoint(projectId, id, false);
@@ -253,7 +254,7 @@ public class PlanningCheckpointService {
         ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
         PlanningCheckpoint checkpoint = checkpoint(projectId, id, true);
         if (checkpoint.status() == PlanningCheckpoint.Status.CANCELLED) return checkpoint;
-        requireVersion(checkpoint, expectedVersion);
+        checkVersion(expectedVersion, checkpoint.version());
         if (checkpoint.status() == PlanningCheckpoint.Status.SUCCEEDED)
             throw conflict("已完成的规划分块不能取消");
         change(
@@ -276,7 +277,7 @@ public class PlanningCheckpointService {
     public PlanningCheckpoint retry(UUID projectId, UUID id, long expectedVersion) {
         NovelProject project = ownedLocked(projectId, LockModeType.PESSIMISTIC_READ);
         PlanningCheckpoint checkpoint = checkpoint(projectId, id, true);
-        requireVersion(checkpoint, expectedVersion);
+        checkVersion(expectedVersion, checkpoint.version());
         if (checkpoint.status() != PlanningCheckpoint.Status.FAILED
                 && checkpoint.status() != PlanningCheckpoint.Status.CANCELLED) {
             throw conflict("只有失败或取消的规划分块可显式重试；运行中断请先取消");
@@ -383,19 +384,14 @@ public class PlanningCheckpointService {
                         command.chapterFrom(),
                         command.chapterTo(),
                         dependencies);
-        try {
-            String hash = Sha256.ofBytes(mapper.writeValueAsBytes(basis));
-            return new PlanningCheckpoint.Source(
-                    bible.getId(),
-                    bible.getRowVersion(),
-                    policy,
-                    command.provider(),
-                    command.instruction(),
-                    hash,
-                    dependencies);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("规划依据不能生成指纹", exception);
-        }
+        return new PlanningCheckpoint.Source(
+                bible.getId(),
+                bible.getRowVersion(),
+                policy,
+                command.provider(),
+                command.instruction(),
+                Json.sha256(mapper, basis, "规划依据不能生成指纹"),
+                dependencies);
     }
 
     private List<PlanningCheckpoint> preceding(NovelProject project, List<UUID> ids) {
@@ -440,13 +436,11 @@ public class PlanningCheckpointService {
     }
 
     private PlanningCheckpoint.Dependency dependency(PlanningCheckpoint value) {
-        try {
-            String hash = Sha256.ofBytes(mapper.writeValueAsBytes(value.result()));
-            return new PlanningCheckpoint.Dependency(
-                    value.id(), value.attempt(), value.source().dependencyHash(), hash);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("前置规划不能生成指纹", exception);
-        }
+        return new PlanningCheckpoint.Dependency(
+                value.id(),
+                value.attempt(),
+                value.source().dependencyHash(),
+                Json.sha256(mapper, value.result(), "前置规划不能生成指纹"));
     }
 
     private void change(
@@ -465,11 +459,6 @@ public class PlanningCheckpointService {
                 || checkpoint.attempt() != attempt) {
             throw conflict("执行尝试已失效，晚到结果不能覆盖当前规划分块");
         }
-    }
-
-    private static void requireVersion(PlanningCheckpoint checkpoint, long version) {
-        if (version != checkpoint.version())
-            throw new ResourceVersionConflictException(version, checkpoint.version());
     }
 
     private static PlanningCheckpointException conflict(String message) {

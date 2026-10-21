@@ -115,7 +115,7 @@ public class QualityReviewStore {
                 WritingContextService.resolve(outline, bible, chapter, CreativeStrategyPolicy.from(project)), project);
         var writingBasis = ChapterWritingBasisService.requireCurrent(manuscript, context, contracts);
         return new Snapshot(project, manuscript, writingBasis, bible, rendered, style, profile,
-                fingerprint(rendered.toString() + "\n" + profile + "\n" + style + "\n" + project.getCurrentCanonVersion()
+                Sha256.ofUtf8(rendered.toString() + "\n" + profile + "\n" + style + "\n" + project.getCurrentCanonVersion()
                         + "\n" + CreativeStrategyGuide.render(CreativeStrategyPolicy.from(project))
                         + "\n" + outline.getId() + ":" + outline.getRowVersion()
                         + "\n" + bible.getId() + ":" + bible.getRowVersion() + ":" + bible.getContent()
@@ -246,7 +246,6 @@ public class QualityReviewStore {
                 && expected.fingerprint().equals(current.fingerprint());
     }
 
-
     private String previousSources(UUID projectId, int chapter) {
         StringBuilder source = new StringBuilder();
         for (int prior = Math.max(1, chapter - 2); prior < chapter; prior++) {
@@ -256,14 +255,5 @@ public class QualityReviewStore {
                             .append(value.getId()).append(':').append(value.getRowVersion()).append(':').append(value.getContent()).append('\n'));
         }
         return source.toString();
-    }
-
-    /**
-     * 将本次正文及检查依据计算为稳定指纹，绑定报告适用范围；不是正文无错误的证明。
-     *
-     * @param value 当前业务对象或作者编辑值，具体类型由方法签名确定。
-     */
-    private static String fingerprint(String value) {
-        return Sha256.ofUtf8(value);
     }
 }

@@ -1,5 +1,7 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -103,7 +105,7 @@ final class PlainTextOutputProtocol implements ModelOutputProtocol {
     }
 
     public String decode(String raw) {
-        if (raw == null || raw.isBlank()) throw new IllegalArgumentException("模型未返回可读文本");
+        if (isBlank(raw)) throw new IllegalArgumentException("模型未返回可读文本");
         ModelOutputAvailability.requireAvailable(raw);
         // Accept internal test fixtures and old locally generated DTOs; neither provider is asked for this format.
         try {

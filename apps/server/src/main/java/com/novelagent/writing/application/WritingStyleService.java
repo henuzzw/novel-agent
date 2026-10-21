@@ -1,9 +1,10 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;
 import com.novelagent.writing.domain.WritingStyleProfile;
@@ -77,8 +78,7 @@ public class WritingStyleService {
     @Transactional
     public StyleState apply(UUID projectId, WritingStyleProfile profile, long expectedVersion) {
         NovelProject project = access.requireOwnedProject(projectId);
-        if (project.getRowVersion() != expectedVersion)
-            throw new ResourceVersionConflictException(expectedVersion, project.getRowVersion());
+        checkVersion(expectedVersion, project.getRowVersion());
         profile = catalog.resolve(profile);
         Map<String, Object> value =
                 profile == null

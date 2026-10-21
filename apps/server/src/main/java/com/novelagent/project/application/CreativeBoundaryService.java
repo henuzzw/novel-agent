@@ -1,5 +1,7 @@
 package com.novelagent.project.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.novelagent.ingest.domain.ImportAnalysis;
 import com.novelagent.project.domain.CreativeBoundaries;
 import com.novelagent.project.domain.NovelProject;
@@ -65,8 +67,7 @@ public class CreativeBoundaryService {
             boolean reset) {
         var project = access.requireOwnedProject(projectId);
         entities.refresh(project, LockModeType.PESSIMISTIC_WRITE);
-        if (project.getRowVersion() != version)
-            throw new ResourceVersionConflictException(version, project.getRowVersion());
+        checkVersion(version, project.getRowVersion());
         if (world == null || scope == null) throw new IllegalArgumentException("请选择世界设定和改编幅度");
         CreativeBoundaries.from(project).choose(world, scope, reset).applyTo(project);
         projects.saveAndFlush(project);

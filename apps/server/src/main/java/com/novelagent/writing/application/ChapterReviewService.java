@@ -1,7 +1,8 @@
 package com.novelagent.writing.application;
 
-import static com.novelagent.writing.application.WritingChecks.check;
-import static com.novelagent.writing.application.WritingChecks.normalize;
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+import static com.novelagent.platform.support.Text.trimToNull;
 
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.EntityCatalogService;
@@ -14,7 +15,6 @@ import com.novelagent.writing.api.ChapterReviewResponse;
 import com.novelagent.writing.api.GenerateWritingRequest;
 import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.ReturnReviewRequest;
-import com.novelagent.writing.domain.ChapterContractVersion;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ChapterReviewVersion;
 import com.novelagent.writing.domain.ManuscriptStatus;
@@ -90,7 +90,7 @@ public class ChapterReviewService {
             ReturnReviewRequest request) {
         contexts.requireOwnedProject(projectId);
         ChapterReviewVersion review = requireReview(projectId, reviewId);
-        check(review.getRowVersion(), expectedVersion);
+        checkVersion(expectedVersion, review.getRowVersion());
         if (review.getChapterNumber() != chapterNumber
                 || review.getStatus() != ReviewStatus.DRAFT) {
             throw new IllegalArgumentException("只有本章待处理审稿可以打回正文");
@@ -130,7 +130,7 @@ public class ChapterReviewService {
         return transactions.execute(
                 status -> {
                     ChapterReviewVersion current = requireReview(projectId, reviewId);
-                    check(current.getRowVersion(), expectedVersion);
+                    checkVersion(expectedVersion, current.getRowVersion());
                     if (current.getStatus() != ReviewStatus.DRAFT)
                         throw new IllegalStateException("审稿状态已变化，请刷新后重试");
                     ManuscriptVersion currentLatest =
@@ -157,8 +157,7 @@ public class ChapterReviewService {
             throw new IllegalArgumentException("请选择 1 至 20 条审稿问题");
         }
         Set<String> selected = new LinkedHashSet<>(issueIds);
-        if (selected.size() != issueIds.size()
-                || selected.stream().anyMatch(id -> id == null || id.isBlank())) {
+        if (selected.size() != issueIds.size() || selected.stream().anyMatch(id -> isBlank(id))) {
             throw new IllegalArgumentException("审稿问题编号无效或重复");
         }
         if (instruction != null && instruction.length() > 2000) {
@@ -175,8 +174,7 @@ public class ChapterReviewService {
                             .filter(item -> Objects.equals(item.id(), id))
                             .findFirst()
                             .orElseThrow(() -> new IllegalArgumentException("审稿问题不存在：" + id));
-            if ((issue.description() == null || issue.description().isBlank())
-                    && (issue.suggestion() == null || issue.suggestion().isBlank())) {
+            if ((isBlank(issue.description())) && (isBlank(issue.suggestion()))) {
                 throw new IllegalArgumentException("审稿问题缺少可执行的修改说明：" + id);
             }
             feedback.append("- [")
@@ -195,7 +193,7 @@ public class ChapterReviewService {
                 .append(review.getVersionNumber())
                 .append("。不得只把问题标记为已处理。\n")
                 .append("作者补充要求：")
-                .append(normalize(instruction) == null ? "无" : normalize(instruction));
+                .append(trimToNull(instruction) == null ? "无" : trimToNull(instruction));
         return feedback.toString();
     }
 
@@ -253,7 +251,7 @@ public class ChapterReviewService {
                         recalled,
                         entityCatalog.forReview(projectId, plan),
                         provider,
-                        context.instructionWithPreparation(normalize(request.instruction())));
+                        context.instructionWithPreparation(trimToNull(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
         int version =
                 reviews.findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
@@ -268,7 +266,7 @@ public class ChapterReviewService {
                         manuscript.getId(),
                         version,
                         provider.name(),
-                        normalize(request.instruction()),
+                        trimToNull(request.instruction()),
                         generated);
         return ChapterReviewResponse.from(reviews.saveAndFlush(review));
     }
@@ -286,7 +284,7 @@ public class ChapterReviewService {
             UUID projectId, UUID id, long expected, ChapterReviewContent content) {
         contexts.requireOwnedProject(projectId);
         ChapterReviewVersion value = requireReview(projectId, id);
-        check(value.getRowVersion(), expected);
+        checkVersion(expected, value.getRowVersion());
         value.revise(content);
         return ChapterReviewResponse.from(reviews.saveAndFlush(value));
     }
@@ -304,7 +302,7 @@ public class ChapterReviewService {
             UUID projectId, UUID id, long expected, ChapterReviewContent content) {
         contexts.requireOwnedProject(projectId);
         ChapterReviewVersion value = requireReview(projectId, id);
-        check(value.getRowVersion(), expected);
+        checkVersion(expected, value.getRowVersion());
         if (content != null) value.revise(content);
         value.approve();
         return ChapterReviewResponse.from(reviews.saveAndFlush(value));

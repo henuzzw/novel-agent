@@ -1,5 +1,6 @@
 package com.novelagent.planning.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
 import static com.alibaba.cloud.ai.graph.StateGraph.END;
 import static com.alibaba.cloud.ai.graph.StateGraph.START;
 import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
@@ -78,7 +79,7 @@ public class OutlineGenerationWorkflow {
 
     private Map<String, Object> validateOutput(OverAllState state) {
         GeneratedOutline generated = read(required(state, "generated"), GeneratedOutline.class);
-        if (generated.generatorType() == null || generated.generatorType().isBlank() || generated.content() == null
+        if (isBlank(generated.generatorType()) || generated.content() == null
                 || generated.content().arcs() == null || generated.content().arcs().isEmpty()
                 || generated.content().chapterCount() == 0) {
             throw new IllegalStateException("模型未返回完整的分层大纲");

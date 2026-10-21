@@ -1,5 +1,8 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.planning.application.GeneratedOutline;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.application.OutlineGenerator;
@@ -24,12 +27,12 @@ public class LocalOutlineGenerator implements OutlineGenerator {
             OutlineContent previousOutline, String instruction, CreativeStrategyPolicy policy) {
         if (previousOutline != null) {
             String pacing = previousOutline.pacingStrategy();
-            if (instruction != null && !instruction.isBlank()) pacing += " 本版调整：" + instruction.trim() + "。";
+            if (hasText(instruction)) pacing += " 本版调整：" + instruction.trim() + "。";
             return new GeneratedOutline(provider().name(), new OutlineContent(
                     previousOutline.title(), previousOutline.premise(), previousOutline.structureSummary(), pacing,
                     previousOutline.suggestedMinWords(), previousOutline.suggestedMaxWords(), previousOutline.arcs(),
                     previousOutline.readerExperiencePlans()),
-                    List.of(instruction == null || instruction.isBlank()
+                    List.of(isBlank(instruction)
                             ? "未发现需要修改的内容，沿用原版本。"
                             : "根据本次要求调整了全书节奏策略，卷章结构与核心事件保持不变。"));
         }
@@ -54,7 +57,7 @@ public class LocalOutlineGenerator implements OutlineGenerator {
                     arcMin, arcMax, List.copyOf(chapters)));
         }
         String pacing = "前段建立人物与规则，中段持续升级选择代价，后段集中回收因果和关系承诺。";
-        if (instruction != null && !instruction.isBlank()) pacing += " 本版侧重：" + instruction.trim() + "。";
+        if (hasText(instruction)) pacing += " 本版侧重：" + instruction.trim() + "。";
         OutlineContent content = new OutlineContent(bible.logline(), bible.logline(),
                 "以人物选择推动外部事件升级，卷末必须改变目标、关系或认知状态。", pacing,
                 budget.acceptableMinWords(), budget.acceptableMaxWords(), List.copyOf(arcs));

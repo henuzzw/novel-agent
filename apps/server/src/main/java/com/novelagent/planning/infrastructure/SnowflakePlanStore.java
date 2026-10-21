@@ -1,6 +1,5 @@
 package com.novelagent.planning.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class SnowflakePlanStore {
     private final JdbcTemplate jdbc;
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     public SnowflakePlanStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -56,7 +57,6 @@ public class SnowflakePlanStore {
     /** Author-triggered recovery discards only a failed dependency suffix; raw agent responses remain intact. */
     public void resumeWithValidPrefix(UUID projectId, UUID id, Map<String, String> expected,
             Map<String, String> retained) {
-        var json = new ObjectMapper();
         requireUpdated(jdbc.update("""
                 UPDATE snowflake_planning_run SET status = 'RUNNING', error_message = NULL,
                     steps = CAST(? AS jsonb), core = ?, characters = ?, plot = ?,
@@ -64,9 +64,9 @@ public class SnowflakePlanStore {
                     updated_at = CURRENT_TIMESTAMP
                 WHERE project_id = ? AND id = ? AND status IN ('FAILED', 'CANCELLED')
                     AND steps = CAST(? AS jsonb)
-                """, json.valueToTree(retained).toString(), retained.get("CORE"), retained.get("CHARACTER_SETTINGS"),
+                """, JSON.valueToTree(retained).toString(), retained.get("CORE"), retained.get("CHARACTER_SETTINGS"),
                 retained.get("DETAILED_OUTLINE"), retained.containsKey("CHARACTER_SETTINGS"), projectId, id,
-                json.valueToTree(expected).toString()));
+                JSON.valueToTree(expected).toString()));
     }
 
     public void save(UUID projectId, UUID id, String stage, String text) {
@@ -89,7 +89,7 @@ public class SnowflakePlanStore {
     public JsonNode input(UUID projectId, UUID id) {
         String value = jdbc.queryForObject("SELECT input_snapshot::text FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
                 String.class, projectId, id);
-        return Json.call(() -> new ObjectMapper().readTree(value), "雪花来源无法读取");
+        return tree(value, "雪花来源无法读取");
     }
 
     /** Save the human-readable step and machine projection atomically, without another model call. */
@@ -106,9 +106,8 @@ public class SnowflakePlanStore {
         String value = jdbc.queryForObject("SELECT prepared_materials::text FROM snowflake_planning_run WHERE project_id = ? AND id = ?",
                 String.class, projectId, id);
         if (value == null) throw new IllegalArgumentException("雪花第7步缺少资料投影，请重新生成规划");
-        return Json.call(() -> new ObjectMapper().readTree(value), "雪花资料无法读取");
+        return tree(value, "雪花资料无法读取");
     }
-
 
     public void finish(UUID projectId, UUID id, String status, String error) {
         requireUpdated(jdbc.update("""
@@ -138,21 +137,16 @@ public class SnowflakePlanStore {
     }
 
     private UUID sourceImportId(String value) {
-        try {
-            String id = new ObjectMapper().readTree(value).path("sourceImportId").asText("");
-            return id.isBlank() ? null : UUID.fromString(id);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("雪花来源无法读取", exception);
-        }
+        String id = tree(value, "雪花来源无法读取").path("sourceImportId").asText("");
+        return id.isBlank() ? null : UUID.fromString(id);
     }
 
     private static Map<String, String> steps(String value) {
-        try {
-            return new ObjectMapper().readValue(value,
-                    new TypeReference<Map<String, String>>() { });
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("雪花步骤记录无法读取", exception);
-        }
+        return Json.call(() -> JSON.readValue(value, new TypeReference<Map<String, String>>() { }), "雪花步骤记录无法读取");
+    }
+
+    private static JsonNode tree(String value, String message) {
+        return Json.call(() -> JSON.readTree(value), message);
     }
 
     private static void requireUpdated(int count) {

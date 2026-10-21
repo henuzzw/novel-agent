@@ -1,5 +1,8 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.trimToNull;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.novelagent.planning.api.StoryBibleResponse;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
 import com.novelagent.planning.application.ModelProvider;
@@ -40,16 +43,16 @@ public class WritingStyleRecommendationService {
     public WritingStyleRecommendationResponse recommend(
             UUID projectId, RecommendWritingStyleRequest request) {
         StoryBibleResponse source = bibles.version(projectId, request.bibleVersionId());
-        WritingChecks.check(source.version(), request.expectedBibleVersion());
+        checkVersion(request.expectedBibleVersion(), source.version());
         var presets = styles.presets(projectId);
         WritingStyleRecommendationContent content =
                 workflow.recommendStyle(
                         projectId,
                         source.content(),
                         request.provider(),
-                        WritingChecks.normalize(request.instruction()));
+                        trimToNull(request.instruction()));
         StoryBibleResponse current = bibles.version(projectId, request.bibleVersionId());
-        WritingChecks.check(current.version(), source.version());
+        checkVersion(source.version(), current.version());
         if (!current.content().equals(source.content())) {
             throw new IllegalArgumentException("故事圣经的渲染内容已变化，请重新分析风格");
         }

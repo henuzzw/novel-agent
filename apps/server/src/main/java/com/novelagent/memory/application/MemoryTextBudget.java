@@ -1,5 +1,8 @@
 package com.novelagent.memory.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static java.util.Objects.requireNonNullElse;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -12,7 +15,7 @@ final class MemoryTextBudget {
     }
 
     static int estimateTokens(String value) {
-        if (value == null || value.isBlank()) {
+        if (isBlank(value)) {
             return 0;
         }
         int tokens = 0;
@@ -33,7 +36,7 @@ final class MemoryTextBudget {
     }
 
     static String trimToTokens(String value, int maxTokens) {
-        String normalized = nullToEmpty(value).strip();
+        String normalized = requireNonNullElse(value, "").strip();
         if (maxTokens <= 0 || normalized.isEmpty()) {
             return "";
         }
@@ -58,7 +61,7 @@ final class MemoryTextBudget {
     }
 
     static String trimParagraphTail(String value, int maxTokens) {
-        String normalized = nullToEmpty(value).strip();
+        String normalized = requireNonNullElse(value, "").strip();
         if (maxTokens <= 0 || normalized.isEmpty()) {
             return "";
         }
@@ -96,9 +99,5 @@ final class MemoryTextBudget {
             tailStart = start;
         }
         return normalized.substring(tailStart);
-    }
-
-    private static String nullToEmpty(String value) {
-        return value == null ? "" : value;
     }
 }

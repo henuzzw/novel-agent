@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.requireText;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -89,7 +91,7 @@ public class StoryBibleVersion {
         this.generationNumber = generationNumber;
         this.schemaVersion = "story-bible/2";
         this.status = StoryBibleStatus.DRAFT;
-        this.generatorType = requireText(generatorType, "generatorType");
+        this.generatorType = requireText(generatorType, "故事圣经缺少字段：generatorType");
         this.authorInstruction = authorInstruction;
         this.sourceDirectionSetId = sourceDirectionSetId;
         this.sourceCandidateId = sourceCandidateId;
@@ -164,19 +166,12 @@ public class StoryBibleVersion {
         if (value == null) {
             throw new IllegalArgumentException("故事圣经内容不能为空");
         }
-        requireText(value.logline(), "logline");
-        requireText(value.theme(), "theme");
-        requireText(value.worldSetting(), "worldSetting");
-        requireText(value.protagonist(), "protagonist");
-        requireText(value.centralConflict(), "centralConflict");
-        requireText(value.endingDirection(), "endingDirection");
-        return value;
-    }
-
-    private static String requireText(String value, String field) {
-        if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("故事圣经缺少字段：" + field);
-        }
+        requireText(value.logline(), "故事圣经缺少字段：logline");
+        requireText(value.theme(), "故事圣经缺少字段：theme");
+        requireText(value.worldSetting(), "故事圣经缺少字段：worldSetting");
+        requireText(value.protagonist(), "故事圣经缺少字段：protagonist");
+        requireText(value.centralConflict(), "故事圣经缺少字段：centralConflict");
+        requireText(value.endingDirection(), "故事圣经缺少字段：endingDirection");
         return value;
     }
 

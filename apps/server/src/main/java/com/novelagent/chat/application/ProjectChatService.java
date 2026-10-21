@@ -1,5 +1,7 @@
 package com.novelagent.chat.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.*;
@@ -56,7 +58,7 @@ public class ProjectChatService {
      * @param question 作者当前问题，非空且不超过 8000 字符
      */
     public ProjectChatStore.Turn send(UUID project, UUID id, String question) {
-        if (question == null || question.isBlank() || question.length() > 8000)
+        if (isBlank(question) || question.length() > 8000)
             throw new IllegalArgumentException("问题需为1至8000字");
         var provider = settings.get().provider();
         if (provider == ModelProvider.LOCAL_TEMPLATE)
@@ -263,8 +265,7 @@ public class ProjectChatService {
                         response = "已暂存待确认候选：" + source.title() + "。尚未修改资料，最终回复后作者才能确认。";
                     }
                     case "REPLY" -> {
-                        if (action.reply() == null || action.reply().isBlank())
-                            throw new IllegalArgumentException("回复不能为空");
+                        if (isBlank(action.reply())) throw new IllegalArgumentException("回复不能为空");
                         if (references.isEmpty() && !searched && !catalog.isEmpty())
                             throw new IllegalArgumentException("回答项目问题前必须读取或检索项目资料");
                         store.complete(project, id, action.reply(), references, proposals);

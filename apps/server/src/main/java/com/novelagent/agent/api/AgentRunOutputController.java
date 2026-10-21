@@ -1,5 +1,6 @@
 package com.novelagent.agent.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.application.AgentRunStreamService;
 import java.util.UUID;
@@ -37,9 +38,7 @@ public class AgentRunOutputController {
     @GetMapping("/response")
     public ResponseEntity<AgentRunOutputResponse> response(
             @PathVariable UUID projectId, @PathVariable UUID runId) {
-        return queries.output(projectId, runId)
-                .map(value -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(value))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ApiResponses.noStoreOrNotFound(queries.output(projectId, runId));
     }
 
     /**

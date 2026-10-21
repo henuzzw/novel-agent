@@ -1,5 +1,6 @@
 package com.novelagent.planning.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
 import java.util.LinkedHashMap;
@@ -81,7 +82,7 @@ final class LegacyCodexPromptReducer {
         // Preserve whitespace too: references must recover the exact supplied block, not a normalized copy.
         String content = block;
         if (content.length() < 1000) { output.append(block); return; }
-        String id = CodexMaterialDelta.fingerprint(content);
+        String id = Sha256.ofUtf8(content);
         materials.put(id, content);
         if (sent.contains(id) || content.length() > 8000) {
             output.append("\n完整资料引用 material_id=").append(id).append("；字符数=").append(content.length())

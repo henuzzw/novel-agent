@@ -1,12 +1,13 @@
 package com.novelagent.modelaccess.application;
 
+import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.CodexConversationStore;
-import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
 import com.novelagent.modelaccess.infrastructure.OAuthCodexClient;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.planning.infrastructure.CodexAppServerClient;
@@ -35,7 +36,7 @@ class CodexProjectGatewayTest {
         var codex = mock(OAuthCodexClient.class); var store = mock(CodexConversationStore.class);
         var project = UUID.randomUUID(); String source = "准确原文".repeat(400);
         var lease = new CodexConversationStore.Lease(project, "NOVEL_MAIN", UUID.randomUUID(), "saved-thread",
-                Set.of(CodexMaterialDelta.fingerprint(source)), 120000);
+                Set.of(Sha256.ofUtf8(source)), 120000);
         when(codex.authorize()).thenReturn("account");
         when(store.claim(project, "NOVEL_MAIN", "account", false)).thenReturn(lease);
         var selected = new EffectiveSettings(ModelProvider.LOCAL_CODEX, "test-model", "high", 1L);

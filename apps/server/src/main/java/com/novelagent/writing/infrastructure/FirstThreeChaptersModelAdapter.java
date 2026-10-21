@@ -1,5 +1,6 @@
 package com.novelagent.writing.infrastructure;
 
+import com.novelagent.platform.support.Json;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,8 +32,7 @@ public class FirstThreeChaptersModelAdapter implements FirstThreeChaptersModel {
     private final JsonNode schema;
     public FirstThreeChaptersModelAdapter(StructuredModelGateway models, ModelContextProperties capacities, ObjectMapper mapper) {
         this.models = models; this.capacities = capacities; this.mapper = mapper;
-        try { this.schema = mapper.readTree(SCHEMA); }
-        catch (JsonProcessingException e) { throw new IllegalStateException(e); }
+        this.schema = Json.call(() -> mapper.readTree(SCHEMA), "前三章通读输出 Schema 配置无效");
     }
     @Override public FirstThreeChaptersBudget budget(FirstThreeChaptersSource source, ModelProvider provider, String instruction) {
         var capacity = capacities.require(provider);

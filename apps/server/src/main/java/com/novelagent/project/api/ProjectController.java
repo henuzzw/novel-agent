@@ -1,8 +1,8 @@
 package com.novelagent.project.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.project.application.ProjectService;
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
@@ -39,9 +39,7 @@ public class ProjectController {
     public ResponseEntity<ProjectResponse> create(
             @Valid @RequestBody CreateProjectRequest request) {
         ProjectResponse project = projectService.create(request);
-        return ResponseEntity.created(URI.create("/api/v1/projects/" + project.id()))
-                .eTag(Long.toString(project.version()))
-                .body(project);
+        return ApiResponses.created("/api/v1/projects/" + project.id(), project, project.version());
     }
 
     /**
@@ -62,7 +60,7 @@ public class ProjectController {
     @GetMapping("/{projectId}")
     public ResponseEntity<ProjectResponse> get(@PathVariable UUID projectId) {
         ProjectResponse project = projectService.get(projectId);
-        return ResponseEntity.ok().eTag(Long.toString(project.version())).body(project);
+        return ApiResponses.versioned(project, project.version());
     }
 
     /**
@@ -77,14 +75,10 @@ public class ProjectController {
             @PathVariable UUID projectId,
             @RequestHeader("If-Match") String ifMatch,
             @Valid @RequestBody CreativeIntentRequest request) {
-        long expectedVersion = parseEtag(ifMatch);
+        long expectedVersion = ApiResponses.expectedVersion(ifMatch);
         ProjectResponse project =
                 projectService.updateCreativeIntent(projectId, expectedVersion, request);
         long intentVersion = project.creativeIntent().version();
-        return ResponseEntity.ok().eTag(Long.toString(intentVersion)).body(project);
-    }
-
-    private static long parseEtag(String value) {
-        return Long.parseLong(value.replace("\"", "").trim());
+        return ApiResponses.versioned(project, intentVersion);
     }
 }

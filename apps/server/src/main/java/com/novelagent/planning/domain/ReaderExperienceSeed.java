@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 public record ReaderExperienceSeed(String key, String kind, String title, String promise,
         String setup, String payoff, String aftermath, Integer plannedChapter) {
     public ReaderExperienceSeed {
@@ -13,7 +15,7 @@ public record ReaderExperienceSeed(String key, String kind, String title, String
     }
 
     private static String required(String value, int limit) {
-        if (value == null || value.isBlank() || value.length() > limit) throw new IllegalArgumentException("台账规划字段为空或过长");
+        if (isBlank(value) || value.length() > limit) throw new IllegalArgumentException("台账规划字段为空或过长");
         return value.trim();
     }
     private static String text(String value) {

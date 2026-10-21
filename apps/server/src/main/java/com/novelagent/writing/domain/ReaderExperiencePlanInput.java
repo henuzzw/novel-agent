@@ -1,5 +1,7 @@
 package com.novelagent.writing.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.UUID;
 
 public record ReaderExperiencePlanInput(UUID requestId, Long expectedVersion, ReaderExperiencePlan.Kind kind,
@@ -14,7 +16,7 @@ public record ReaderExperiencePlanInput(UUID requestId, Long expectedVersion, Re
     }
 
     private static void required(String value, int limit, String field) {
-        if (value == null || value.isBlank() || value.length() > limit) throw new IllegalArgumentException(field + "为空或过长");
+        if (isBlank(value) || value.length() > limit) throw new IllegalArgumentException(field + "为空或过长");
     }
 
     private static void optional(String value) {

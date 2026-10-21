@@ -1,5 +1,7 @@
 package com.novelagent.ingest.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,7 +16,6 @@ import com.novelagent.platform.support.Json;
 import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CreativeBoundaryService;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.application.WritingResourceNotFoundException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -109,7 +110,7 @@ public class ImportAnalysisStore {
      */
     @Transactional
     public Claim claim(UUID projectId, UUID importId, UUID id, long version) {
-        lock(projectId); var report = require(projectId, importId, id); version(report, version);
+        lock(projectId); var report = require(projectId, importId, id); checkVersion(version, report.version());
         var chapters = fresh(report);
         if (!report.status().equals("READY") || report.nextSlice() >= report.slices().size()) throw new IllegalArgumentException("解析当前不能执行，请刷新或明确恢复");
         if (jdbc.queryForObject("SELECT count(*) FROM import_analysis_report WHERE project_id = ? AND status = 'RUNNING'", Integer.class, projectId) > 0) throw new IllegalArgumentException("本项目已有原文解析正在运行");
@@ -130,7 +131,8 @@ public class ImportAnalysisStore {
     @Transactional
     public View finish(Claim claim, String output) {
         var expected = claim.report(); lock(expected.projectId()); var report = require(expected.projectId(), expected.importId(), expected.id());
-        version(report, expected.version()); var chapters = fresh(report);
+        checkVersion(expected.version(), report.version());
+        var chapters = fresh(report);
         if (!report.status().equals("RUNNING")) throw new IllegalArgumentException("任务已取消或恢复，拒绝迟到解析结果");
         var batch = parser.parse(output);
         batch = ImportAnalysis.normalizeBatch(batch, report.slices().get(report.nextSlice()), chapters);
@@ -166,7 +168,7 @@ public class ImportAnalysisStore {
      */
     @Transactional
     public View action(UUID projectId, UUID importId, UUID id, long version, String action) {
-        lock(projectId); var report = require(projectId, importId, id); version(report, version);
+        lock(projectId); var report = require(projectId, importId, id); checkVersion(version, report.version());
         String status;
         if (action.equals("resume")) {
             fresh(report);
@@ -191,7 +193,8 @@ public class ImportAnalysisStore {
     public View confirm(UUID projectId, UUID importId, UUID id, Confirm input) {
         lock(projectId); var report = require(projectId, importId, id);
         if (input == null || !input.authorConfirmed()) throw new IllegalArgumentException("请明确确认解析报告");
-        version(report, input.version()); fresh(report);
+        checkVersion(input.version(), report.version());
+        fresh(report);
         if (!List.of("REVIEW", "CONFIRMED").contains(report.status()) || report.nextSlice() != report.slices().size()) throw new IllegalArgumentException("必须完成全部原文解析后才能确认");
         ImportAnalysis.validateDecisions(report.content(), input.decisions(), input.mode());
         jdbc.update("UPDATE import_analysis_report SET decisions = CAST(? AS jsonb), confirmed_mode = ?, status = 'CONFIRMED', row_version = row_version + 1, updated_at = now() WHERE id = ?", json(input.decisions()), input.mode().name(), id);
@@ -211,7 +214,7 @@ public class ImportAnalysisStore {
     public JsonNode requireConfirmed(UUID projectId, UUID importId, UUID id, Long version, ImportPlanningMode mode) {
         source(projectId, importId);
         if (id == null || version == null) throw new IllegalArgumentException("请先解析原文并确认报告，再生成规划");
-        var report = require(projectId, importId, id); version(report, version); fresh(report);
+        var report = require(projectId, importId, id); checkVersion(version, report.version()); fresh(report);
         UUID current = jdbc.queryForObject("SELECT confirmed_analysis_id FROM work_import WHERE id = ? AND project_id = ?", UUID.class, importId, projectId);
         if (!report.status().equals("CONFIRMED") || report.confirmedMode() != mode || !id.equals(current)) throw new IllegalArgumentException("解析报告未确认、已被替换或使用方式不同，请重新确认");
         var result = mapper.createObjectNode(); result.put("reportId", id.toString()); result.put("version", version);
@@ -280,5 +283,4 @@ public class ImportAnalysisStore {
      * @param type 本次查询类别或反序列化目标类型，具体含义由签名区分。
      */
     private <T> T read(String value, TypeReference<T> type) { return Json.call(() -> mapper.readValue(value, type), "解析报告格式错误", IllegalArgumentException::new); }
-    private static void version(Report report, long version) { if (report.version() != version) throw new ResourceVersionConflictException(version, report.version()); }
 }

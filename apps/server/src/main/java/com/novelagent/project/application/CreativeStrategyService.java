@@ -1,5 +1,7 @@
 package com.novelagent.project.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.NovelProject;
@@ -51,9 +53,7 @@ public class CreativeStrategyService {
     public State update(UUID projectId, CreativeStrategy strategy, long expectedVersion) {
         NovelProject project = access.requireOwnedProject(projectId);
         entities.refresh(project, LockModeType.PESSIMISTIC_WRITE);
-        if (project.getRowVersion() != expectedVersion) {
-            throw new ResourceVersionConflictException(expectedVersion, project.getRowVersion());
-        }
+        checkVersion(expectedVersion, project.getRowVersion());
         if (strategy == null) {
             throw new IllegalArgumentException("请选择创作策略");
         }

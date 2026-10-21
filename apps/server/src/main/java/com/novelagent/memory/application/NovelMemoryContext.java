@@ -1,5 +1,7 @@
 package com.novelagent.memory.application;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.platform.support.Sha256;
 import java.util.List;
 
@@ -7,7 +9,7 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
         MemoryUsage usage, List<SemanticMemory> futureContext, List<String> trimmedSources,
         String boundaryFingerprint) {
     public NovelMemoryContext(List<SemanticMemory> semanticMemories, List<GraphFact> graphFacts, MemoryUsage usage) {
-        this(semanticMemories, graphFacts, usage, List.of(), List.of(), fingerprint(""));
+        this(semanticMemories, graphFacts, usage, List.of(), List.of(), Sha256.ofUtf8(""));
     }
 
     public static final long FUTURE_PLAN = -3;
@@ -69,7 +71,7 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
                                 : memory.canonVersion() == 0 ? "作者已确认，未提交正史"
                                 : memory.canonVersion() == -1 ? "仅合同已确认" : "前文缺失")
                         .append("）摘要：").append(memory.summary()).append('\n');
-                if (memory.content() != null && !memory.content().isBlank()) {
+                if (hasText(memory.content())) {
                     result.append(memory.recentChapter() ? "  前章合同与正文：" : "  相关片段：")
                             .append(memory.content()).append('\n');
                 }
@@ -80,7 +82,7 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
             for (GraphFact fact : graphFacts) {
                 result.append("- ").append(fact.subject()).append(' ')
                         .append(fact.predicate()).append(' ').append(fact.object());
-                if (fact.evidence() != null && !fact.evidence().isBlank()) {
+                if (hasText(fact.evidence())) {
                     result.append("（依据：").append(fact.evidence()).append('）');
                 }
                 result.append('\n');
@@ -90,16 +92,12 @@ public record NovelMemoryContext(List<SemanticMemory> semanticMemories, List<Gra
             result.append("【未来规划边界：不得作为已发生正史或人物已知信息】\n");
             for (SemanticMemory future : futureContext) {
                 result.append(future.summary()).append('\n');
-                if (future.content() != null && !future.content().isBlank()) result.append(future.content()).append('\n');
+                if (hasText(future.content())) result.append(future.content()).append('\n');
             }
         }
         if (!trimmedSources.isEmpty()) {
             result.append("【预算裁剪】").append(String.join("；", trimmedSources)).append('\n');
         }
         return result.toString().strip();
-    }
-
-    public static String fingerprint(String value) {
-        return Sha256.ofUtf8(value);
     }
 }

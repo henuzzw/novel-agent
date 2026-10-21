@@ -1,11 +1,11 @@
 package com.novelagent.writing.application;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.novelagent.platform.support.Json;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.writing.domain.ManuscriptStatus;
 import com.novelagent.writing.domain.ReaderExperienceEntry;
 import com.novelagent.writing.domain.ReaderExperienceEvent;
@@ -143,7 +143,7 @@ public class ReaderExperienceService {
         String hash = hash("update", id, input);
         var replay = replay(projectId, input.requestId(), hash);
         if (replay != null) return replay;
-        requireVersion(requirePlan(projectId, id), input.expectedVersion());
+        checkVersion(input.expectedVersion(), requirePlan(projectId, id).version());
         store.update(projectId, id, input);
         store.remember(projectId, input.requestId(), id, hash, actor.currentUserId());
         return entry(requirePlan(projectId, id));
@@ -164,7 +164,7 @@ public class ReaderExperienceService {
         ownAndLock(projectId);
         String hash = hash("delete", id, expectedVersion);
         if (replay(projectId, requestId, hash) != null) return;
-        requireVersion(requirePlan(projectId, id), expectedVersion);
+        checkVersion(expectedVersion, requirePlan(projectId, id).version());
         store.advance(projectId, id, expectedVersion, true);
         store.remember(projectId, requestId, id, hash, actor.currentUserId());
     }
@@ -185,7 +185,7 @@ public class ReaderExperienceService {
         var replay = replay(projectId, input.requestId(), hash);
         if (replay != null) return replay;
         ReaderExperiencePlan plan = requirePlan(projectId, id);
-        requireVersion(plan, input.expectedVersion());
+        checkVersion(input.expectedVersion(), plan.version());
         ReaderExperienceEntry before = entry(plan);
         before.state().requireTransition(input.state(), before.stale());
         store.lockManuscript(projectId, input.manuscriptId());
@@ -269,11 +269,6 @@ public class ReaderExperienceService {
                 .orElseThrow(() -> new WritingResourceNotFoundException("读者体验计划", id));
     }
 
-    private void requireVersion(ReaderExperiencePlan plan, long expected) {
-        if (plan.version() != expected)
-            throw new ResourceVersionConflictException(expected, plan.version());
-    }
-
     private ReaderExperienceEntry replay(UUID projectId, UUID requestId, String hash) {
         var mutation = store.mutation(projectId, requestId);
         if (mutation.isEmpty()) return null;
@@ -288,11 +283,6 @@ public class ReaderExperienceService {
     }
 
     private String hash(String operation, UUID resourceId, Object input) {
-        try {
-            String text = mapper.writeValueAsString(List.of(operation, resourceId, input));
-            return Sha256.ofUtf8(text);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("台账请求无法生成指纹", exception);
-        }
+        return Json.sha256(mapper, List.of(operation, resourceId, input), "台账请求无法生成指纹");
     }
 }

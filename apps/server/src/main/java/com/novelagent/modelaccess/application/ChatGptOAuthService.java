@@ -1,5 +1,7 @@
 package com.novelagent.modelaccess.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.modelaccess.infrastructure.ChatGptHttp;
 import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore.Credentials;
@@ -226,7 +228,7 @@ public class ChatGptOAuthService {
                     || attempt.previous != null && !client.equals(attempt.previous.clientId()))
                 throw new ChatGptAccessException("AUTHENTICATION", "登录返回的应用标识不正确，未替换现有账号");
             String code = query.get("code");
-            if (code == null || code.isBlank()) throw new IllegalArgumentException("登录缺少授权码");
+            if (isBlank(code)) throw new IllegalArgumentException("登录缺少授权码");
             var tokens =
                     http.form(
                             ChatGptHttp.TOKEN,

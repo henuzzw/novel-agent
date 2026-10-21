@@ -1,7 +1,7 @@
 package com.novelagent.writing.application;
 
-import static com.novelagent.writing.application.WritingChecks.check;
-import static com.novelagent.writing.application.WritingChecks.normalize;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+import static com.novelagent.platform.support.Text.trimToNull;
 
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
@@ -187,7 +187,7 @@ public class ManuscriptService {
                         recalled,
                         previousContent,
                         provider,
-                        context.instructionWithPreparation(normalize(request.instruction())));
+                        context.instructionWithPreparation(trimToNull(request.instruction())));
         basis.requireUnchanged(contexts.context(projectId, chapterNumber));
         if (contexts.requireOwnedProject(projectId).getCurrentCanonVersion() != sourceCanonVersion)
             throw new IllegalStateException("生成期间前文正史或记忆已变化，请重新生成");
@@ -214,7 +214,7 @@ public class ManuscriptService {
                         chapterNumber,
                         version,
                         provider.name(),
-                        normalize(request.instruction()),
+                        trimToNull(request.instruction()),
                         base == null ? null : base.getId(),
                         generatedContent,
                         generated.changeSummary())
@@ -240,7 +240,7 @@ public class ManuscriptService {
             String feedback) {
         contexts.requireOwnedProject(projectId);
         ManuscriptVersion source = requireManuscript(projectId, sourceId);
-        check(source.getRowVersion(), sourceVersion);
+        checkVersion(sourceVersion, source.getRowVersion());
         if (source.getChapterNumber() != chapterNumber
                 || !manuscripts
                         .findFirstByProjectIdAndChapterNumberOrderByVersionNumberDesc(
@@ -282,7 +282,7 @@ public class ManuscriptService {
             UUID projectId, UUID id, long expected, ManuscriptContent content) {
         contexts.requireOwnedProject(projectId);
         ManuscriptVersion value = requireManuscript(projectId, id);
-        check(value.getRowVersion(), expected);
+        checkVersion(expected, value.getRowVersion());
         value.revise(characterNames.tokenize(projectId, content));
         return manuscriptResponse(manuscripts.saveAndFlush(value));
     }
@@ -303,7 +303,7 @@ public class ManuscriptService {
                 manuscripts
                         .findByIdAndProjectIdAndChapterNumber(sourceId, projectId, chapterNumber)
                         .orElseThrow(() -> new WritingResourceNotFoundException("正文版本", sourceId));
-        check(source.getRowVersion(), expected);
+        checkVersion(expected, source.getRowVersion());
         if (source.getStatus() != ManuscriptStatus.AUTHOR_ACCEPTED) {
             throw new IllegalArgumentException("只有作者已确认的正文才能创建人工修订草稿");
         }
@@ -342,7 +342,7 @@ public class ManuscriptService {
     public ManuscriptResponse acceptManuscript(UUID projectId, UUID id, long expected) {
         contexts.requireOwnedProject(projectId);
         ManuscriptVersion value = requireManuscript(projectId, id);
-        check(value.getRowVersion(), expected);
+        checkVersion(expected, value.getRowVersion());
         value.accept();
         return manuscriptResponse(manuscripts.saveAndFlush(value));
     }

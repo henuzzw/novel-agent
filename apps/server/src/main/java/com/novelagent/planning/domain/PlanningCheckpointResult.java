@@ -1,5 +1,7 @@
 package com.novelagent.planning.domain;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,14 +21,14 @@ public record PlanningCheckpointResult(List<OutlineArc> arcs) {
     public void requireRange(int from, int to) {
         Set<Integer> chapters = new HashSet<>();
         for (OutlineArc arc : arcs) {
-            if (blank(arc.title()) || blank(arc.objective()) || arc.ordinal() < 1) {
+            if (isBlank(arc.title()) || isBlank(arc.objective()) || arc.ordinal() < 1) {
                 throw new IllegalArgumentException("规划分块卷或幕的标题、目标或序号不可用");
             }
             for (ChapterPlan chapter : arc.chapters()) {
                 if (chapter.number() < from || chapter.number() > to || !chapters.add(chapter.number())) {
                     throw new IllegalArgumentException("规划分块包含越界或重复章节");
                 }
-                if (blank(chapter.title()) || blank(chapter.content())) {
+                if (isBlank(chapter.title()) || isBlank(chapter.content())) {
                     throw new IllegalArgumentException("规划分块章节内容不完整");
                 }
                 if (chapter.status() != ChapterPlanStatus.PLANNED) {
@@ -36,6 +38,4 @@ public record PlanningCheckpointResult(List<OutlineArc> arcs) {
         }
         if (chapters.size() != to - from + 1) throw new IllegalArgumentException("规划分块未覆盖冻结的章节范围");
     }
-
-    private static boolean blank(String value) { return value == null || value.isBlank(); }
 }

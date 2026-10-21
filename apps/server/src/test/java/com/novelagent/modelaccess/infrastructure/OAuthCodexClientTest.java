@@ -1,7 +1,9 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.application.ChatGptOAuthService;
@@ -26,7 +28,7 @@ class OAuthCodexClientTest {
         var environment = new HashMap<String, String>(); environment.put("OPENAI_API_KEY", "not-used");
         client.configureEnvironment(environment);
         assertThat(environment).containsEntry("ACCESS_TOKEN", "private-test-token").doesNotContainKey("OPENAI_API_KEY");
-        String content = "原文".repeat(6000); String id = CodexMaterialDelta.fingerprint(content);
+        String content = "原文".repeat(6000); String id = Sha256.ofUtf8(content);
         var lease = new CodexConversationStore.Lease(UUID.randomUUID(), "NOVEL_MAIN", UUID.randomUUID(), "thread", Set.of(), 0);
         client.openScope("thread", lease, Set.of(id), binding); when(store.readMaterial(lease, id)).thenReturn(content);
         var params = json.createObjectNode().put("threadId", "thread").put("turnId", "turn").put("tool", "novel_read_material");

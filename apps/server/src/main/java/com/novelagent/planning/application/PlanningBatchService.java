@@ -1,5 +1,7 @@
 package com.novelagent.planning.application;
 
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.api.OutlineResponse;
@@ -19,9 +21,7 @@ import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.planning.infrastructure.PlanningBatchJdbcStore;
 import com.novelagent.planning.infrastructure.StoryBibleVersionRepository;
 import com.novelagent.platform.support.Json;
-import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.ProjectAccessService;
-import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.CreativeIntentRepository;
@@ -164,10 +164,7 @@ public class PlanningBatchService {
         var bible = currentBible(project);
         if (!bible.getId().equals(command.expectedBibleId()))
             throw conflict("当前已确认雪花资料已切换，请刷新后创建批次");
-        if (bible.getRowVersion() != command.expectedBibleVersion()) {
-            throw new ResourceVersionConflictException(
-                    command.expectedBibleVersion(), bible.getRowVersion());
-        }
+        checkVersion(command.expectedBibleVersion(), bible.getRowVersion());
         var intent =
                 intents.findById(projectId)
                         .orElseThrow(() -> new IllegalArgumentException("项目缺少创作意图"));
@@ -224,7 +221,7 @@ public class PlanningBatchService {
     public Claim claimNext(UUID projectId, UUID id, long version) {
         NovelProject project = ownedLocked(projectId);
         var batch = batch(projectId, id, true);
-        requireVersion(batch, version);
+        checkVersion(version, batch.version());
         if (batch.status() != PlanningBatch.Status.READY) throw conflict("批次不能重复执行，请显式恢复失败或取消的批次");
         requireSource(project, batch);
         var values = materialized(batch);
@@ -310,7 +307,7 @@ public class PlanningBatchService {
         ownedLocked(projectId);
         var batch = batch(projectId, id, true);
         if (batch.status() == PlanningBatch.Status.CANCELLED) return view(batch);
-        requireVersion(batch, version);
+        checkVersion(version, batch.version());
         if (batch.status() == PlanningBatch.Status.SUCCEEDED) throw conflict("已拼装批次不能取消");
         for (var value : materialized(batch)) {
             if (value.status() != PlanningCheckpoint.Status.SUCCEEDED) {
@@ -332,7 +329,7 @@ public class PlanningBatchService {
     public View resume(UUID projectId, UUID id, long version) {
         NovelProject project = ownedLocked(projectId);
         var batch = batch(projectId, id, true);
-        requireVersion(batch, version);
+        checkVersion(version, batch.version());
         if (batch.status() != PlanningBatch.Status.CANCELLED
                 && batch.status() != PlanningBatch.Status.FAILED) {
             throw conflict("只有失败或取消的批次可以显式恢复，运行中断请先取消");
@@ -369,7 +366,7 @@ public class PlanningBatchService {
                             .orElseThrow();
             return response(existing);
         }
-        requireVersion(batch, version);
+        checkVersion(version, batch.version());
         if (batch.status() != PlanningBatch.Status.READY) throw conflict("批次尚未等待拼装");
         var bible = requireSource(project, batch);
         var values = materialized(batch);
@@ -466,7 +463,7 @@ public class PlanningBatchService {
                         project.getCurrentOutlineVersionId(),
                         project.getCurrentCanonVersion(),
                         source);
-        return Json.call(() -> Sha256.ofBytes(mapper.writeValueAsBytes(basis)), "规划批次来源不能生成指纹");
+        return Json.sha256(mapper, basis, "规划批次来源不能生成指纹");
     }
 
     private PlanningBatch batch(UUID projectId, UUID id, boolean lock) {
@@ -518,13 +515,8 @@ public class PlanningBatchService {
         }
     }
 
-    private static void requireVersion(PlanningBatch batch, long version) {
-        if (batch.version() != version)
-            throw new ResourceVersionConflictException(version, batch.version());
-    }
-
     private static void requireRunning(PlanningBatch batch, long version) {
-        requireVersion(batch, version);
+        checkVersion(version, batch.version());
         if (batch.status() != PlanningBatch.Status.RUNNING) throw conflict("批次已取消或恢复，晚到执行不能覆盖");
     }
 

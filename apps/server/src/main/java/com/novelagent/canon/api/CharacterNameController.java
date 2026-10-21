@@ -1,5 +1,6 @@
 package com.novelagent.canon.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.canon.application.CharacterNameService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -61,10 +62,10 @@ public class CharacterNameController {
                 service.update(
                         projectId,
                         characterId,
-                        Long.parseLong(match.replace("\"", "").trim()),
+                        ApiResponses.expectedVersion(match),
                         request.canonicalName(),
                         request.nickname(),
                         request.title());
-        return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
+        return ApiResponses.versioned(value, value.version());
     }
 }

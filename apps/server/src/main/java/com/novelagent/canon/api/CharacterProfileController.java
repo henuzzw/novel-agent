@@ -1,5 +1,6 @@
 package com.novelagent.canon.api;
 
+import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.canon.application.CharacterProfileService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -54,10 +55,7 @@ public class CharacterProfileController {
             @Valid @RequestBody UpdateCharacterProfileRequest request) {
         CharacterProfileResponse value =
                 service.update(
-                        projectId,
-                        characterId,
-                        Long.parseLong(match.replace("\"", "").trim()),
-                        request);
-        return ResponseEntity.ok().eTag(Long.toString(value.version())).body(value);
+                        projectId, characterId, ApiResponses.expectedVersion(match), request);
+        return ApiResponses.versioned(value, value.version());
     }
 }

@@ -1,5 +1,7 @@
 package com.novelagent.writing.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.writing.domain.ChapterContractContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
@@ -32,7 +34,7 @@ class LocalWritingGenerator {
         if (previous == null) {
             return new GeneratedManuscript(manuscript(chapter, contract));
         }
-        if (instruction == null || instruction.isBlank()) {
+        if (isBlank(instruction)) {
             return new GeneratedManuscript(previous, List.of("未发现需要修改的内容，沿用原版本。"));
         }
         ManuscriptContent revised = new ManuscriptContent(previous.title(),

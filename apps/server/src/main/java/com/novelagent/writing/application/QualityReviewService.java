@@ -1,5 +1,8 @@
 package com.novelagent.writing.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.agent.application.AgentStage;
 import com.novelagent.memory.application.ContextBudgetPlanner;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
@@ -102,7 +105,7 @@ public class QualityReviewService {
                                                                 .toString()
                                                                 .contains(name))
                                 .toList());
-        if (source.futureContext() != null && !source.futureContext().isBlank()) {
+        if (hasText(source.futureContext())) {
             recalled =
                     MemoryBudgetAllocator.withFutureContext(
                             recalled,
@@ -217,7 +220,7 @@ public class QualityReviewService {
         if (issueIds == null
                 || issueIds.isEmpty()
                 || issueIds.size() > 20
-                || issueIds.stream().anyMatch(id -> id == null || id.isBlank())
+                || issueIds.stream().anyMatch(id -> isBlank(id))
                 || new HashSet<>(issueIds).size() != issueIds.size()) {
             throw new IllegalArgumentException("请选择 1 至 20 条不重复的质量问题");
         }

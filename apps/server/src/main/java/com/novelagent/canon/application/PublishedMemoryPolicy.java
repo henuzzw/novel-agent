@@ -1,5 +1,7 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.novelagent.writing.domain.FactDecision;
 import com.novelagent.writing.domain.FactProposal;
 import java.util.HashSet;
@@ -17,10 +19,10 @@ public class PublishedMemoryPolicy {
         if (facts == null || facts.size() > 100) throw new IllegalArgumentException("记忆条目数量无效");
         var ids = new HashSet<String>();
         for (var fact : facts) {
-            if (fact == null || fact.id() == null || fact.id().isBlank() || fact.id().length() > 100
+            if (fact == null || isBlank(fact.id()) || fact.id().length() > 100
                     || !ids.add(fact.id()) || !TYPES.contains(fact.factType())
-                    || blank(fact.subject()) || blank(fact.predicate()) || blank(fact.object())
-                    || blank(fact.evidence()) || !body.contains(fact.evidence())
+                    || isBlank(fact.subject()) || isBlank(fact.predicate()) || isBlank(fact.object())
+                    || isBlank(fact.evidence()) || !body.contains(fact.evidence())
                     || (fact.confidence() != null && (!Double.isFinite(fact.confidence())
                         || fact.confidence() < 0 || fact.confidence() > 1))) {
                 throw new IllegalArgumentException("记忆条目缺少有效来源、唯一编号或逐字正文证据");
@@ -51,12 +53,12 @@ public class PublishedMemoryPolicy {
 
     /** Follow the materializer's requested-ID, canonical-name, then confirmed-alias resolution order. */
     private static String reference(String type, String name, String id, String evidence, EntityCatalogContext catalog) {
-        if (blank(type) || blank(name)) return null;
+        if (isBlank(type) || isBlank(name)) return null;
         type = type.trim().toUpperCase(Locale.ROOT);
         name = name.trim();
         if (!ENTITY_TYPES.contains(type)) return null;
         String entityType = type, mention = name;
-        if (!blank(id)) {
+        if (!isBlank(id)) {
             UUID requested;
             try { requested = UUID.fromString(id); }
             catch (IllegalArgumentException invalid) { return null; }
@@ -71,6 +73,4 @@ public class PublishedMemoryPolicy {
         if (Set.of("CHARACTER", "ORGANIZATION").contains(type) && !evidence.contains(mention)) return null;
         return "NEW:" + entityType + ":" + mention;
     }
-
-    private static boolean blank(String value) { return value == null || value.isBlank(); }
 }

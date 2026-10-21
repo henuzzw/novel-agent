@@ -1,5 +1,11 @@
 package com.novelagent.canon.application;
 
+import static com.novelagent.platform.support.Text.isBlank;
+import static com.novelagent.platform.support.Text.hasText;
+import static com.novelagent.platform.support.Text.requireText;
+import static com.novelagent.platform.support.Text.trimToNull;
+import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -187,10 +193,8 @@ public class CharacterNameService {
             String title) {
         access.requireOwnedProject(projectId);
         CharacterNameResponse before = row(projectId, entityId);
-        if (before.version() != expectedVersion) {
-            throw new ResourceVersionConflictException(expectedVersion, before.version());
-        }
-        String name = required(canonicalName);
+        checkVersion(expectedVersion, before.version());
+        String name = requireText(canonicalName, "标准姓名不能为空").trim();
         try {
             int changed =
                     jdbc.update(
@@ -201,8 +205,8 @@ public class CharacterNameService {
                       AND canon_version_to IS NULL AND row_version = ?
                     """,
                             name,
-                            optional(nickname),
-                            optional(title),
+                            trimToNull(nickname),
+                            trimToNull(title),
                             entityId,
                             projectId,
                             expectedVersion);
@@ -249,7 +253,7 @@ public class CharacterNameService {
      */
     private String render(
             String text, List<CharacterNameResponse> characters, List<NameForm> forms) {
-        if (text == null || text.isBlank()) return text;
+        if (isBlank(text)) return text;
         Map<UUID, CharacterNameResponse> byId = new LinkedHashMap<>();
         characters.forEach(item -> byId.put(item.id(), item));
         Matcher matcher = REFERENCE.matcher(text);
@@ -343,7 +347,7 @@ public class CharacterNameService {
      * @param forms 已按长度排序的标准名、旧名及别名映射。
      */
     private String tokenize(String text, List<NameForm> forms) {
-        if (text == null || text.isBlank()) return text;
+        if (isBlank(text)) return text;
         String result = text;
         for (NameForm form : forms) {
             if (!form.text().isBlank()) {
@@ -481,7 +485,7 @@ public class CharacterNameService {
                                         }),
                         projectId));
         return forms.stream()
-                .filter(value -> value.text() != null && !value.text().isBlank())
+                .filter(value -> hasText(value.text()))
                 .distinct()
                 .sorted(
                         Comparator.comparingInt((NameForm value) -> value.text().length())
@@ -505,15 +509,6 @@ public class CharacterNameService {
             case "TITLE" -> value.title() == null ? value.canonicalName() : value.title();
             default -> value.canonicalName();
         };
-    }
-
-    private static String required(String value) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException("标准姓名不能为空");
-        return value.trim();
-    }
-
-    private static String optional(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private record NameForm(String text, UUID id, String form) {}

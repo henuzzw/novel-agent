@@ -1,5 +1,7 @@
 package com.novelagent.agent.tool;
 
+import static com.novelagent.platform.support.Text.hasText;
+
 import com.novelagent.memory.application.MemorySearchTerms;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.memory.application.TextEmbeddingService;
@@ -51,7 +53,7 @@ class StoryMemorySearchTool implements NovelReadTool {
         if (request.semanticCandidateLimit() <= 0) return NovelToolResult.semantic(List.of());
         List<Hit> lexical = keywordSearch(request);
         List<Hit> semantic = List.of();
-        if (request.query() != null && !request.query().isBlank()) {
+        if (hasText(request.query())) {
             try {
                 String query = request.query().substring(0, Math.min(2000, request.query().length()));
                 String vector = PgVectorSupport.literal(embeddings.embed(query));

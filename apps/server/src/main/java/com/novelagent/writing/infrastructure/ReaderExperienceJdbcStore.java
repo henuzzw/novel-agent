@@ -1,5 +1,7 @@
 package com.novelagent.writing.infrastructure;
 
+import static java.util.Objects.requireNonNullElse;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.OutlineContent;
@@ -114,8 +116,8 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
         jdbc.update("""
                 INSERT INTO reader_experience_plan(id, project_id, kind, title, promise_text, setup_text,
                     payoff_text, aftermath_text, planned_chapter) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, id, projectId, input.kind().name(), input.title().trim(), input.promise(), text(input.setup()),
-                text(input.payoff()), text(input.aftermath()), input.plannedChapter());
+                """, id, projectId, input.kind().name(), input.title().trim(), input.promise(), requireNonNullElse(input.setup(), ""),
+                requireNonNullElse(input.payoff(), ""), requireNonNullElse(input.aftermath(), ""), input.plannedChapter());
         return plan(projectId, id).orElseThrow();
     }
 
@@ -131,8 +133,8 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
                 UPDATE reader_experience_plan SET kind = ?, title = ?, promise_text = ?, setup_text = ?,
                     payoff_text = ?, aftermath_text = ?, planned_chapter = ?, row_version = row_version + 1, updated_at = now()
                 WHERE project_id = ? AND id = ? AND row_version = ? AND NOT deleted
-                """, input.kind().name(), input.title().trim(), input.promise(), text(input.setup()), text(input.payoff()),
-                text(input.aftermath()), input.plannedChapter(), projectId, id, input.expectedVersion());
+                """, input.kind().name(), input.title().trim(), input.promise(), requireNonNullElse(input.setup(), ""), requireNonNullElse(input.payoff(), ""),
+                requireNonNullElse(input.aftermath(), ""), input.plannedChapter(), projectId, id, input.expectedVersion());
         checkChanged(projectId, id, input.expectedVersion(), changed);
     }
 
@@ -335,6 +337,4 @@ public class ReaderExperienceJdbcStore implements ReaderExperienceStore {
         var current = plan(projectId, id).orElseThrow(() -> new WritingResourceNotFoundException("读者体验计划", id));
         throw new ResourceVersionConflictException(expected, current.version());
     }
-
-    private static String text(String value) { return value == null ? "" : value; }
 }

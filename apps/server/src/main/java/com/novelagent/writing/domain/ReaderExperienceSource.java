@@ -1,5 +1,8 @@
 package com.novelagent.writing.domain;
 
+import com.novelagent.platform.support.Sha256;
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.UUID;
@@ -8,7 +11,7 @@ public record ReaderExperienceSource(UUID id, UUID projectId, long rowVersion, i
         ManuscriptStatus status, String body, UUID chapterCanonCommitId, UUID canonManuscriptId,
         Long canonVersion, boolean superseded) {
     public boolean canon() { return !superseded && id.equals(canonManuscriptId); }
-    public String fingerprint() { return ReaderExperienceFingerprint.of(body == null ? "" : body); }
+    public String fingerprint() { return Sha256.ofUtf8(body == null ? "" : body); }
 
     @JsonProperty("fingerprint")
     public String getFingerprint() { return fingerprint(); }
@@ -18,7 +21,7 @@ public record ReaderExperienceSource(UUID id, UUID projectId, long rowVersion, i
         if (status != ManuscriptStatus.AUTHOR_ACCEPTED) throw new IllegalArgumentException("来源正文尚未 AUTHOR_ACCEPTED");
         if (rowVersion != expectedVersion) throw new IllegalArgumentException("来源正文版本已变化");
         if (superseded) throw new IllegalArgumentException("来源正文的正史已被替换");
-        if (evidence == null || evidence.isBlank() || body == null || !body.contains(evidence)) {
+        if (isBlank(evidence) || body == null || !body.contains(evidence)) {
             throw new IllegalArgumentException("证据必须是 body 中逐字存在的连续原文");
         }
     }

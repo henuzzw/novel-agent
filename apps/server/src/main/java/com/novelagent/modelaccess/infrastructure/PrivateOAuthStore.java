@@ -1,5 +1,7 @@
 package com.novelagent.modelaccess.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.modelaccess.application.ChatGptAccessException;
 import java.io.IOException;
@@ -31,7 +33,7 @@ public class PrivateOAuthStore {
     public PrivateOAuthStore(ObjectMapper json,
             @Value("${app.ai.chatgpt.credential-directory:${user.home}/.novel-agent/chatgpt}") String root) {
         this.json = json;
-        if (root == null || root.isBlank()) throw storageFailure();
+        if (isBlank(root)) throw storageFailure();
         this.root = Path.of(root).toAbsolutePath().normalize();
     }
     public <T> T locked(UUID user, Supplier<T> action) {

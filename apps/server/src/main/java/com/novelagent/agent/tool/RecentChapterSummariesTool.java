@@ -1,5 +1,6 @@
 package com.novelagent.agent.tool;
 
+import com.novelagent.platform.support.Sha256;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.memory.application.NovelMemoryContext;
@@ -45,7 +46,7 @@ class RecentChapterSummariesTool implements NovelReadTool {
                 """, (row, index) -> new PlanSource("来源项目=" + request.projectId()
                         + "；大纲=" + row.getString("outline_id") + "；大纲行版本=" + row.getLong("outline_row_version")
                         + "；圣经=" + row.getString("bible_id") + "；圣经行版本=" + row.getLong("bible_row_version")
-                        + "；大纲内容指纹=" + NovelMemoryContext.fingerprint(row.getString("outline_content")),
+                        + "；大纲内容指纹=" + Sha256.ofUtf8(row.getString("outline_content")),
                         readOutline(row.getString("outline_content"))), request.projectId());
         if (plans.isEmpty()) throw new IllegalArgumentException("项目当前已发布大纲或关联圣经不可用");
         PlanSource source = plans.getFirst();
@@ -139,7 +140,7 @@ class RecentChapterSummariesTool implements NovelReadTool {
                 + "；正文=" + row.getString("manuscript_id") + "；正文版本=" + row.getInt("version_number")
                 + "；正文行版本=" + row.getLong("manuscript_row_version")
                 + "；来源大纲=" + row.getString("source_outline_id") + "；内容指纹="
-                + NovelMemoryContext.fingerprint(row.getString("summary") + "\n" + row.getString("body")
+                + Sha256.ofUtf8(row.getString("summary") + "\n" + row.getString("body")
                         + "\n" + row.getString("contract_content") + "\n" + row.getString("accepted_facts"))
                 + "；来源大纲行版本=" + row.getLong("source_outline_row_version")
                 + "；来源圣经=" + row.getString("source_bible_id") + "；来源圣经行版本=" + row.getLong("source_bible_row_version");

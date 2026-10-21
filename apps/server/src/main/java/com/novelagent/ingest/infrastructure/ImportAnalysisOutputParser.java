@@ -1,5 +1,8 @@
 package com.novelagent.ingest.infrastructure;
 
+import com.novelagent.platform.support.Json;
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -20,13 +23,9 @@ public class ImportAnalysisOutputParser {
     public ImportAnalysisOutputParser(ObjectMapper mapper) { this.mapper = mapper; }
 
     public ImportAnalysis.Batch parse(String output) {
-        if (output == null || output.isBlank()) throw invalid("根节点：响应为空", null);
-        JsonNode root;
-        try {
-            root = mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(output);
-        } catch (JsonProcessingException error) {
-            throw invalid("根节点：不是完整、合法的 JSON", error);
-        }
+        if (isBlank(output)) throw invalid("根节点：响应为空", null);
+        JsonNode root = Json.call(() -> mapper.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(output),
+                "根节点：不是完整、合法的 JSON", ImportAnalysisOutputParser::invalid);
         if (root == null || !root.isObject() || !root.path("summary").isTextual() || !root.path("items").isArray()) {
             throw invalid("根节点：必须包含字符串 summary 和数组 items", null);
         }

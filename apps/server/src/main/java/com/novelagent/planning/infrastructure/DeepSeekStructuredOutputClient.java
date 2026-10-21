@@ -1,5 +1,7 @@
 package com.novelagent.planning.infrastructure;
 
+import static com.novelagent.platform.support.Text.isBlank;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
@@ -50,7 +52,7 @@ public class DeepSeekStructuredOutputClient {
 
     public ResponseResult request(String schemaName, String instructions, String input, JsonNode schema,
             int maxOutputTokens, EffectiveSettings frozenSettings) {
-        if (apiKey == null || apiKey.isBlank()) throw new IllegalArgumentException("尚未配置 DeepSeek API Key");
+        if (isBlank(apiKey)) throw new IllegalArgumentException("尚未配置 DeepSeek API Key");
         Map<String, Object> request = new LinkedHashMap<>(Map.of(
                 "model", frozenSettings.model(), "instructions", instructions, "input", input,
                 "reasoning", Map.of("effort", "none"),
@@ -80,7 +82,7 @@ public class DeepSeekStructuredOutputClient {
             throw new ResponseFailure("DeepSeek 生成未完成", usage);
         }
         String output = findOutputText(response.path("output"));
-        if (output == null || output.isBlank()) throw new ResponseFailure("DeepSeek 未返回可用内容", usage);
+        if (isBlank(output)) throw new ResponseFailure("DeepSeek 未返回可用内容", usage);
         return new ResponseResult(output, usage);
     }
 

@@ -1,6 +1,6 @@
 package com.novelagent.canon.infrastructure;
 
-import static com.novelagent.canon.infrastructure.CanonFactProjectionText.hasText;
+import static com.novelagent.platform.support.Text.hasText;
 
 import com.novelagent.canon.application.CanonFactProjector;
 import com.novelagent.writing.domain.FactProposal;
