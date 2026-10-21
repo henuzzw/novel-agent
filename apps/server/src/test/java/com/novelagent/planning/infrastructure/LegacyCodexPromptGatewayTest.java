@@ -64,7 +64,7 @@ class LegacyCodexPromptGatewayTest {
                 CodexSessionPolicy.REUSE_THREAD, settings, null)) {
             assertThatThrownBy(() -> gateway.prepare(project, "STORY_BIBLE", "planning", "system", "user",
                     CodexSessionPolicy.REUSE_THREAD, settings, null)).hasMessageContaining("正在生成");
-            request.run(request.instructions("system"), settings, 4000, ignored -> {});
+            request.run(request.instructions("system"), settings, 4000, null, ignored -> {});
         }
         var order = inOrder(client);
         order.verify(client).compactThread("existing-thread");

@@ -46,7 +46,7 @@ class CodexProjectGatewayTest {
         try (var request = gateway.prepare(project, "NOVEL_MAIN", false, "【本轮创作资料】\n【原文】\n" + source)) {
             assertThat(request.wireInput()).doesNotContain(source);
             assertThatThrownBy(() -> gateway.prepare(project, "NOVEL_MAIN", false, "another")).hasMessageContaining("正在执行");
-            assertThat(request.run("新的本轮角色", selected, 12000, ignored -> {}).output()).isEqualTo("正文");
+            assertThat(request.run("新的本轮角色", selected, 12000, null, ignored -> {}).output()).isEqualTo("正文");
             request.accept();
         }
         var order = inOrder(codex);
@@ -63,7 +63,7 @@ class CodexProjectGatewayTest {
         var gateway = new CodexProjectGateway(codex, store, new ModelContextProperties());
         when(codex.startThread(any(), any(), any())).thenThrow(new IllegalStateException("request rejected"));
         try (var request = gateway.prepare(project, "NOVEL_MAIN", false, "material")) {
-            assertThatThrownBy(() -> request.run("system", new EffectiveSettings(ModelProvider.LOCAL_CODEX, "test", "high", 1L), 100, ignored -> {}))
+            assertThatThrownBy(() -> request.run("system", new EffectiveSettings(ModelProvider.LOCAL_CODEX, "test", "high", 1L), 100, null, ignored -> {}))
                     .hasMessageContaining("request rejected");
         }
         verify(store).abort(lease); verify(store, never()).complete(any(), any(), anyLong());

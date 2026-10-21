@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class TypedCanonQueryService {
+    private static final RowMapper<EntityAliasResponse> ALIAS_ROW =
+            (rs, row) ->
+                    new EntityAliasResponse(
+                            rs.getObject("id", UUID.class),
+                            rs.getObject("entity_id", UUID.class),
+                            rs.getString("alias"),
+                            rs.getString("alias_type"),
+                            rs.getLong("canon_version_from"));
     private final ProjectAccessService access;
     private final JdbcTemplate jdbc;
     private final ObjectMapper mapper;
@@ -320,13 +329,7 @@ public class TypedCanonQueryService {
                 SELECT id, entity_id, alias, alias_type, canon_version_from
                 FROM entity_alias WHERE entity_id = ? AND alias = ? AND canon_version_to IS NULL
                 """,
-                (rs, row) ->
-                        new EntityAliasResponse(
-                                rs.getObject("id", UUID.class),
-                                rs.getObject("entity_id", UUID.class),
-                                rs.getString("alias"),
-                                rs.getString("alias_type"),
-                                rs.getLong("canon_version_from")),
+                ALIAS_ROW,
                 entityId,
                 value);
     }
@@ -348,13 +351,7 @@ public class TypedCanonQueryService {
                 WHERE project_id = ? AND entity_id = ? AND canon_version_to IS NULL
                 ORDER BY alias
                 """,
-                (rs, row) ->
-                        new EntityAliasResponse(
-                                rs.getObject("id", UUID.class),
-                                rs.getObject("entity_id", UUID.class),
-                                rs.getString("alias"),
-                                rs.getString("alias_type"),
-                                rs.getLong("canon_version_from")),
+                ALIAS_ROW,
                 projectId,
                 entityId);
     }

@@ -53,9 +53,6 @@ public class CodexProjectGateway {
         }
         public String wireInput() { return delta.text(); }
         public String instructions(String current) { return current + CodexMaterialDelta.READ_RULES; }
-        public CodexAppServerClient.TurnResult run(String system, EffectiveSettings choice, int outputReserve, Consumer<String> progress) {
-            return run(system, choice, outputReserve, null, progress);
-        }
         public CodexAppServerClient.TurnResult run(String system, EffectiveSettings choice, int outputReserve,
                 JsonNode schema, Consumer<String> progress) {
             attempted = true;

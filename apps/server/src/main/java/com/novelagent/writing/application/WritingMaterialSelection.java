@@ -45,9 +45,7 @@ public final class WritingMaterialSelection {
 
     public static OutlineContent forOpening(OutlineContent source) {
         if (source == null) return null;
-        var arcs = source.arcs().stream().map(arc -> new OutlineArc(arc.ordinal(), arc.title(),
-                arc.objective(), arc.mainConflict(), arc.turningPoint(), arc.outcome(),
-                arc.suggestedMinWords(), arc.suggestedMaxWords(), arc.chapters().stream()
+        var arcs = source.arcs().stream().map(arc -> arc.withChapters(arc.chapters().stream()
                         .filter(chapter -> chapter.number() >= 1 && chapter.number() <= 3).toList()))
                 .filter(arc -> !arc.chapters().isEmpty()).toList();
         return new OutlineContent(source.title(), source.premise(), source.structureSummary(), source.pacingStrategy(),

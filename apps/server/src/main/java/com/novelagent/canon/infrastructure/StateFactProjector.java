@@ -1,7 +1,9 @@
 package com.novelagent.canon.infrastructure;
 
-import static com.novelagent.platform.support.Text.hasText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.payloadText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.retireCommit;
+import static com.novelagent.platform.support.Text.hasText;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CanonFactProjector;
@@ -64,8 +66,7 @@ public class StateFactProjector implements CanonFactProjector {
         FactProposal proposal = projection.proposal();
         TypedFactPayload payload = proposal.payload();
         String beforeValue = payload == null ? null : payload.beforeValue();
-        String afterValue = payload != null && hasText(payload.afterValue())
-                ? payload.afterValue() : normalizedText(proposal.object());
+        String afterValue = payloadText(payload, TypedFactPayload::afterValue, normalizedText(proposal.object()));
         String storyTime = payload == null ? null : payload.storyTime();
         // Transaction-wide now() would tie successive changes and make the chapter's final state ambiguous.
         jdbc.update(INSERT_SQL, UUID.randomUUID(), projection.projectId(), projection.subjectId(), projection.factId(), field,
@@ -95,7 +96,6 @@ public class StateFactProjector implements CanonFactProjector {
 
     @Override
     public void retire(UUID commitId, long replacementVersion) {
-        jdbc.update("UPDATE entity_state_change SET canon_version_to = ? "
-                + "WHERE source_commit_id = ? AND canon_version_to IS NULL", replacementVersion, commitId);
+        retireCommit(jdbc, "entity_state_change", commitId, replacementVersion);
     }
 }

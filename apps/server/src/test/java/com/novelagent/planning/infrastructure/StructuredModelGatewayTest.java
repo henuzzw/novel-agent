@@ -123,7 +123,7 @@ class StructuredModelGatewayTest {
         when(projectGateway.prepare(eq(project), anyString(), anyBoolean(), anyString())).thenReturn(prepared);
         when(prepared.instructions(anyString())).thenAnswer(call -> call.getArgument(0) + "\nread rules");
         when(prepared.wireInput()).thenReturn("current instructions and material_id=exact-data-reference");
-        when(prepared.run(anyString(), eq(settings), eq(4000), any()))
+        when(prepared.run(anyString(), eq(settings), eq(4000), any(), any()))
                 .thenReturn(new CodexAppServerClient.TurnResult("turn", "正文文本"));
         var selectedGateway = new StructuredModelGateway(List.of(
                 new ProjectCodexExecutor(runs, new ModelContextProperties(), projectGateway, direct)),
@@ -361,11 +361,11 @@ class StructuredModelGatewayTest {
         var prepared = mock(ChatGptDirectGateway.Prepared.class);
         when(direct.effectiveSettings()).thenReturn(settings);
         when(direct.prepare(eq(project), eq(PlanningConversationPolicy.KEY), eq(wireSystem), eq(wireUser),
-                eq(CodexSessionPolicy.REUSE_THREAD), eq(PlanningConversationPolicy.REVISION), eq(4000))).thenReturn(prepared);
+                eq(CodexSessionPolicy.REUSE_THREAD), eq(PlanningConversationPolicy.REVISION), eq(4000), isNull())).thenReturn(prepared);
         when(prepared.wireInput()).thenReturn("[full history and current input]");
         when(prepared.budget()).thenReturn(new AgentRunRecorder.ContextBudget(128000, 4000, 20, 4000));
         var result = new ChatGptResponsesClient.Result("response", "text", null, mapper.createArrayNode());
-        when(prepared.run(eq(settings), any())).thenReturn(result);
+        when(prepared.run(eq(settings), any(), any(), isNull())).thenReturn(result);
         var selected = new StructuredModelGateway(List.of(new ChatGptHttpExecutor(runs, new ModelContextProperties(), direct)),
                 new ModelPromptAssembler(null, null, null), transport);
         selected.request(project, "OUTLINE", ModelProvider.LOCAL_CODEX, "system", "user", schema, "schema", 4000,

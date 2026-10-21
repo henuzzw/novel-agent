@@ -45,8 +45,7 @@ public record OutlineContent(
                     || !Objects.equals(arc.mainConflict(), oldArc.mainConflict())
                     || !Objects.equals(arc.turningPoint(), oldArc.turningPoint())
                     || !Objects.equals(arc.outcome(), oldArc.outcome());
-            return new OutlineArc(arc.ordinal(), arc.title(), arc.objective(), arc.mainConflict(), arc.turningPoint(),
-                    arc.outcome(), arc.suggestedMinWords(), arc.suggestedMaxWords(), arc.chapters().stream()
+            return arc.withChapters(arc.chapters().stream()
                     .map(chapter -> chapter.reviewContentAgainst(oldChapters.get(chapter.number()), bookChanged || arcChanged)).toList());
         }).toList();
         return new OutlineContent(title, premise, structureSummary, pacingStrategy, suggestedMinWords,

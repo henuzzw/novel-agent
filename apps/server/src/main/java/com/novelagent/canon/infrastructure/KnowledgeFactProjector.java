@@ -1,6 +1,7 @@
 package com.novelagent.canon.infrastructure;
 
-import static com.novelagent.platform.support.Text.hasText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.payloadText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.retireCommit;
 
 import com.novelagent.canon.application.CanonFactProjector;
 import com.novelagent.writing.domain.FactProposal;
@@ -34,10 +35,8 @@ public class KnowledgeFactProjector implements CanonFactProjector {
     public void project(Projection projection) {
         FactProposal proposal = projection.proposal();
         TypedFactPayload payload = proposal.payload();
-        String knowledgeType = hasText(payload == null ? null : payload.knowledgeType())
-                ? payload.knowledgeType() : "LEARNED";
-        String beliefTruth = hasText(payload == null ? null : payload.beliefTruth())
-                ? payload.beliefTruth() : "UNVERIFIED";
+        String knowledgeType = payloadText(payload, TypedFactPayload::knowledgeType, "LEARNED");
+        String beliefTruth = payloadText(payload, TypedFactPayload::beliefTruth, "UNVERIFIED");
         double confidence = proposal.confidence() == null ? 0.7 : proposal.confidence();
         jdbc.update(INSERT_SQL, UUID.randomUUID(), projection.projectId(), projection.subjectId(), projection.factId(), knowledgeType, beliefTruth,
                 confidence, projection.chapterNumber(), projection.canonVersion(), projection.commitId(), proposal.evidence());
@@ -45,7 +44,6 @@ public class KnowledgeFactProjector implements CanonFactProjector {
 
     @Override
     public void retire(UUID commitId, long replacementVersion) {
-        jdbc.update("UPDATE character_knowledge SET canon_version_to = ? "
-                + "WHERE source_commit_id = ? AND canon_version_to IS NULL", replacementVersion, commitId);
+        retireCommit(jdbc, "character_knowledge", commitId, replacementVersion);
     }
 }

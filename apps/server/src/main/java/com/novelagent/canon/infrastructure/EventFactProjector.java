@@ -1,8 +1,9 @@
 package com.novelagent.canon.infrastructure;
 
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.factSentence;
-import static com.novelagent.platform.support.Text.hasText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.payloadText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.retireCommit;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.truncate;
 
 import com.novelagent.canon.application.CanonFactProjector;
@@ -42,10 +43,8 @@ public class EventFactProjector implements CanonFactProjector {
     public void project(Projection projection) {
         FactProposal proposal = projection.proposal();
         TypedFactPayload payload = proposal.payload();
-        String title = hasText(payload == null ? null : payload.eventTitle())
-                ? payload.eventTitle() : normalizedText(proposal.subject()) + normalizedText(proposal.predicate());
-        String summary = hasText(payload == null ? null : payload.eventSummary())
-                ? payload.eventSummary() : factSentence(proposal);
+        String title = payloadText(payload, TypedFactPayload::eventTitle, normalizedText(proposal.subject()) + normalizedText(proposal.predicate()));
+        String summary = payloadText(payload, TypedFactPayload::eventSummary, factSentence(proposal));
         String storyTime = payload == null ? null : payload.storyTime();
         jdbc.update(INSERT_SQL, UUID.randomUUID(), projection.projectId(), projection.factId(), truncate(title, 300), summary,
                 storyTime, projection.chapterNumber(), projection.canonVersion(), projection.commitId(), proposal.evidence());
@@ -53,7 +52,6 @@ public class EventFactProjector implements CanonFactProjector {
 
     @Override
     public void retire(UUID commitId, long replacementVersion) {
-        jdbc.update("UPDATE story_event SET canon_version_to = ? "
-                + "WHERE source_commit_id = ? AND canon_version_to IS NULL", replacementVersion, commitId);
+        retireCommit(jdbc, "story_event", commitId, replacementVersion);
     }
 }

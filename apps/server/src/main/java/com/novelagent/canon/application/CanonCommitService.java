@@ -77,14 +77,10 @@ public class CanonCommitService {
         NovelProject project = access.requireOwnedProject(projectId);
 
         CanonCommit existing =
-                commits.findByReviewVersionId(request.reviewVersionId()).orElse(null);
+                activeCommitForReview(
+                        projectId, chapterNumber, request.reviewVersionId(), "这份审稿对应的正史已失效，不能重复提交");
         if (existing != null) {
-            if (existing.isActive()
-                    && existing.getProjectId().equals(projectId)
-                    && existing.getChapterNumber() == chapterNumber) {
-                return CanonCommitResponse.from(existing);
-            }
-            throw new IllegalStateException("这份审稿对应的正史已失效，不能重复提交");
+            return CanonCommitResponse.from(existing);
         }
         if (commits.existsByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber)) {
             throw new IllegalStateException("本章已提交正史，修订稿暂不能再次提交；需使用正史替换流程");
@@ -92,24 +88,21 @@ public class CanonCommitService {
 
         ChapterReviewVersion review =
                 requireApprovedReview(projectId, chapterNumber, request.reviewVersionId());
-        ManuscriptVersion manuscript =
-                requireAcceptedManuscript(projectId, review.getSourceManuscriptVersionId());
-        if (manuscript.getChapterNumber() != chapterNumber) {
-            throw new IllegalArgumentException("审稿关联的正文不属于本章");
-        }
+        ManuscriptVersion manuscript = requireAcceptedManuscript(projectId, chapterNumber, review);
         List<FactProposal> acceptedFacts = acceptedFacts(review);
         long canonVersion = project.commitCanon(request.expectedCanonVersion());
 
         CanonCommit commit =
                 saveCommit(
-                        projectId, chapterNumber, manuscript, review, canonVersion, acceptedFacts);
-        typedCanon.materialize(
-                projectId, chapterNumber, commit.getId(), canonVersion, acceptedFacts);
-        outbox.save(
-                createCanonCommittedEvent(
-                        projectId, chapterNumber, manuscript, commit, canonVersion));
-        projects.save(project);
-        return CanonCommitResponse.from(commit);
+                        UUID.randomUUID(),
+                        projectId,
+                        chapterNumber,
+                        manuscript,
+                        review,
+                        canonVersion,
+                        acceptedFacts);
+        return publish(
+                project, projectId, chapterNumber, manuscript, commit, canonVersion, acceptedFacts);
     }
 
     /**
@@ -124,14 +117,10 @@ public class CanonCommitService {
             UUID projectId, int chapterNumber, ReplaceCanonRequest request) {
         NovelProject project = access.requireOwnedProject(projectId);
         CanonCommit existingReviewCommit =
-                commits.findByReviewVersionId(request.reviewVersionId()).orElse(null);
+                activeCommitForReview(
+                        projectId, chapterNumber, request.reviewVersionId(), "这份审稿已用于旧版正史，请重新审稿");
         if (existingReviewCommit != null) {
-            if (existingReviewCommit.isActive()
-                    && existingReviewCommit.getProjectId().equals(projectId)
-                    && existingReviewCommit.getChapterNumber() == chapterNumber) {
-                return CanonCommitResponse.from(existingReviewCommit);
-            }
-            throw new IllegalStateException("这份审稿已用于旧版正史，请重新审稿");
+            return CanonCommitResponse.from(existingReviewCommit);
         }
         CanonCommit previous =
                 commits.findByProjectIdAndChapterNumberAndActiveTrue(projectId, chapterNumber)
@@ -145,11 +134,7 @@ public class CanonCommitService {
         }
         ChapterReviewVersion review =
                 requireApprovedReview(projectId, chapterNumber, request.reviewVersionId());
-        ManuscriptVersion manuscript =
-                requireAcceptedManuscript(projectId, review.getSourceManuscriptVersionId());
-        if (manuscript.getChapterNumber() != chapterNumber) {
-            throw new IllegalArgumentException("审稿关联的正文不属于本章");
-        }
+        ManuscriptVersion manuscript = requireAcceptedManuscript(projectId, chapterNumber, review);
         if (previous.getManuscriptVersionId().equals(manuscript.getId())) {
             throw new IllegalStateException("替换正史必须使用重新确认并审稿的新版正文");
         }
@@ -168,13 +153,14 @@ public class CanonCommitService {
                         canonVersion,
                         acceptedFacts);
         typedCanon.retire(previous.getId(), canonVersion);
-        typedCanon.materialize(
-                projectId, chapterNumber, replacement.getId(), canonVersion, acceptedFacts);
-        outbox.save(
-                createCanonCommittedEvent(
-                        projectId, chapterNumber, manuscript, replacement, canonVersion));
-        projects.save(project);
-        return CanonCommitResponse.from(replacement);
+        return publish(
+                project,
+                projectId,
+                chapterNumber,
+                manuscript,
+                replacement,
+                canonVersion,
+                acceptedFacts);
     }
 
     /**
@@ -210,20 +196,66 @@ public class CanonCommitService {
     }
 
     /**
-     * 要求审稿引用的正文属于本项目且为 AUTHOR_ACCEPTED，不从任意最新草稿抽取正史。
+     * 同一审稿已生成本章有效正史时返回该提交以支持幂等重试；审稿曾用于失效或其他章节的正史时拒绝。
      *
      * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
-     * @param manuscriptVersionId 正文版本 ID，作为审稿或正史提交的明确来源。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param reviewVersionId 作者确认的审稿版本 ID。
+     * @param staleMessage 审稿已不可复用时的错误信息。
+     * @return 可复用的有效提交；审稿尚未提交时为 null。
      */
-    private ManuscriptVersion requireAcceptedManuscript(UUID projectId, UUID manuscriptVersionId) {
+    private CanonCommit activeCommitForReview(
+            UUID projectId, int chapterNumber, UUID reviewVersionId, String staleMessage) {
+        CanonCommit existing = commits.findByReviewVersionId(reviewVersionId).orElse(null);
+        if (existing == null) {
+            return null;
+        }
+        if (existing.isActive()
+                && existing.getProjectId().equals(projectId)
+                && existing.getChapterNumber() == chapterNumber) {
+            return existing;
+        }
+        throw new IllegalStateException(staleMessage);
+    }
+
+    /**
+     * 要求审稿引用的正文属于本项目本章且为 AUTHOR_ACCEPTED，不从任意最新草稿抽取正史。
+     *
+     * @param projectId 小说项目 ID，用于限定业务与数据访问范围。
+     * @param chapterNumber 章节号，从 1 开始，与版本 ID 分开定位。
+     * @param review 已确认的审稿，其来源正文作为正史提交的明确来源。
+     */
+    private ManuscriptVersion requireAcceptedManuscript(
+            UUID projectId, int chapterNumber, ChapterReviewVersion review) {
         ManuscriptVersion manuscript =
                 manuscripts
-                        .findByIdAndProjectId(manuscriptVersionId, projectId)
+                        .findByIdAndProjectId(review.getSourceManuscriptVersionId(), projectId)
                         .orElseThrow(() -> new IllegalArgumentException("审稿关联正文不存在"));
         if (manuscript.getStatus() != ManuscriptStatus.AUTHOR_ACCEPTED) {
             throw new IllegalArgumentException("正文尚未由作者确认");
         }
+        if (manuscript.getChapterNumber() != chapterNumber) {
+            throw new IllegalArgumentException("审稿关联的正文不属于本章");
+        }
         return manuscript;
+    }
+
+    /** 物化已保存提交的正史事实，并在同一事务写入 Outbox 事件与推进后的项目正史版本。 */
+    private CanonCommitResponse publish(
+            NovelProject project,
+            UUID projectId,
+            int chapterNumber,
+            ManuscriptVersion manuscript,
+            CanonCommit commit,
+            long canonVersion,
+            List<FactProposal> acceptedFacts) {
+        typedCanon.materialize(
+                projectId, chapterNumber, commit.getId(), canonVersion, acceptedFacts);
+        outbox.save(
+                createCanonCommittedEvent(
+                        projectId, chapterNumber, manuscript, commit, canonVersion));
+        projects.save(project);
+        return CanonCommitResponse.from(commit);
     }
 
     /**
@@ -236,23 +268,6 @@ public class CanonCommitService {
         return review.getContent().factProposals().stream()
                 .filter(fact -> fact.decision() == FactDecision.ACCEPTED)
                 .toList();
-    }
-
-    private CanonCommit saveCommit(
-            UUID projectId,
-            int chapterNumber,
-            ManuscriptVersion manuscript,
-            ChapterReviewVersion review,
-            long canonVersion,
-            List<FactProposal> acceptedFacts) {
-        return saveCommit(
-                UUID.randomUUID(),
-                projectId,
-                chapterNumber,
-                manuscript,
-                review,
-                canonVersion,
-                acceptedFacts);
     }
 
     private CanonCommit saveCommit(

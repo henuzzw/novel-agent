@@ -80,8 +80,7 @@ public class ImportedOutlineGenerator {
                 chapters.add(chapter.withStatus(++chapterIndex <= occurredChapterCount
                         ? ChapterPlanStatus.OCCURRED : ChapterPlanStatus.PLANNED));
             }
-            arcs.add(new OutlineArc(arc.ordinal(), arc.title(), arc.objective(), arc.mainConflict(),
-                    arc.turningPoint(), arc.outcome(), arc.suggestedMinWords(), arc.suggestedMaxWords(), List.copyOf(chapters)));
+            arcs.add(arc.withChapters(List.copyOf(chapters)));
         }
         if (chapterIndex < occurredChapterCount) throw new IllegalArgumentException("反推大纲章节数少于已导入章节数");
         return new GeneratedOutline(generated.generatorType(), new OutlineContent(content.title(), content.premise(),

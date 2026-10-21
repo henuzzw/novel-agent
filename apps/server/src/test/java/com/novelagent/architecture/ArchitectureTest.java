@@ -80,6 +80,7 @@ class ArchitectureTest {
         Set<String> adapters = Set.of(
                 "com.novelagent.planning.infrastructure.CodexAppServerOutlineGenerator",
                 "com.novelagent.planning.infrastructure.DeepSeekOutlineGenerator",
+                "com.novelagent.planning.infrastructure.StructuredOutlineGenerator",
                 "com.novelagent.ingest.infrastructure.ImportedPlanningModelGateway",
                 "com.novelagent.writing.infrastructure.WritingModelRouter");
         Set<String> infrastructureDetails = Set.of(

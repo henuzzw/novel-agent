@@ -35,10 +35,6 @@ public class ChatGptDirectGateway {
         return new EffectiveSettings(ModelProvider.LOCAL_CODEX, value.codexModel(), value.codexEffort(), value.version());
     }
     public Prepared prepare(UUID project, String workflow, String instructions, String user, CodexSessionPolicy policy,
-            String revision, int outputReserve) {
-        return prepare(project, workflow, instructions, user, policy, revision, outputReserve, null);
-    }
-    public Prepared prepare(UUID project, String workflow, String instructions, String user, CodexSessionPolicy policy,
             String revision, int outputReserve, JsonNode schema) {
         String binding = ChatGptResponsesClient.accountBinding(auth.authorization());
         var lease = conversations.claim(project, workflow, binding, revision, policy == CodexSessionPolicy.NEW_THREAD);
@@ -64,9 +60,6 @@ public class ChatGptDirectGateway {
         }
         public String wireInput() { return input.toString(); }
         public AgentRunRecorder.ContextBudget budget() { return budget; }
-        public ChatGptResponsesClient.Result run(EffectiveSettings selected, Consumer<String> progress) {
-            return run(selected, progress, null, null);
-        }
         public ChatGptResponsesClient.Result run(EffectiveSettings selected, Consumer<String> progress,
                 String schemaName, JsonNode schema) {
             var renewed = new AtomicLong(System.nanoTime());

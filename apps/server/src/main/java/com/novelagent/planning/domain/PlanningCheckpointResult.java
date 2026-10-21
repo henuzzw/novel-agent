@@ -13,8 +13,7 @@ public record PlanningCheckpointResult(List<OutlineArc> arcs) {
             if (arc == null || arc.chapters() == null || arc.chapters().isEmpty()) {
                 throw new IllegalArgumentException("规划分块的卷或幕缺少章节");
             }
-            return new OutlineArc(arc.ordinal(), arc.title(), arc.objective(), arc.mainConflict(), arc.turningPoint(),
-                    arc.outcome(), arc.suggestedMinWords(), arc.suggestedMaxWords(), List.copyOf(arc.chapters()));
+            return arc.withChapters(List.copyOf(arc.chapters()));
         }).toList();
     }
 

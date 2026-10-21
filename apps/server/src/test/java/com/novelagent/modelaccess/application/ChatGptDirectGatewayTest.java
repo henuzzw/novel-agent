@@ -24,11 +24,11 @@ class ChatGptDirectGatewayTest {
         var lease = new HttpConversationStore.Lease(UUID.randomUUID(), "STORY_PLANNING", UUID.randomUUID(), UUID.randomUUID(), history);
         when(store.claim(any(), anyString(), anyString(), anyString(), anyBoolean())).thenReturn(lease);
         var gateway = new ChatGptDirectGateway(auth, store, mock(ChatGptResponsesClient.class), mock(GlobalModelSettingsService.class), new ModelContextProperties());
-        try (var prepared = gateway.prepare(lease.project(), lease.workflow(), "updated instructions", "current input", CodexSessionPolicy.REUSE_THREAD, "revision", 1000)) {
+        try (var prepared = gateway.prepare(lease.project(), lease.workflow(), "updated instructions", "current input", CodexSessionPolicy.REUSE_THREAD, "revision", 1000, null)) {
             assertThat(prepared.wireInput()).contains("previous input", "current input");
         }
         verify(store).release(lease); verify(store, never()).complete(any(), any()); assertThat(history).hasSize(1);
-        try (var prepared = gateway.prepare(lease.project(), lease.workflow(), "updated instructions", "current input", CodexSessionPolicy.REUSE_THREAD, "revision", 1000)) {
+        try (var prepared = gateway.prepare(lease.project(), lease.workflow(), "updated instructions", "current input", CodexSessionPolicy.REUSE_THREAD, "revision", 1000, null)) {
             var output = json.createArrayNode(); output.addObject().put("type", "message").put("role", "assistant");
             prepared.accept(new ChatGptResponsesClient.Result("response", "final", null, output));
         }

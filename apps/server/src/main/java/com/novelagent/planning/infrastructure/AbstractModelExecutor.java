@@ -1,5 +1,6 @@
 package com.novelagent.planning.infrastructure;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.AgentRunRecorder.ContextBudget;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.agent.application.AgentRunRecorder.ModelResult;
@@ -53,6 +54,11 @@ public abstract class AbstractModelExecutor {
             String schemaName, ModelOutputProtocol protocol, int maxOutputTokens,
             CodexSessionPolicy policy, String revision, boolean sharedPlanning) {
         public String sessionKey() { return sharedPlanning ? PlanningConversationPolicy.KEY : workflow; }
+        /** 返回需要随请求下发的结构化输出 Schema；协议不约束输出时返回 {@code null}。 */
+        public JsonNode wireSchemaOrNull() {
+            var schema = protocol.wireSchema();
+            return schema == null || schema.isNull() ? null : schema;
+        }
     }
 
     protected interface PreparedCall extends AutoCloseable {

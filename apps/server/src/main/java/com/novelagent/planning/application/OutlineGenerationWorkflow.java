@@ -1,9 +1,10 @@
 package com.novelagent.planning.application;
 
-import static com.novelagent.platform.support.Text.isBlank;
 import static com.alibaba.cloud.ai.graph.StateGraph.END;
 import static com.alibaba.cloud.ai.graph.StateGraph.START;
 import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
+import static com.novelagent.platform.support.GraphStateCodec.required;
+import static com.novelagent.platform.support.Text.isBlank;
 
 import com.alibaba.cloud.ai.graph.CompiledGraph;
 import com.alibaba.cloud.ai.graph.KeyStrategyFactoryBuilder;
@@ -14,7 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.StoryBibleContent;
-import com.novelagent.platform.support.Json;
+import com.novelagent.platform.support.GraphStateCodec;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import java.util.Map;
 import java.util.UUID;
@@ -23,23 +24,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class OutlineGenerationWorkflow {
     private final OutlineGeneratorRegistry registry;
-    private final ObjectMapper mapper;
+    private final GraphStateCodec codec;
     private final CompiledGraph graph;
 
     public OutlineGenerationWorkflow(OutlineGeneratorRegistry registry, ObjectMapper mapper) {
         this.registry = registry;
-        this.mapper = mapper;
+        this.codec = new GraphStateCodec(mapper, "Agent Graph ");
         this.graph = compile();
     }
 
     public GeneratedOutline generate(UUID projectId, StoryBibleContent bible, OutlineWordBudget budget,
             ModelProvider provider, OutlineContent previousOutline, String instruction, CreativeStrategyPolicy policy) {
-        OverAllState result = graph.invoke(Map.of("projectId", projectId.toString(), "bible", write(bible),
-                        "budget", write(budget), "provider", provider.name(),
-                        "previousOutline", previousOutline == null ? "" : write(previousOutline),
-                        "instruction", instruction == null ? "" : instruction, "policy", write(policy)))
+        OverAllState result = graph.invoke(Map.of("projectId", projectId.toString(), "bible", codec.write(bible),
+                        "budget", codec.write(budget), "provider", provider.name(),
+                        "previousOutline", previousOutline == null ? "" : codec.write(previousOutline),
+                        "instruction", instruction == null ? "" : instruction, "policy", codec.write(policy)))
                 .orElseThrow(() -> new IllegalStateException("分层大纲 Agent 工作流未返回结果"));
-        return read(required(result, "generated"), GeneratedOutline.class);
+        return codec.read(required(result, "generated"), GeneratedOutline.class);
     }
 
     private CompiledGraph compile() {
@@ -56,44 +57,34 @@ public class OutlineGenerationWorkflow {
 
     private Map<String, Object> validateInput(OverAllState state) {
         UUID.fromString(required(state, "projectId"));
-        read(required(state, "bible"), StoryBibleContent.class);
-        OutlineWordBudget budget = read(required(state, "budget"), OutlineWordBudget.class);
+        codec.read(required(state, "bible"), StoryBibleContent.class);
+        OutlineWordBudget budget = codec.read(required(state, "budget"), OutlineWordBudget.class);
         if (budget.acceptableMinWords() >= budget.acceptableMaxWords()) throw new IllegalArgumentException("字数区间无效");
         ModelProvider.valueOf(required(state, "provider"));
-        read(required(state, "policy"), CreativeStrategyPolicy.class);
+        codec.read(required(state, "policy"), CreativeStrategyPolicy.class);
         return Map.of();
     }
 
     private Map<String, Object> generateOutline(OverAllState state) {
         UUID projectId = UUID.fromString(required(state, "projectId"));
-        StoryBibleContent bible = read(required(state, "bible"), StoryBibleContent.class);
-        OutlineWordBudget budget = read(required(state, "budget"), OutlineWordBudget.class);
+        StoryBibleContent bible = codec.read(required(state, "bible"), StoryBibleContent.class);
+        OutlineWordBudget budget = codec.read(required(state, "budget"), OutlineWordBudget.class);
         ModelProvider provider = ModelProvider.valueOf(required(state, "provider"));
         String instruction = state.value("instruction", "");
         String previousJson = state.value("previousOutline", "");
-        OutlineContent previousOutline = previousJson.isBlank() ? null : read(previousJson, OutlineContent.class);
-        return Map.of("generated", write(registry.require(provider).generate(projectId, bible, budget,
+        OutlineContent previousOutline = previousJson.isBlank() ? null : codec.read(previousJson, OutlineContent.class);
+        return Map.of("generated", codec.write(registry.require(provider).generate(projectId, bible, budget,
                 previousOutline, instruction.isBlank() ? null : instruction,
-                read(required(state, "policy"), CreativeStrategyPolicy.class))));
+                codec.read(required(state, "policy"), CreativeStrategyPolicy.class))));
     }
 
     private Map<String, Object> validateOutput(OverAllState state) {
-        GeneratedOutline generated = read(required(state, "generated"), GeneratedOutline.class);
+        GeneratedOutline generated = codec.read(required(state, "generated"), GeneratedOutline.class);
         if (isBlank(generated.generatorType()) || generated.content() == null
                 || generated.content().arcs() == null || generated.content().arcs().isEmpty()
                 || generated.content().chapterCount() == 0) {
             throw new IllegalStateException("模型未返回完整的分层大纲");
         }
         return Map.of();
-    }
-
-    private static String required(OverAllState state, String key) {
-        return state.value(key, String.class).orElseThrow(() -> new IllegalStateException("Agent Graph 状态缺少字段：" + key));
-    }
-    private String write(Object value) {
-        return Json.call(() -> mapper.writeValueAsString(value), "Agent Graph 状态序列化失败");
-    }
-    private <T> T read(String value, Class<T> type) {
-        return Json.call(() -> mapper.readValue(value, type), "Agent Graph 状态反序列化失败");
     }
 }

@@ -67,10 +67,6 @@ public class LegacyCodexPromptGateway {
         public String wireInput() { return delta.text(); }
         public String instructions(String system) { return system + LegacyCodexPromptReducer.READ_RULES; }
         public CodexAppServerClient.TurnResult run(String system, EffectiveSettings settings,
-                int outputReserve, Consumer<String> progress) {
-            return run(system, settings, outputReserve, null, progress);
-        }
-        public CodexAppServerClient.TurnResult run(String system, EffectiveSettings settings,
                 int outputReserve, JsonNode schema, Consumer<String> progress) {
             attempted = true;
             var capacity = context.require(settings.provider());

@@ -29,6 +29,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +40,16 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class CharacterNameService {
+    private static final RowMapper<CharacterNameResponse> NAME_ROW =
+            (rs, row) ->
+                    new CharacterNameResponse(
+                            rs.getObject("id", UUID.class),
+                            rs.getString("role_key"),
+                            rs.getString("source_name"),
+                            rs.getString("canonical_name"),
+                            rs.getString("nickname"),
+                            rs.getString("title_name"),
+                            rs.getLong("row_version"));
     private static final Pattern REFERENCE =
             Pattern.compile("\\{\\{entity:([0-9a-fA-F-]{36}):(CANONICAL|NICKNAME|TITLE)}}");
     private final ProjectAccessService access;
@@ -374,15 +385,7 @@ public class CharacterNameService {
                 WHERE project_id = ? AND entity_type = 'CHARACTER' AND canon_version_to IS NULL
                 ORDER BY CASE WHEN role_key = 'PROTAGONIST' THEN 0 ELSE 1 END, role_key, canonical_name
                 """,
-                (rs, row) ->
-                        new CharacterNameResponse(
-                                rs.getObject("id", UUID.class),
-                                rs.getString("role_key"),
-                                rs.getString("source_name"),
-                                rs.getString("canonical_name"),
-                                rs.getString("nickname"),
-                                rs.getString("title_name"),
-                                rs.getLong("row_version")),
+                NAME_ROW,
                 projectId);
     }
 
@@ -401,15 +404,7 @@ public class CharacterNameService {
                 FROM story_entity WHERE id = ? AND project_id = ? AND entity_type = 'CHARACTER'
                   AND canon_version_to IS NULL
                 """,
-                        (rs, row) ->
-                                new CharacterNameResponse(
-                                        rs.getObject("id", UUID.class),
-                                        rs.getString("role_key"),
-                                        rs.getString("source_name"),
-                                        rs.getString("canonical_name"),
-                                        rs.getString("nickname"),
-                                        rs.getString("title_name"),
-                                        rs.getLong("row_version")),
+                        NAME_ROW,
                         entityId,
                         projectId)
                 .stream()

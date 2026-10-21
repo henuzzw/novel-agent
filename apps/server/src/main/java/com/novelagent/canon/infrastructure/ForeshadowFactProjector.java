@@ -1,7 +1,8 @@
 package com.novelagent.canon.infrastructure;
 
-import static com.novelagent.platform.support.Text.hasText;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.payloadText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.retireCommit;
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.truncate;
 
 import com.novelagent.canon.application.CanonFactProjector;
@@ -41,12 +42,9 @@ public class ForeshadowFactProjector implements CanonFactProjector {
     public void project(Projection projection) {
         FactProposal proposal = projection.proposal();
         TypedFactPayload payload = proposal.payload();
-        String title = hasText(payload == null ? null : payload.foreshadowTitle())
-                ? payload.foreshadowTitle() : normalizedText(proposal.subject()) + normalizedText(proposal.predicate());
-        String targetEffect = hasText(payload == null ? null : payload.targetEffect())
-                ? payload.targetEffect() : proposal.object();
-        String status = hasText(payload == null ? null : payload.foreshadowStatus())
-                ? payload.foreshadowStatus() : "PLANTED";
+        String title = payloadText(payload, TypedFactPayload::foreshadowTitle, normalizedText(proposal.subject()) + normalizedText(proposal.predicate()));
+        String targetEffect = payloadText(payload, TypedFactPayload::targetEffect, proposal.object());
+        String status = payloadText(payload, TypedFactPayload::foreshadowStatus, "PLANTED");
         Integer plannedChapter = payload == null ? null : payload.plannedResolveChapter();
         jdbc.update(INSERT_SQL, UUID.randomUUID(), projection.projectId(), projection.factId(),
                 truncate(title, 300), targetEffect, status, plannedChapter, projection.canonVersion(), projection.commitId(),
@@ -55,7 +53,6 @@ public class ForeshadowFactProjector implements CanonFactProjector {
 
     @Override
     public void retire(UUID commitId, long replacementVersion) {
-        jdbc.update("UPDATE foreshadow SET canon_version_to = ? "
-                + "WHERE source_commit_id = ? AND canon_version_to IS NULL", replacementVersion, commitId);
+        retireCommit(jdbc, "foreshadow", commitId, replacementVersion);
     }
 }

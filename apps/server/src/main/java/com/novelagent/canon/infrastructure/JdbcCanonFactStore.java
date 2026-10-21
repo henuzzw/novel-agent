@@ -1,6 +1,7 @@
 package com.novelagent.canon.infrastructure;
 
 import static com.novelagent.canon.infrastructure.CanonFactProjectionText.normalizedText;
+import static com.novelagent.canon.infrastructure.CanonFactProjectionText.retireCommit;
 
 import com.novelagent.canon.application.CanonFactStore;
 import com.novelagent.writing.domain.FactProposal;
@@ -34,7 +35,6 @@ public class JdbcCanonFactStore implements CanonFactStore {
 
     @Override
     public void retire(UUID commitId, long replacementVersion) {
-        jdbc.update("UPDATE story_fact SET canon_version_to = ? "
-                + "WHERE source_commit_id = ? AND canon_version_to IS NULL", replacementVersion, commitId);
+        retireCommit(jdbc, "story_fact", commitId, replacementVersion);
     }
 }
