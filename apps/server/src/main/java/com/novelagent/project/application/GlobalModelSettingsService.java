@@ -1,6 +1,6 @@
 package com.novelagent.project.application;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.project.domain.GlobalModelSettings;
 import com.novelagent.project.infrastructure.GlobalModelSettingsRepository;
 import org.springframework.beans.factory.annotation.Value;

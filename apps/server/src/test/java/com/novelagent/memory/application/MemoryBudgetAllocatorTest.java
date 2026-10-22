@@ -1,10 +1,10 @@
 package com.novelagent.memory.application;
 
-import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.novelagent.platform.support.Sha256;
 import com.novelagent.agent.application.AgentStage;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

@@ -1,6 +1,6 @@
 package com.novelagent.project.domain;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 
 public record GlobalModelSettings(ModelProvider provider, String codexModel, String codexEffort,
         String deepSeekModel, long version) {

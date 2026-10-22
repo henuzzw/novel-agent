@@ -1,7 +1,7 @@
 package com.novelagent.project.application;
 
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.FreeTextPlanningRequest;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.application.FreeTextModelRequest;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,10 +14,10 @@ import org.springframework.stereotype.Service;
 public class BookTitleService {
     private final ProjectAccessService access;
     private final JdbcTemplate jdbc;
-    private final FreeTextPlanningRequest texts;
+    private final FreeTextModelRequest texts;
 
     public BookTitleService(
-            ProjectAccessService access, JdbcTemplate jdbc, FreeTextPlanningRequest texts) {
+            ProjectAccessService access, JdbcTemplate jdbc, FreeTextModelRequest texts) {
         this.access = access;
         this.jdbc = jdbc;
         this.texts = texts;

@@ -1,7 +1,7 @@
 package com.novelagent.memory.application;
 
 import com.novelagent.agent.application.AgentStage;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 
 public record MemoryBudgetPlan(
         AgentStage stage,

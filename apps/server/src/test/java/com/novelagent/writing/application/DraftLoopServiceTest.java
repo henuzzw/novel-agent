@@ -3,10 +3,11 @@ package com.novelagent.writing.application;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
 import com.novelagent.agent.application.GenerationControlRegistry;
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.domain.*;
 import com.novelagent.writing.infrastructure.DraftLoopModel;
 import java.time.Instant;

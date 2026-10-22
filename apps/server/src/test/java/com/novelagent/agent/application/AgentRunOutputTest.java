@@ -12,8 +12,8 @@ import static org.mockito.Mockito.when;
 
 import com.novelagent.agent.api.dto.AgentRunOutputResponse;
 import com.novelagent.agent.infrastructure.AgentRunQueryRepository;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.CodexAppServerException;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.infrastructure.CodexAppServerException;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import java.math.BigDecimal;

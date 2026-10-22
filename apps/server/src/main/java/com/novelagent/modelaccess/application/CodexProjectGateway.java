@@ -7,7 +7,7 @@ import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.CodexConversationStore;
 import com.novelagent.modelaccess.infrastructure.CodexMaterialDelta;
 import com.novelagent.modelaccess.infrastructure.OAuthCodexClient;
-import com.novelagent.planning.infrastructure.CodexAppServerClient;
+import com.novelagent.modelaccess.infrastructure.CodexAppServerClient;
 import java.util.LinkedHashSet;
 import java.util.UUID;
 import java.util.concurrent.Executors;

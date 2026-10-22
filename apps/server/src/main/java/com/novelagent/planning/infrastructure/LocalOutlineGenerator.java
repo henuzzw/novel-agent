@@ -4,7 +4,7 @@ import static com.novelagent.platform.support.Text.isBlank;
 import static com.novelagent.platform.support.Text.hasText;
 
 import com.novelagent.planning.application.GeneratedOutline;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.OutlineGenerator;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.ChapterPlanStatus;

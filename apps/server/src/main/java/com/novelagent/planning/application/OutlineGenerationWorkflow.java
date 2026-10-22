@@ -6,6 +6,7 @@ import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
 import static com.novelagent.platform.support.GraphStateCodec.required;
 import static com.novelagent.platform.support.Text.isBlank;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.alibaba.cloud.ai.graph.CompiledGraph;
 import com.alibaba.cloud.ai.graph.KeyStrategyFactoryBuilder;
 import com.alibaba.cloud.ai.graph.OverAllState;

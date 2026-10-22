@@ -1,9 +1,10 @@
 package com.novelagent.planning.application;
 
-import com.novelagent.platform.support.Json;
 import static com.novelagent.platform.support.Text.isBlank;
 import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.platform.support.Json;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.domain.PlanningCheckpoint;

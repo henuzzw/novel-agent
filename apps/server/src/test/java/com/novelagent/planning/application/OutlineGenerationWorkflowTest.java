@@ -2,6 +2,7 @@ package com.novelagent.planning.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;

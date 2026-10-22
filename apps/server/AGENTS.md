@@ -11,7 +11,7 @@ Novel Agent 是面向长篇小说作者的可控创作系统。服务端负责�
 - 让作者决定哪些正文和候选事实进入正史。
 - 使用 PostgreSQL 保存权威业务数据和正史版本。
 - 使用 pgvector 召回历史正文与摘要。
-- 使用 Neo4j 查询人物、事件和事实关系。
+- 使用 Neo4j 保存可重建的图谱投影；当前相关正史事实召回直接查询 PostgreSQL。
 - 使用 Kafka + Outbox 异步更新可重建投影。
 - 对 Codex、DeepSeek 和本地模板提供统一的领域生成入口。
 
@@ -60,9 +60,11 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 ## 4. 当前完成度
 
-最后更新：2026-10-21。
+最后更新：2026-10-22。
 
 ### 4.1 已完成
+
+- 模型模块边界：公共网关、四个执行器、输出协议、预算和 Codex 会话/客户端归入 modelaccess。业务通过 application.StructuredModelGateway 调用；ModelProvider / CodexSessionPolicy 位于 modelaccess.domain。FreeTextModelRequest 与 GlobalModelCatalogService 归属模型应用层。导入、规划规则分别实现 StagePromptContributor，模型模块不引用这些业务实现。现有调用方法、提示词文本与顺序、表名、枚举值、会话键、保存回调和失败传播保持兼容；架构测试约束跨模块依赖，装配测试覆盖接口注入与规则顺序。
 
 - V064 记忆修订实测修复（2026-10-14）：实体出现记录按来源／编号／角色更新；story_fact唯一键改为保留历史版本且仅一条当前有效记录，避免整批重物化重复键。状态写入使用clock_timestamp区分同事务内的连续变化，记忆指令强调章末返回／归还。Neo4j投影将Numeric置信度转换为double。新增真实PostgreSQL版本唯一性与出现记录重物化验证；定向测试通过，21:21已重启加载V064。项目9f843969专项补救：22章记忆成功、234条引文可核对、发布正文哈希未变、22章完整导出；正文第3／15／19章仅另存未发布修订候选，逐章正文对前文记忆复核见 ../../docs/samples/PROJECT_9f843969_MEMORY_RECOVERY.md。
 
@@ -236,7 +238,7 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 - 长期记忆召回：章节摘要优先、正文片段补充、定向图谱事实、统一 Token 预算。
 - 章节合同、独立合同审阅、正文和正文审稿使用阶段白名单只读工具：前两章合同/正文/有效正史事实、语义历史检索和相关正史事实。前章优先取有效正史正文，未提交时取作者已确认稿，再退化为已确认合同；未提交稿不得当作正史。召回结果将前章合同与正文分开，正文生成优先为 n-1 正文留约 4000～5000 Token 的动态空间，n-2 较少，并预留事实额度；合同与审阅阶段使用较小的正文额度。
 - 长期记忆按阶段分配预算，并根据模型上下文、固定输入、输出预留和安全余量动态收缩。
-- Neo4j 不可用时，写作召回降级到 pgvector。
+- 相关正史事实读取 PostgreSQL，不依赖 Neo4j；向量检索不可用时保留关键词召回。
 - Codex App Server 长驻进程；大纲和正文每次生成新 thread，其他阶段按项目、工作流复用 thread。
 - DeepSeek Responses JSON Schema 结构化输出。
 - Spring AI Alibaba Graph 编排八个标准创作模型阶段（含独立质量检查）的输入校验、模型生成和输出校验；样本风格分析独立调用。
@@ -274,10 +276,10 @@ src/main/java/com/novelagent
 ├── agent         Agent 阶段定义、只读 Tool、白名单与工具编排
 ├── project       项目、创作入口、创作意图和当前版本指针
 ├── prompt        全局阶段指令、默认目录、配置版本和历史
-├── modelaccess   ChatGPT OAuth、显式入口、私有凭据、HTTP 流式与会话历史
-├── planning      故事方向、故事圣经、大纲、模型生成适配
-├── writing       章节合同、正文、审稿和候选事实
-├── memory        pgvector 召回、图谱查询、Embedding、Token 预算
+├── modelaccess   模型调用端口、供应商执行器、协议、预算、目录、认证与会话
+├── planning      雪花规划、确认资料快照、大纲及阶段生成适配
+├── writing       正文、质量检查、自动编辑循环；合同仅历史兼容
+├── memory        关键词与 pgvector 召回、正史事实读取、Embedding、Token 预算
 ├── canon         正史提交、Outbox、Kafka 和投影
 └── platform      Web 配置、统一异常处理等横切能力
 ```
@@ -285,7 +287,7 @@ src/main/java/com/novelagent
 每个业务模块优先采用：
 
 ```text
-api             Controller、请求和响应 DTO
+api / api.dto   Controller、请求和响应 DTO
 application     用例服务、工作流和端口
 domain          实体、值对象、状态机和领域规则
 infrastructure  Repository、外部模型、数据库和消息适配
@@ -377,7 +379,7 @@ POST /api/v1/projects/{projectId}/chapters/{chapterNumber}/canon-commits
 
 pgvector 和 Neo4j 不参与该数据库事务。投影失败不能回滚已经成功的正史提交。
 
-正史替换在同一事务中将旧提交置为失效、关闭旧提交的类型化事实有效区间、物化新事实并写 Outbox。实体身份可跨提交复用，不随旧事实关闭。写作工具按有效提交过滤 pgvector 和 Neo4j 结果，因此投影延迟时也不会读到旧事实；消费者收到新事件后清理旧版语义文档和图谱事实。后续章节已有正史时仍需单独的依赖分析与连锁修订流程。
+正史替换在同一事务中将旧提交置为失效、关闭旧提交的类型化事实有效区间、物化新事实并写 Outbox。实体身份可跨提交复用，不随旧事实关闭。写作工具按有效提交过滤语义文档，相关事实直接按 PostgreSQL 正史有效区间读取；消费者收到新事件后清理旧版语义文档和图谱事实。后续章节已有正史时仍需单独的依赖分析与连锁修订流程。
 
 ### 6.3 长期记忆召回
 
@@ -390,9 +392,9 @@ NovelMemoryService.recall(stage, projectId, chapterNumber, canonVersion, query, 
 输入 query 由章节标题、POV、目标、核心事件和作者本次要求组合。召回包括：
 
 - 不高于目标正史版本的语义文档。
-- 与查询中的实体或事实相关的 Neo4j 事实。
-- Neo4j 无命中时的少量近期事实回退。
-- Neo4j 异常时的 pgvector-only 降级。
+- 与查询中的实体或事实相关的 PostgreSQL 权威正史事实。
+- 相关事实无命中时的少量近期事实回退。
+- 向量查询不可用时保留关键词检索；PostgreSQL 权威事实查询失败直接报错。
 - `MemoryBudgetAllocator` 按阶段与章节远近分配前章摘要、正文、精简合同和图谱事实额度，并确保合成后的 Prompt 记忆不超过有效预算。正文阶段 n-1 最近章节总额度不超过有效预算 65% 和 5400 Token，n-2 不超过 18% 和 1500 Token；有事实候选时预留最多 800 Token，剩余留给语义检索及其他事实。合同与审阅阶段沿用较短前文。
 - 文本预算集中在包内 `MemoryTextBudget`：沿用 ASCII 连续段每四字符约一 Token、非 ASCII 每码点一 Token 的估算，前缀按码点线性裁剪并为省略号预留额度，正文尾部按完整段落反向累计，不反复创建和扫描增长的子串。`MemoryBudgetAllocator.estimateTokens` 保留公共兼容入口；来源指纹用 StringBuilder 按原顺序拼接，哈希格式不变。单 Token 裁剪只保留省略号，避免局部超预算；补充字符不截断 UTF-16 代理对。最终完整 Prompt 仍须重新估算，定位证据片段仍整段保留或省略。
 
@@ -422,7 +424,7 @@ AgentToolPolicy
 
 ### 7.1 统一供应商枚举
 
-`ModelProvider` 当前包含：
+`modelaccess.domain.ModelProvider` 当前包含：
 
 - `LOCAL_CODEX`
 - `DEEPSEEK`
@@ -441,7 +443,7 @@ Codex 使用后端主机上的 `codex app-server`，不是前端浏览器或用�
 - Codex 协议请求默认最多等待600秒（CODEX_CLI_TIMEOUT_SECONDS）；生成按连续无新进展1200秒（CODEX_TURN_TIMEOUT_SECONDS）判断空闲超时，持续输出或推理时自动续期，不设总生成时长上限。运行后端的系统用户必须能读写自己的Codex运行状态目录，否则App Server无法初始化。
 - `CodexAgentSession`：项目与工作流对应的持久化会话。
 - `CodexAgentSessionRepository`：恢复 thread。
-- `StructuredModelGateway`：冻结提示词与模型配置，统一供应商路由和 AgentRun 记录；会话操作委托 CodexSessionManager，最终输入及预留校验委托 StructuredRequestBudget。
+- `modelaccess.application.StructuredModelGateway`：业务调用端口。RoutedStructuredModelGateway 选择执行器，ModelPromptAssembler 按注入的阶段规则组装提示词；AbstractModelExecutor 统一预算、记录、解析、保存及成功确认，会话细节由各执行器的协作者处理。
 - `CodexSessionManager`：新建/恢复会话、提示词版本轮转、缺失 thread 重建和完成 turn 回写；模型失败不写完成标记，普通网络及鉴权错误不重试。
 - `StructuredRequestBudget`：基于最终 Prompt 与 Schema 校验输入、输出预留和安全余量，不截断输入。
 - `CodexSessionPolicy`：业务阶段显式选择新 thread 或复用 thread；大纲、正文及独立检查等阶段新建，连续审阅类阶段按既有规则恢复。
@@ -658,7 +660,7 @@ app.memory.*
 
 ### 12.3 领域边界
 
-- 内容更新包装统一使用 `platform.api.ContentUpdateRequest<T>`：大纲、正文、审稿保留各自的具体 content 类型和 `{content: ...}` JSON；是否触发 Bean Validation 仍由接口的 `@Valid` 决定，大纲必填、审稿批准可省略 body 的行为不变。规划批次/片段共用 `planning.api.VersionRequest`，保留必填非负行版本校验。不把状态、来源字段或授权范围不同的响应/修订请求强行合并。
+- 内容更新包装统一使用 `platform.api.dto.ContentUpdateRequest<T>`：大纲、正文、审稿保留各自的具体 content 类型和 `{content: ...}` JSON；是否触发 Bean Validation 仍由接口的 `@Valid` 决定，大纲必填、审稿批准可省略 body 的行为不变。规划批次/片段共用 `planning.api.dto.VersionRequest`，保留必填非负行版本校验。不把状态、来源字段或授权范围不同的响应/修订请求强行合并。
 - API DTO 不直接承担领域状态机。
 - 模型输出 DTO 必须经过转换和领域校验后才能持久化。
 - JSONB 适合不可变版本快照和供应商输出，不适合永久替代所有可查询领域表。
@@ -666,7 +668,7 @@ app.memory.*
 
 ## 13. 测试与验证
 
-日常采用低负载验证，不再每次修改都运行全部测试。默认后端仅运行 9 个关键测试类，单 JVM、关闭并行、测试堆上限 512 MB、可用处理器数 2；不启动 Spring 上下文、数据库或模拟长时间超时。
+日常采用低负载验证，不再每次修改都运行全部测试。默认后端运行 10 个关键测试类（包含 ArchitectureTest），单 JVM、关闭并行、测试堆上限 512 MB、可用处理器数 2；不启动 Spring 上下文、数据库或模拟长时间超时。
 
 ```powershell
 .\mvnw.cmd test
@@ -759,7 +761,7 @@ app.memory.*
 - 写作链路精简（2026-10-09）：已删除不可达的合同生成/合同审阅 Graph、模型调用、Prompt 构造、Schema、Parser 和本地合同模板；前端未使用的合同 API 与版本类型同步移除。活动写作 Graph 复用项目/圣经/供应商输入校验，正文审稿与质量检查复用问题 Schema 构造，保留各自严重级别和类别限制。旧接口仍校验项目权限并返回 410，错误构造集中在 ChapterContractService；章节写作依据、历史读取、持久化字段、活动提示词与正史权限不变。不要将 ChapterContractContent 仅凭名称视为死代码，它仍承载从大纲得到的写作依据。
 
 - `CodexAppServerClient` 负责较多协议与进程细节，需要在补足回归测试后再拆，不要无测试重写。
-- 写作用例已拆分，模型公共生命周期由 AbstractModelExecutor 收敛，入口差异分配给四个适配器；公共调用代码仍位于 planning infrastructure，尚未进行公共模型包迁移。部分领域对象仍依赖 application 枚举、应用用例沿用 API DTO。本轮未进行全模块纯领域化。重复项目归属校验已统一到 ProjectAccessService；锁定、来源复核、编辑版本和作者门禁仍由各业务用例管理，不统一成通用 CRUD。
+- 写作用例已拆分，模型公共生命周期由 AbstractModelExecutor 收敛，入口差异分配给四个适配器；公共调用代码已归入 modelaccess，ModelProvider 已进入公共领域包；业务模块通过调用端口访问。其他部分领域对象仍依赖 application 枚举、应用用例沿用 API DTO。本轮未进行全模块纯领域化。重复项目归属校验已统一到 ProjectAccessService；锁定、来源复核、编辑版本和作者门禁仍由各业务用例管理，不统一成通用 CRUD。
 - 新提交已开始物化类型化正史，但模型候选仍是扁平结构，旧 JSONB 事实尚未批量回填。
 - 当前运行环境仍使用开发用特征哈希；正式适配器已完成，但未配置独立 Embedding 密钥和召回评测集。
 - `AgentRun` 可记录供应商提供的真实 usage，缺失保持未知，旧字段仍为估算；自动任务缺任务级配置冻结、真实费用归集、即时中断与费用硬上限。

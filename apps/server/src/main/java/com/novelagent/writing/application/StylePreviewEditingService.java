@@ -2,7 +2,7 @@ package com.novelagent.writing.application;
 
 import static com.novelagent.platform.support.Text.trimToNull;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.CheckStylePreviewRequest;
 import com.novelagent.writing.api.dto.ReviseStylePreviewRequest;
 import com.novelagent.writing.api.dto.StylePreviewReviewResponse;

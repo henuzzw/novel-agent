@@ -3,13 +3,14 @@ package com.novelagent.chat.application;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.GenerationControlRegistry;
 import com.novelagent.chat.domain.*;
 import com.novelagent.memory.application.MemoryPreviewService;
 import com.novelagent.memory.application.NovelMemoryContext;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import java.time.Instant;
 import java.util.*;

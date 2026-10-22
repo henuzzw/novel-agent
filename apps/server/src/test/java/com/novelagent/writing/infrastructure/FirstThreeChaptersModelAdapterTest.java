@@ -14,13 +14,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.agent.application.ModelFailureDetails;
 import com.novelagent.memory.application.ModelContextProperties;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
 import java.util.List;
 import java.util.function.Consumer;

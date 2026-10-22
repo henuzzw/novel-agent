@@ -1,6 +1,6 @@
 package com.novelagent.project.api;
 
-import com.novelagent.project.application.GlobalModelCatalogService;
+import com.novelagent.modelaccess.application.GlobalModelCatalogService;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import com.novelagent.project.domain.GlobalModelSettings;
 import java.util.List;

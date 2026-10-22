@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.infrastructure.OutboxPublisher;
 import com.novelagent.chat.domain.ChatAction;
 import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.SnowflakeStep;
 import com.novelagent.planning.domain.*;
 import com.novelagent.planning.infrastructure.*;

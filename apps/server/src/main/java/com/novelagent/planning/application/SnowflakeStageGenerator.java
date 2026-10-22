@@ -1,19 +1,20 @@
 package com.novelagent.planning.application;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.infrastructure.FreeTextPlanningRequest;
+import com.novelagent.modelaccess.application.FreeTextModelRequest;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 /** Builds and generates exactly one stage; orchestration and checkpoint writes belong to SnowflakePlanningService. */
 @Component
 public class SnowflakeStageGenerator {
-    private final FreeTextPlanningRequest texts;
+    private final FreeTextModelRequest texts;
     private final CharacterDesignService characters;
     private final ObjectMapper mapper;
 
-    public SnowflakeStageGenerator(FreeTextPlanningRequest texts, CharacterDesignService characters, ObjectMapper mapper) {
+    public SnowflakeStageGenerator(FreeTextModelRequest texts, CharacterDesignService characters, ObjectMapper mapper) {
         this.texts = texts;
         this.characters = characters;
         this.mapper = mapper;

@@ -5,7 +5,7 @@ logging:
     name: ${LOG_FILE:logs/novel-agent-server.log}
   level:
     com.novelagent.platform.web.HttpRequestLog: ${HTTP_LOG_LEVEL:INFO}
-    com.novelagent.planning.infrastructure.CodexAppServerClient: ${CODEX_LOG_LEVEL:INFO}
+    com.novelagent.modelaccess.infrastructure.CodexAppServerClient: ${CODEX_LOG_LEVEL:INFO}
   logback:
     rollingpolicy:
       max-file-size: 10MB

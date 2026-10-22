@@ -2,7 +2,7 @@ package com.novelagent.planning.infrastructure;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
 import com.novelagent.platform.support.Json;

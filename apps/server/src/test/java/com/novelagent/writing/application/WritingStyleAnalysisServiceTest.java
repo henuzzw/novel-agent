@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import com.novelagent.planning.application.ModelProvider;
+
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.infrastructure.WritingGenerationGateway;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;

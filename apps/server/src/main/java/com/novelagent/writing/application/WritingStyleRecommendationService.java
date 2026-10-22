@@ -5,7 +5,7 @@ import static com.novelagent.project.application.ResourceVersionConflictExceptio
 
 import com.novelagent.planning.api.dto.StoryBibleResponse;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.RecommendWritingStyleRequest;
 import com.novelagent.writing.api.dto.WritingStyleRecommendationResponse;
 import com.novelagent.writing.domain.WritingStyleProfile;

@@ -1,8 +1,8 @@
 package com.novelagent.ingest.application;
 
 import com.novelagent.ingest.infrastructure.ImportAnalysisPrompt;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.project.application.BookTitleService;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;

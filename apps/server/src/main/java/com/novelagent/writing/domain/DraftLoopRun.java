@@ -1,6 +1,6 @@
 package com.novelagent.writing.domain;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.support.Sha256;
 import jakarta.persistence.*;
 import java.time.Instant;

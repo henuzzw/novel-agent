@@ -5,7 +5,7 @@ import static com.novelagent.platform.support.Text.isBlank;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.support.Json;
 import com.novelagent.platform.support.Sha256;
 import java.math.BigDecimal;

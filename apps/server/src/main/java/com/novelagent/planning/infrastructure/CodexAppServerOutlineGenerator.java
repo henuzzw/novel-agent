@@ -1,6 +1,7 @@
 package com.novelagent.planning.infrastructure;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import org.springframework.stereotype.Component;
 
 @Component

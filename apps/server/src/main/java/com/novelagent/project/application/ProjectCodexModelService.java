@@ -1,7 +1,8 @@
 package com.novelagent.project.application;
 
+import com.novelagent.modelaccess.application.GlobalModelCatalogService;
 import com.novelagent.project.domain.CodexModelChoice;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.project.domain.GlobalModelSettings;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

@@ -8,7 +8,7 @@ import com.novelagent.memory.application.ContextBudgetPlanner;
 import com.novelagent.memory.application.MemoryBudgetAllocator;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.memory.application.NovelMemoryService;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.CharacterBlueprint;
 import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.api.dto.QualityReviewResponse;

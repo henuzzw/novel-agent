@@ -21,7 +21,7 @@ import com.novelagent.canon.application.ProjectionStatusService;
 import com.novelagent.memory.api.MemoryController;
 import com.novelagent.memory.application.MemoryPreviewService;
 import com.novelagent.memory.application.NovelMemoryContext;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.project.application.ProjectNotFoundException;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;

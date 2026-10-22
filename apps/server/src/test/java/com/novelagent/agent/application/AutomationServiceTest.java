@@ -3,9 +3,10 @@ package com.novelagent.agent.application;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
 import com.novelagent.agent.domain.*;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.application.*;
 import com.novelagent.writing.domain.*;

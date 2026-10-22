@@ -1,6 +1,6 @@
 package com.novelagent.writing.api.dto;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import java.util.UUID;

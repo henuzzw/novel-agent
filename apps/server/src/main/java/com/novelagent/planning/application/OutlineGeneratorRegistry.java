@@ -1,5 +1,6 @@
 package com.novelagent.planning.application;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;

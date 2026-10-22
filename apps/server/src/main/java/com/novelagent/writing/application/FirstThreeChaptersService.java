@@ -1,6 +1,6 @@
 package com.novelagent.writing.application;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.domain.FirstThreeChaptersBudget;
 import com.novelagent.writing.domain.FirstThreeChaptersContent;
 import com.novelagent.writing.domain.FirstThreeChaptersReport;

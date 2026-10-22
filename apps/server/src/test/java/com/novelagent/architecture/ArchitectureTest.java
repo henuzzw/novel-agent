@@ -85,17 +85,49 @@ class ArchitectureTest {
                 "com.novelagent.writing.infrastructure.WritingModelRouter");
         Set<String> infrastructureDetails = Set.of(
                 "com.novelagent.agent.application.AgentRunRecorder",
-                "com.novelagent.planning.infrastructure.CodexAgentSessionRepository",
-                "com.novelagent.planning.infrastructure.CodexAppServerClient",
-                "com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient");
+                "com.novelagent.modelaccess.infrastructure.CodexAgentSessionRepository",
+                "com.novelagent.modelaccess.infrastructure.CodexAppServerClient",
+                "com.novelagent.modelaccess.infrastructure.DeepSeekStructuredOutputClient");
 
         adapters.forEach(name -> {
             assertThat(dependencies).containsKey(name);
-            assertThat(dependencies.get(name)).as(name).contains("com.novelagent.planning.infrastructure.StructuredModelGateway");
+            assertThat(dependencies.get(name)).as(name).contains("com.novelagent.modelaccess.application.StructuredModelGateway");
             assertThat(dependencies.get(name)).as(name).doesNotContainAnyElementsOf(infrastructureDetails);
             assertThat(dependencies.get(name)).as(name).noneMatch(type -> infrastructureDetails.stream()
                     .anyMatch(detail -> type.startsWith(detail + "$")));
         });
+    }
+
+    @Test void businessModulesUseModelPortsInsteadOfTransportImplementations() {
+        dependencies.forEach((name, references) -> {
+            if (name.startsWith("com.novelagent.modelaccess.")) return;
+            assertThat(references).as(name).noneMatch(type ->
+                    type.startsWith("com.novelagent.modelaccess.infrastructure."));
+        });
+    }
+
+    @Test void modelAccessDoesNotDependOnPlanningOrWritingImplementations() {
+        dependencies.forEach((name, references) -> {
+            if (!name.startsWith("com.novelagent.modelaccess.")) return;
+            assertThat(references).as(name).noneMatch(type ->
+                    type.startsWith("com.novelagent.planning.")
+                            || type.startsWith("com.novelagent.ingest.")
+                            || type.startsWith("com.novelagent.writing.")
+                            || type.startsWith("com.novelagent.canon."));
+        });
+    }
+
+    @Test void modelContractsRemainIndependentOfSpringAndAdapters() {
+        for (String name : List.of(
+                "com.novelagent.modelaccess.application.StructuredModelGateway",
+                "com.novelagent.modelaccess.application.StagePromptContributor",
+                "com.novelagent.modelaccess.domain.ModelProvider",
+                "com.novelagent.modelaccess.domain.CodexSessionPolicy")) {
+            assertThat(dependencies).containsKey(name);
+            assertThat(dependencies.get(name)).as(name).noneMatch(type ->
+                    type.startsWith("org.springframework.") || type.startsWith("jakarta.persistence.")
+                            || type.contains(".infrastructure.") || type.contains(".api."));
+        }
     }
 
     @Test void writingCollaboratorsRemainAcyclic() {

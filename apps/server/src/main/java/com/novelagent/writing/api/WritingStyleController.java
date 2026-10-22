@@ -1,6 +1,6 @@
 package com.novelagent.writing.api;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.GenerateStylePreviewRequest;
 import com.novelagent.writing.api.dto.RecommendWritingStyleRequest;
 import com.novelagent.writing.api.dto.WritingStylePreviewResponse;

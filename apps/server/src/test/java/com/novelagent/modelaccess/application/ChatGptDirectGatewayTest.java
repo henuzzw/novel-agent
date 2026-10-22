@@ -10,7 +10,7 @@ import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.ChatGptResponsesClient;
 import com.novelagent.modelaccess.infrastructure.HttpConversationStore;
 import com.novelagent.modelaccess.infrastructure.PrivateOAuthStore;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

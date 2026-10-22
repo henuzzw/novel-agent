@@ -1,6 +1,6 @@
 package com.novelagent.modelaccess.application;
 
-import com.novelagent.planning.application.ModelProviderException;
+
 
 /** Only sanitized diagnostics cross the API/task boundary, never raw token responses. */
 public class ChatGptAccessException extends ModelProviderException {

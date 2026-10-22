@@ -3,6 +3,7 @@ package com.novelagent.planning.application;
 import static com.novelagent.platform.support.Text.isBlank;
 import static com.novelagent.platform.support.Text.hasText;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.novelagent.agent.application.GenerationStoppedException;

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,7 +20,7 @@ import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.agent.application.ModelInputUnavailableException;
 import com.novelagent.planning.domain.SnowflakePlan;
 import com.novelagent.planning.domain.StoryBibleContent;
-import com.novelagent.planning.infrastructure.FreeTextPlanningRequest;
+import com.novelagent.modelaccess.application.FreeTextModelRequest;
 import com.novelagent.planning.infrastructure.SnowflakePlanStore;
 import com.novelagent.project.application.CreativeBoundaryGuide;
 import com.novelagent.project.application.ProjectAccessService;
@@ -55,7 +56,7 @@ class SnowflakePlanningServiceTest {
             StoryBibleContent.class);
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final SnowflakePlanStore store = mock(SnowflakePlanStore.class);
-    private final FreeTextPlanningRequest texts = mock(FreeTextPlanningRequest.class);
+    private final FreeTextModelRequest texts = mock(FreeTextModelRequest.class);
     private final CharacterDesignService characters = mock(CharacterDesignService.class);
     private final SnowflakePlanningService service = new SnowflakePlanningService(access, store,
             new SnowflakeStageGenerator(texts, characters, mapper));

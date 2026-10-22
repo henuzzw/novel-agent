@@ -3,8 +3,9 @@ package com.novelagent.project.application;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.FreeTextPlanningRequest;
+
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.application.FreeTextModelRequest;
 import com.novelagent.project.domain.NovelProject;
 import java.util.UUID;
 import java.util.Map;
@@ -15,7 +16,7 @@ class BookTitleServiceTest {
     private final UUID projectId = UUID.randomUUID(), importId = UUID.randomUUID();
     private final ProjectAccessService access = mock(ProjectAccessService.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final FreeTextPlanningRequest text = mock(FreeTextPlanningRequest.class);
+    private final FreeTextModelRequest text = mock(FreeTextModelRequest.class);
     private final NovelProject project = mock(NovelProject.class);
     private final BookTitleService titles = new BookTitleService(access, jdbc, text);
     @Test void suppliedTitleDoesNotConsumeAModelRequest() {

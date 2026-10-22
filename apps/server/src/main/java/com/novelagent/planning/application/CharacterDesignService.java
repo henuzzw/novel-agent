@@ -1,11 +1,12 @@
 package com.novelagent.planning.application;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.StoryBibleContent;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.StoryBibleOutputSchema;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.prompt.application.AgentPromptDefaults;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

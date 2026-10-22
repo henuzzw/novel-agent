@@ -5,7 +5,7 @@ import com.novelagent.agent.application.AgentStage;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.memory.application.ContextBudgetPlanner;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.writing.domain.DraftLoopRun;

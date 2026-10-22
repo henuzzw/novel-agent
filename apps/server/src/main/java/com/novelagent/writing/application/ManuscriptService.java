@@ -9,7 +9,7 @@ import com.novelagent.memory.application.ContextBudgetPlanner;
 import com.novelagent.memory.application.MemoryBudgetPlan;
 import com.novelagent.memory.application.NovelMemoryContext;
 import com.novelagent.planning.application.GenerationMode;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.GenerateWritingRequest;
 import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.api.dto.ManuscriptVersionSummaryResponse;

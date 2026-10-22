@@ -2,7 +2,7 @@ package com.novelagent.writing.infrastructure;
 
 import static com.novelagent.platform.support.Text.isBlank;
 
-import com.novelagent.planning.application.ModelProviderException;
+import com.novelagent.modelaccess.application.ModelProviderException;
 import com.novelagent.writing.domain.FactProposal;
 import com.novelagent.writing.domain.TypedFactPayload;
 import java.util.Set;

@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.project.domain.GlobalModelSettings;
 import com.novelagent.project.infrastructure.GlobalModelSettingsRepository;
 import java.util.Optional;

@@ -10,7 +10,7 @@ import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.ingest.api.dto.PrepareImportedStoryRequest;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.ingest.infrastructure.ImportedPlanningStore;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.SnowflakePlanningService;
 import com.novelagent.planning.domain.SnowflakePlan;
 import com.novelagent.project.api.dto.CreativeIntentRequest;

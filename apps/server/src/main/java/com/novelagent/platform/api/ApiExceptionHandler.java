@@ -3,7 +3,7 @@ package com.novelagent.platform.api;
 import com.novelagent.agent.application.GenerationStopConflictException;
 import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.agent.application.ModelInputUnavailableException;
-import com.novelagent.planning.application.ModelProviderException;
+import com.novelagent.modelaccess.application.ModelProviderException;
 import com.novelagent.planning.application.OutlineVersionNotFoundException;
 import com.novelagent.planning.application.PlanningCheckpointException;
 import com.novelagent.planning.application.StoryBibleVersionNotFoundException;

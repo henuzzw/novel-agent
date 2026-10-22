@@ -5,7 +5,7 @@ import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.agent.infrastructure.AutomationRunRepository;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;

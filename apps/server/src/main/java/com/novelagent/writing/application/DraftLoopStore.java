@@ -4,7 +4,7 @@ import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.agent.infrastructure.AutomationRunRepository;
 import com.novelagent.canon.application.CharacterNameService;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.writing.domain.*;

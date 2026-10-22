@@ -11,7 +11,7 @@ import com.novelagent.ingest.api.dto.ImportedChapterResponse;
 import com.novelagent.ingest.domain.ImportAnalysis;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.ingest.infrastructure.ImportAnalysisOutputParser;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.support.Json;
 import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CreativeBoundaryService;

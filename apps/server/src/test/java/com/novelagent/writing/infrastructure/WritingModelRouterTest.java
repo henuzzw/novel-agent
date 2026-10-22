@@ -7,9 +7,9 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 

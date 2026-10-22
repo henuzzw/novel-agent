@@ -30,7 +30,7 @@
 		<java.version>21</java.version>
 		<spring-ai-alibaba.version>1.1.2.2</spring-ai-alibaba.version>
 		<!-- Daily checks avoid Spring contexts, databases and timeout simulations. -->
-		<test.includes>**/ProjectAccessServiceTest.java,**/BookTitleServiceTest.java,**/PlainTextOutputProtocolTest.java,**/ImportAnalysisOutputParserTest.java,**/SnowflakePlanningServiceTest.java,**/StructuredModelGatewayTest.java,**/DraftLoopRunTest.java,**/DraftLoopServiceTest.java,**/GenerationControlRegistryTest.java</test.includes>
+		<test.includes>**/ArchitectureTest.java,**/ProjectAccessServiceTest.java,**/BookTitleServiceTest.java,**/PlainTextOutputProtocolTest.java,**/ImportAnalysisOutputParserTest.java,**/SnowflakePlanningServiceTest.java,**/StructuredModelGatewayTest.java,**/DraftLoopRunTest.java,**/DraftLoopServiceTest.java,**/GenerationControlRegistryTest.java</test.includes>
 	</properties>
 	<dependencyManagement>
 		<dependencies>

@@ -3,7 +3,7 @@ package com.novelagent.planning.infrastructure;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.SnowflakeStep;
 import com.novelagent.planning.domain.SnowflakePlan;
 import com.novelagent.platform.support.Json;

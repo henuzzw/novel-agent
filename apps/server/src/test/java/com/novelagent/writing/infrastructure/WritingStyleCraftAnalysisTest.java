@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.planning.application.ModelProviderException;
+import com.novelagent.modelaccess.application.ModelProviderException;
 import com.novelagent.writing.application.WritingStyleGuide;
 import com.novelagent.writing.application.WritingStylePresets;
 import com.novelagent.writing.domain.WritingStyleCraft;

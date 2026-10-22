@@ -3,7 +3,7 @@ package com.novelagent.agent.api.dto;
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.agent.domain.AutomationStep;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

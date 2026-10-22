@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.novelagent.planning.api.dto.StoryBibleResponse;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.project.application.ProjectNotFoundException;

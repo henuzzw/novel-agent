@@ -1,6 +1,6 @@
 package com.novelagent.writing.api;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.application.DraftLoopService;
 import com.novelagent.writing.application.DraftLoopStore;
 import com.novelagent.writing.domain.DraftLoopRun;

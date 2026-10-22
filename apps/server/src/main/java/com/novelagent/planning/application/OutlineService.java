@@ -3,6 +3,7 @@ package com.novelagent.planning.application;
 import static com.novelagent.platform.support.Text.trimToNull;
 import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.ingest.application.ImportedOutlineGenerator;
 import com.novelagent.planning.api.dto.GenerateOutlineRequest;

@@ -2,8 +2,9 @@ package com.novelagent.writing.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProviderException;
+import com.novelagent.modelaccess.application.ModelProviderException;
 import com.novelagent.writing.domain.ManuscriptContent;
 import java.util.List;
 import org.junit.jupiter.api.Test;

@@ -1,8 +1,10 @@
 package com.novelagent.planning.infrastructure;
 
+import com.novelagent.modelaccess.application.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.planning.application.GeneratedOutline;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.OutlineGenerator;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.OutlineContent;

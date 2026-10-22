@@ -4,7 +4,7 @@ import static com.novelagent.platform.support.Text.isBlank;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.novelagent.agent.application.ModelOutputAvailability;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.SnowflakeStep;
 import java.time.Instant;
 import java.util.LinkedHashMap;

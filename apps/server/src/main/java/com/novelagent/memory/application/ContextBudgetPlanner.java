@@ -2,7 +2,7 @@ package com.novelagent.memory.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentStage;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.support.Json;
 import org.springframework.stereotype.Component;
 

@@ -3,10 +3,11 @@ package com.novelagent.writing.infrastructure;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.writing.domain.*;
 import java.util.List;
 import java.util.UUID;

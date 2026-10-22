@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.api.dto.GenerateOutlineRequest;
 import com.novelagent.planning.domain.ChapterPlan;

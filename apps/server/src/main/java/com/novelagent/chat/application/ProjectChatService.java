@@ -2,13 +2,14 @@ package com.novelagent.chat.application;
 
 import static com.novelagent.platform.support.Text.isBlank;
 
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.novelagent.agent.application.*;
 import com.novelagent.chat.domain.*;
 import com.novelagent.memory.application.MemoryPreviewService;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.*;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.prompt.application.AgentPromptDefaults;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import java.util.*;

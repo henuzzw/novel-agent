@@ -2,6 +2,7 @@ package com.novelagent.planning.application;
 
 import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.planning.api.dto.OutlineResponse;

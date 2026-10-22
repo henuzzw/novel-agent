@@ -1,7 +1,7 @@
 package com.novelagent.planning.api.dto;
 
 import com.novelagent.planning.application.GenerationMode;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
 

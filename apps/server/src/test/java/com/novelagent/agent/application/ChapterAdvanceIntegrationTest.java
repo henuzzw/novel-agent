@@ -4,6 +4,7 @@ import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+
 import com.novelagent.agent.api.dto.CreateAutomationRunRequest;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.canon.api.dto.PublishManuscriptRequest;
@@ -11,7 +12,7 @@ import com.novelagent.canon.application.CanonPublicationService;
 import com.novelagent.canon.application.PublishedMemoryService;
 import com.novelagent.canon.infrastructure.OutboxPublisher;
 import com.novelagent.memory.infrastructure.SemanticEmbeddingBackfill;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.*;
 import com.novelagent.planning.infrastructure.OutlineVersionRepository;
 import com.novelagent.project.application.CurrentActorProvider;

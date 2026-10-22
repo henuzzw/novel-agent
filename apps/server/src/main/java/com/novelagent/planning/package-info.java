@@ -1,9 +1,10 @@
 /**
- * 规划模块：雪花规划、故事圣经、分层大纲、规划分块与检查点；同时包含所有模型共用的结构化调用网关与执行器。
+ * 规划模块：雪花规划、确认资料快照、分层大纲、规划分块与检查点。
  *
  * <ul>
  *   <li>接口入口：OutlineController、SnowflakePlanningController、PlanningBatchController、PlanningCheckpointController。
- *   <li>核心服务：OutlineService、OutlineGenerationWorkflow；infrastructure 下的 StructuredModelGateway 与 *Executor 是所有模型调用的统一入口。
+ *   <li>核心服务：OutlineService、OutlineGenerationWorkflow、ConfirmedSnowflakeService；通过 modelaccess 的调用端口生成内容。
+ *   <li>OutlinePromptContributor 提供规划规则，模型接入模块不引用规划实现。
  *   <li>主要依赖：project、agent（运行记录）、memory、modelaccess、prompt。
  * </ul>
  *

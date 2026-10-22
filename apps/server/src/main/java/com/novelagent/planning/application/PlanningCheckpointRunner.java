@@ -1,14 +1,15 @@
 package com.novelagent.planning.application;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.OutlineOutputSchema;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.project.application.CreativeStrategyGuide;
 import com.novelagent.prompt.application.AgentPromptDefaults;
 import java.util.UUID;

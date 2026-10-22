@@ -85,7 +85,7 @@
 - Java 21、Spring Boot 3.5、Spring AI 1.1、Spring AI Alibaba 1.1.2.2。
 - Spring Data JPA、Flyway。
 - PostgreSQL 16、pgvector、Neo4j。
-- Vue 3、TypeScript、Vite、Vue Router、Pinia、TanStack Query。
+- Vue 3、TypeScript、Vite、Vue Router、TanStack Query。
 - Vitest、Playwright、Spring Boot Test。
 
 ## 目录

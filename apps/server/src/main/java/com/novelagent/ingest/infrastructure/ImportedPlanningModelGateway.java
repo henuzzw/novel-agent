@@ -1,9 +1,9 @@
 package com.novelagent.ingest.infrastructure;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;

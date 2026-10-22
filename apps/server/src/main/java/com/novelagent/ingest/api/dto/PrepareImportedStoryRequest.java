@@ -1,7 +1,7 @@
 package com.novelagent.ingest.api.dto;
 
 import com.novelagent.ingest.domain.ImportPlanningMode;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import jakarta.validation.constraints.*;
 import java.util.UUID;
 

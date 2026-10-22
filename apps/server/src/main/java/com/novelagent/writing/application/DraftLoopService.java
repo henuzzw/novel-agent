@@ -6,7 +6,7 @@ import com.novelagent.agent.application.GenerationControlRegistry;
 import com.novelagent.agent.application.GenerationStopConflictException;
 import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.agent.domain.AutomationRun;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.domain.DraftLoopRun;
 import com.novelagent.writing.infrastructure.DraftLoopModel;
 import java.nio.charset.StandardCharsets;

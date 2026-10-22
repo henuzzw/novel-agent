@@ -3,7 +3,7 @@ package com.novelagent.planning.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import org.junit.jupiter.api.Test;
 
 class PlanningModelOutputParserTest {

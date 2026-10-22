@@ -1,6 +1,6 @@
 # Java 服务端当前架构
 
-最后更新：2026-10-21（含目录结构与共享工具调整）。
+最后更新：2026-10-22（模型接入模块与调用端口边界）。
 
 每个模块根包的 `package-info.java` 写有该模块的职责、接口入口、核心服务和主要依赖。
 
@@ -14,17 +14,17 @@
 | --- | --- |
 | project | 项目、当前作者、创作意图、项目访问权限 |
 | prompt | 全局阶段提示词、默认目录、用户配置与版本历史 |
-| planning | 故事方向、圣经、大纲及相关模型适配 |
+| planning | 雪花规划、确认资料快照、大纲及阶段生成适配 |
 | writing | 正文版本、审稿与质量检查、风格、自动编辑循环；合同仅保留历史读取与退役接口 |
 | writing 风格试写 | WritingStylePreviewService 读取同项目已保存大纲第一章，WritingGenerationWorkflow 的独立 STYLE_PREVIEW Graph 生成临时样例；不通过 ManuscriptService 保存、不修改风格和正史 |
 | writing 试写编辑 | StylePreviewEditingController → StylePreviewEditingService → Workflow 的独立检查/修订 Graph；StylePreviewReviewStore 保存依据与报告、锁内单次认领、生成后复核，不回调写作门面 |
-| writing 风格推荐 | WritingStyleRecommendationService 复用 StoryBibleService 的权限与版本读取，独立 STYLE_RECOMMENDATION Graph 校验规范预设及圣经证据；前后校验源快照、不应用风格或改变权威数据 |
+| writing 风格推荐 | WritingStyleRecommendationService 复用 ConfirmedSnowflakeService 的权限与版本读取，独立 STYLE_RECOMMENDATION Graph 校验规范预设及资料证据；前后校验源快照、不应用风格或改变权威数据 |
 | agent | 自动任务、阶段决策、只读工具、模型运行记录 |
 | memory | 记忆召回、Token 预算、Embedding、记忆预览 |
 | canon | 正史提交、类型化事实、人物资料、Outbox、投影 |
 | ingest | 作品导入、解析、导入反推规划 |
 | chat | 项目创作对话与修改候选 |
-| modelaccess | ChatGPT OAuth 直连、HTTP 会话历史与 Codex 项目会话 |
+| modelaccess | 公共模型调用端口、供应商执行器、输出协议、预算、目录、认证与会话 |
 | platform | HTTP 响应工具、异常映射、请求日志，以及 Json、Sha256、Text、GraphStateCodec 等通用工具 |
 
 各模块沿用 `api / application / domain / infrastructure` 分层：
@@ -44,31 +44,42 @@ Controller 与 application Service 使用四空格缩进；在项目根目录运
 ### 请求类型复用
 
 - `ContentUpdateRequest<T>` 仅统一 HTTP 的 `{content: ...}` 包装，替代 UpdateOutlineRequest、UpdateManuscriptRequest、UpdateChapterReviewRequest。Controller 用具体泛型声明保证 Jackson 绑定为对应领域内容，应用服务继续接收原有具体内容类型。大纲接口保留 `@Valid` 与 content 必填校验；正文/审稿的既有校验及审稿批准的可选 body 不变。
-- 规划批次和规划片段共用 `planning.api.VersionRequest`，统一 `{version: ...}` 与必填、非负约束，版本冲突仍由各用例判断。
+- 规划批次和规划片段共用 `planning.api.dto.VersionRequest`，统一 `{version: ...}` 与必填、非负约束，版本冲突仍由各用例判断。
 - 不同内容、来源、状态和作者授权仍使用专用类型；不为统一命名增加通用响应基类，也不向响应添加无关的可空字段。ContentUpdateControllerTest 验证三种具体内容绑定、ETag、大纲必填和审稿批准可选 body；规划 Controller 测试验证共用版本请求。
 
-结构化模型调用统一经过 `StructuredModelGateway`。规划、写作和导入生成器只负责选择
-Prompt、Schema、解析器及 Codex 会话策略；公共网关负责 Codex / DeepSeek 路由、
-`AgentRun` 记录、Codex thread 新建或恢复、失效 thread 重建和 turn 回写。新增模型阶段不得
-在业务生成器中再次复制这套生命周期。前端 API 则统一经过 `src/api/http.ts`，集中处理
-`no-store`、JSON 请求头、FormData 边界、204 响应和 Problem Details 错误。
+### 模型调用边界
 
-公共网关内部也按职责分开，避免新增阶段时扩展同一个大类：
+业务生成器依赖 `modelaccess.application.StructuredModelGateway` 接口，提供 Prompt、Schema、
+解析与保存回调以及会话策略。`ModelProvider` 与 `CodexSessionPolicy` 位于 `modelaccess.domain`，
+不再依赖规划模块。自由文本请求通过 `FreeTextModelRequest` 复用相同调用端口。
+
+供应商客户端、输出协议与会话实现集中到 `modelaccess.infrastructure`：
 
 ```text
-业务 Prompt / Schema / 输出解析器
-    -> StructuredModelGateway：冻结配置、路由供应商、记录实际请求与结果
-        -> AgentPromptService：解析当前用户的阶段提示词版本
-        -> StructuredRequestBudget：校验最终 Prompt + Schema + 输出预留 + 安全余量
-        -> CodexSessionManager：新建/恢复 thread、版本换会话、缺失恢复、完成后回写 turn
-            -> CodexAppServerClient / CodexAgentSessionRepository
-        -> DeepSeekStructuredOutputClient：无状态供应商请求
+规划 / 写作 / 导入 / 对话 / 书名生成
+    -> StructuredModelGateway（application 接口）
+        <- RoutedStructuredModelGateway（infrastructure 实现）
+            -> ModelPromptAssembler：用户提示词、边界、阶段规则与输出协议
+                -> StagePromptContributor（application 扩展接口）
+                    <- ImportAnalysisPromptContributor（ingest）
+                    <- OutlinePromptContributor（planning）
+            -> AbstractModelExecutor：冻结参数、预算、记录、解码、业务保存、成功确认
+                <- LegacyCodexExecutor / ProjectCodexExecutor / ChatGptHttpExecutor / DeepSeekExecutor
+                    -> 各供应商客户端、会话与资料策略
 ```
 
-会话与预算协作者是包内实现，由网关构造并独立测试，不新增 Spring Bean 或外部依赖。
-网关原有公共调用入口保持兼容，业务生成器不接触内部协作者。
-提示词、Schema、令牌上限、解析方式和调用记录内的校验回调不变；
-鉴权错误及普通网络错误仍不自动重试，只有已确认的失效 thread 可重建。
+导入与大纲的附加规则由所属业务模块实现 `StagePromptContributor`，按声明顺序注入；
+保留原有规则条件、文本及拼接顺序。增加业务阶段规则不再让模型模块引用业务实现。
+模型目录读取及配置组合校验归属 `modelaccess.application.GlobalModelCatalogService`，
+项目模块继续保存全局设置，HTTP 路由与响应结构不变。
+
+原有方法签名、提示词、Schema、令牌上限、保存回调与失败传播保持兼容。
+只有业务保存成功后才确认会话资料已交付；鉴权或普通网络错误不自动切换供应商。
+迁移保留实体名称、表名、枚举字符串、会话键与配置键，不需要数据库迁移。
+客户端日志分类随包名同步更新，仍使用 `CODEX_LOG_LEVEL`。
+
+前端 API 统一经过 `src/api/http.ts`，集中处理 `no-store`、JSON、FormData、204 与错误。
+状态管理使用 Vue 响应式与 TanStack Query，已移除 Pinia。
 
 ## 2. 写作职责
 
@@ -94,7 +105,7 @@ ChapterContractService -> 历史读取；退役写入统一返回 410
 | ManuscriptService | 正文生成与基准版本、编辑、人工修订、作者确认、渲染导出、准备质量修订候选 |
 | ChapterReviewService | 已确认正文审稿、候选事实决策、审稿确认、打回生成及原子保存 |
 | WritingContextService | 按已发布大纲查找卷章和圣经，检查访问权限，组装记忆召回输入 |
-| WritingChecks | 写作内部版本前置校验及要求文本规范化；不承担状态机 |
+| ResourceVersionConflictException / Text | 复用行版本校验与文本规范化；状态转换仍由领域对象负责 |
 | QualityReviewService / Store | 保持原有生成与持久化分离，不再反向依赖写作门面 |
 
 专用服务不回调 `WritingService`。其他模块可继续使用兼容入口，不需要感知内部拆分。
@@ -208,18 +219,14 @@ SQL 不推断参与人物，也不解除作者侧秘密与视角知识的区分�
 
 1. Controller 不直接引用存储适配器、JDBC 或 JPA 访问 API，包括方法体内访问。
 2. domain 不引用本项目 api 或 infrastructure。
-3. WritingService 仅依赖三个专用写作服务，无自身事务声明。
-4. 写作内部不反向依赖门面。
-5. 写作 application 类之间无直接字节码依赖环；嵌套类归并到所属顶层类。
-6. 写作与质量的模型生成入口不声明长数据库事务。
-7. 作者编辑和确认入口保留写事务声明。
-8. 规划生成器、导入网关和写作路由只依赖统一结构化模型网关，不直接依赖供应商客户端、Codex 会话仓库或运行记录器。
-9. 业务归属校验只通过 ProjectAccessService；字节码中的 NovelProject.getOwnerId 调用只允许该公共策略持有。
-10. 生产代码只在 Sha256 中直接调用 MessageDigest.getInstance，且工具不依赖业务模块或 Spring。
-11. 公共网关委托会话与预算策略，不直接新建/恢复 thread 或保存会话。
-12. 人物档案应用服务只依赖存储端口，不直接使用 JDBC、SQL 结果类型或基础设施；存储适配器不反向调用服务，原有读写事务声明保留。
-13. 类型化事实协调器依赖策略接口，不依赖具体投影器；策略不反向调用协调器，也不自行声明事务。
-14. 通用事实编排与实体消歧只依赖应用层存储端口，不引用 JDBC、SQL 结果类型或基础设施实现。
+3. 业务归属校验只通过 ProjectAccessService；NovelProject.getOwnerId 只允许该策略调用。
+4. 规划生成器、导入网关和写作路由依赖统一模型调用端口，不直接依赖供应商客户端、会话仓库或运行记录器。
+5. modelaccess 之外的业务代码不引用 modelaccess.infrastructure。
+6. modelaccess 不反向引用 planning、ingest、writing 或 canon 的类。
+7. 模型调用端口、阶段规则端口及公共枚举不依赖 Spring、JPA、HTTP DTO 或基础设施实现。
+8. 写作 application 类之间无直接字节码依赖环；嵌套类归并到所属顶层类。
+9. 写作与质量的模型生成入口不声明长数据库事务。
+10. 作者编辑和确认入口保留写事务声明。
 
 该测试不是完整 Spring Bean 图验证，也不覆盖反射、运行时动态依赖或所有跨模块循环。真实 Spring 上下文与 PostgreSQL 回归用于补充验证装配和事务行为。
 
@@ -227,7 +234,7 @@ SQL 不推断参与人物，也不解除作者侧秘密与视角知识的区分�
 
 ```powershell
 cd apps/server
-.\mvnw.cmd test
+.\mvnw.cmd -Dtest=ArchitectureTest,ModelExecutorWiringTest,StructuredModelGatewayTest test
 ```
 
 2026-10-07 本轮验证：完整测试 598 项，默认 548 通过、50 环境条件跳过；
@@ -247,8 +254,7 @@ cd apps/server
 已清除没有生产调用的提示词别名、旧项目模型设置转换、创作准备人物初始化、人物蓝图副本和传输判定辅助方法；不可达的创作准备默认指令分支同步清除。活动模板资源与兼容接口保留。判断可删除代码时，应区分显式调用、Spring 装配/回调、配置绑定及历史序列化，不能只依据文本引用数量。
 
 - `CodexAppServerClient` 的进程、JSON-RPC 和 turn 生命周期仍集中，需独立协议测试后按职责拆分。
-- 通用模型网关及底层客户端暂时位于 `planning.infrastructure`；若供应商继续增加，再迁入独立
-  platform / model infrastructure 包。本轮为控制改动面，不做纯包移动。
+- 公共模型能力已迁入 modelaccess；模块仍读取项目配置、提示词并记录 AgentRun，尚未独立部署为服务。
 - 部分领域对象仍引用 application 枚举，且应用层使用 API DTO；进一步解耦应另行评估迁移成本。
 - 人物资料、创作准备等服务的复杂 SQL 与业务编排还可继续按真实职责拆分；不引入万能 CRUD 基类，不混用读取、锁定、作者确认和正史状态规则。
 - 普通生成的并发版本 / 来源校验、长期调用即时取消和真实 usage 仍属于后续业务完善，不混入纯架构调整。

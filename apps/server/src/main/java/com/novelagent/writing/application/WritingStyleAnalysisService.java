@@ -1,6 +1,6 @@
 package com.novelagent.writing.application;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import com.novelagent.writing.infrastructure.WritingGenerationGateway;
 import java.nio.ByteBuffer;

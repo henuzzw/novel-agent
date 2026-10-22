@@ -5,7 +5,7 @@ import static com.novelagent.platform.support.Text.hasText;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.GeneratedOutline;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.OutlineContent;
 import java.util.List;
 import org.springframework.stereotype.Component;

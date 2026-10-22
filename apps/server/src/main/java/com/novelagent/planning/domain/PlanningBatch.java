@@ -1,6 +1,6 @@
 package com.novelagent.planning.domain;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;

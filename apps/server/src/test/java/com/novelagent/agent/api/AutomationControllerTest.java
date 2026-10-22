@@ -14,7 +14,7 @@ import com.novelagent.agent.api.dto.AutomationRunResponse;
 import com.novelagent.agent.api.dto.CreateAutomationRunRequest;
 import com.novelagent.agent.application.AutomationService;
 import com.novelagent.agent.domain.AutomationRun;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.api.ApiExceptionHandler;
 import com.novelagent.project.application.ProjectNotFoundException;
 import java.util.UUID;

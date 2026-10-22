@@ -1,6 +1,6 @@
 package com.novelagent.project.infrastructure;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.project.domain.GlobalModelSettings;
 import java.util.Optional;
 import java.util.UUID;

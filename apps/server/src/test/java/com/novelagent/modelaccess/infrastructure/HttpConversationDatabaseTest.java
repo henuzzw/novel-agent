@@ -1,10 +1,10 @@
 package com.novelagent.modelaccess.infrastructure;
 
-import com.novelagent.platform.support.Sha256;
 import static com.novelagent.support.TestDatabase.env;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.novelagent.platform.support.Sha256;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunRecorder;
@@ -12,13 +12,9 @@ import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.application.ChatGptDirectGateway;
 import com.novelagent.modelaccess.application.ChatGptOAuthService;
 import com.novelagent.modelaccess.application.ChatGptTransportService;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.ChatGptHttpExecutor;
-import com.novelagent.planning.infrastructure.CodexAppServerClient;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
-import com.novelagent.planning.infrastructure.DeepSeekStructuredOutputClient;
-import com.novelagent.planning.infrastructure.ModelPromptAssembler;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import com.novelagent.project.application.ResourceVersionConflictException;
@@ -169,10 +165,10 @@ class HttpConversationDatabaseTest {
             var prompts = mock(AgentPromptService.class);
             when(prompts.resolve(anyString(), anyString())).thenAnswer(call -> new AgentPromptService.Resolved(
                     call.getArgument(0) + " phase", "wire-revision", call.getArgument(0) + " instructions"));
-            var gateway = new StructuredModelGateway(List.of(
+            var gateway = new RoutedStructuredModelGateway(List.of(
                     new ChatGptHttpExecutor(runs,
                             new ModelContextProperties(), direct)),
-                    new ModelPromptAssembler(prompts, null, null), transport);
+                    new ModelPromptAssembler(prompts, null, null, java.util.List.of(new com.novelagent.ingest.infrastructure.ImportAnalysisPromptContributor(), new com.novelagent.planning.infrastructure.OutlinePromptContributor())), transport);
             var schema = json.createObjectNode().put("type", "object"); schema.putObject("properties").putObject("text").put("type", "string");
             for (String phase : new String[]{"STORY_BIBLE", "OUTLINE"})
                 assertThat(gateway.request(project, phase, ModelProvider.LOCAL_CODEX,

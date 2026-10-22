@@ -9,7 +9,7 @@ import com.novelagent.canon.api.dto.CanonCommitResponse;
 import com.novelagent.canon.api.dto.PublishManuscriptRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.NovelProject;
 import com.novelagent.project.infrastructure.NovelProjectRepository;

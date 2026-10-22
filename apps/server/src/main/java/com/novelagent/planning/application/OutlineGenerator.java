@@ -1,5 +1,6 @@
 package com.novelagent.planning.application;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.domain.OutlineWordBudget;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.StoryBibleContent;

@@ -1,6 +1,6 @@
 package com.novelagent.writing.application;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.ManuscriptLocalEditRequest;
 import com.novelagent.writing.api.dto.ManuscriptLocalEditResponse;
 import com.novelagent.writing.api.dto.ManuscriptResponse;

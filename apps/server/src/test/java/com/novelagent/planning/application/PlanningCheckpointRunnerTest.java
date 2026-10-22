@@ -11,14 +11,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.domain.ChapterPlan;
 import com.novelagent.planning.domain.OutlineArc;
 import com.novelagent.planning.domain.PlanningCheckpoint;
 import com.novelagent.planning.domain.PlanningCheckpointResult;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
 import com.novelagent.planning.infrastructure.OutlineOutputSchema;
-import com.novelagent.planning.infrastructure.StructuredModelGateway;
+import com.novelagent.modelaccess.application.StructuredModelGateway;
 import com.novelagent.project.domain.CreativeStrategy;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.application.CreativeStrategyGuide;

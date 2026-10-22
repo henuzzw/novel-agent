@@ -16,7 +16,7 @@ evaluation/     写作质量评测语料与说明
 docs/           设计、功能说明、运维与路线文档（导航见 docs/README.md）
 ```
 
-技术栈：Spring Boot 3.5、Spring AI / Spring AI Alibaba Agent Graph、Spring Data JPA、Flyway、PostgreSQL 16 + pgvector、Neo4j、Kafka（Outbox 投递）；前端 Vue 3、Vite、Pinia、TanStack Query。
+技术栈：Spring Boot 3.5、Spring AI / Spring AI Alibaba Agent Graph、Spring Data JPA、Flyway、PostgreSQL 16 + pgvector、Neo4j、Kafka（Outbox 投递）；前端 Vue 3、Vite、Vue Router、TanStack Query。
 
 ## 快速启动
 
@@ -34,7 +34,7 @@ docs/           设计、功能说明、运维与路线文档（导航见 docs/R
 | 模块 | 负责内容 | 从这里开始看 |
 | --- | --- | --- |
 | `project` | 小说项目、创作意图、创作策略与边界、全局模型设置、项目访问权限 | `ProjectController`、`ProjectAccessService` |
-| `planning` | 雪花规划、故事圣经、大纲、规划分块；模型调用网关与执行器 | `OutlineService`、`StructuredModelGateway` |
+| `planning` | 雪花规划、确认资料快照、大纲、规划分块 | `OutlineService`、`ConfirmedSnowflakeService` |
 | `writing` | 正文版本、质量检查与润色、写作风格与试写、单章自动编辑循环 | `WritingController`、`ManuscriptService` |
 | `canon` | 发布正文、正史提交、类型化事实投影、人物档案、发布后记忆整理 | `CanonPublicationService`、`CanonCommitService` |
 | `memory` | 记忆召回、混合检索、Token 预算、Embedding | `NovelMemoryService` |
@@ -42,7 +42,7 @@ docs/           设计、功能说明、运维与路线文档（导航见 docs/R
 | `ingest` | 导入已有作品、原文解析、反推规划 | `WorkImportService`、`ImportAnalysisRunner` |
 | `chat` | 项目创作对话与修改候选 | `ProjectChatService` |
 | `prompt` | 全局提示词模板、版本与默认目录 | `AgentPromptService` |
-| `modelaccess` | ChatGPT OAuth 直连、HTTP 会话历史与 Codex 项目会话 | `ChatGptDirectGateway`、`CodexProjectGateway` |
+| `modelaccess` | 模型调用端口、供应商路由、输出协议、预算、模型目录、认证与会话 | `StructuredModelGateway`、`RoutedStructuredModelGateway` |
 | `platform` | 横切能力：HTTP 响应工具、异常映射、请求日志、通用工具（JSON、哈希、文本、图状态） | `ApiResponses`、`platform/support` |
 
 ### 模块内分层
@@ -65,12 +65,17 @@ POST /api/v1/projects/{projectId}/outlines/actions/generate
   → planning/application/OutlineService        校验项目归属、已发布圣经与字数预算
   → planning/application/OutlineGenerationWorkflow   Agent Graph：输入校验 → 生成 → 输出校验
   → planning/infrastructure/StructuredOutlineGenerator  按所选模型（Codex / DeepSeek）组装提示词
-  → planning/infrastructure/StructuredModelGateway      统一结构化输出协议，选择执行器
-  → *Executor（ProjectCodex / ChatGptHttp / DeepSeek）   实际调用模型，AgentRunRecorder 记录运行
+  → modelaccess/application/StructuredModelGateway     业务模块依赖的调用接口
+  → modelaccess/infrastructure/RoutedStructuredModelGateway  选择执行器，组装协议与预算
+  → *Executor（LegacyCodex / ProjectCodex / ChatGptHttp / DeepSeek）  调用模型并记录运行
   ← OutlineService 保存 OutlineVersion 草稿（作者确认发布后才成为当前大纲）
 ```
 
-其他生成类功能（圣经、正文、质量检查等）基本是同样的链路。
+其他生成类功能（规划、正文、质量检查等）基本是同样的链路。
+
+模型供应商与会话策略位于 `modelaccess/domain`。导入、规划模块通过 `StagePromptContributor` 提供专用规则，模型接入模块不反向依赖这些业务实现。前端接口、数据库枚举值与现有会话标识保持兼容。
+
+PostgreSQL 保存权威正史事实；pgvector 与关键词检索共同召回正文。Neo4j 当前用于异步图谱投影，相关事实召回由 PostgreSQL 的 `RelatedCanonFactsTool` 执行。Kafka 负责投影事件，发布后记忆提取由持久化任务队列和应用内 Worker 执行。
 
 ## 开发与测试
 

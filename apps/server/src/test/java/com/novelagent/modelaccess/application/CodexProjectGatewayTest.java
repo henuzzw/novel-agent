@@ -1,16 +1,16 @@
 package com.novelagent.modelaccess.application;
 
-import com.novelagent.platform.support.Sha256;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.novelagent.platform.support.Sha256;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.AgentRunRecorder.EffectiveSettings;
 import com.novelagent.memory.application.ModelContextProperties;
 import com.novelagent.modelaccess.infrastructure.CodexConversationStore;
 import com.novelagent.modelaccess.infrastructure.OAuthCodexClient;
-import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.planning.infrastructure.CodexAppServerClient;
+import com.novelagent.modelaccess.domain.ModelProvider;
+import com.novelagent.modelaccess.infrastructure.CodexAppServerClient;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,6 @@
 package com.novelagent.writing.api;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.api.dto.QualityReviewResponse;

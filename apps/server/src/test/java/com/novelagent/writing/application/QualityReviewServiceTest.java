@@ -10,9 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+
 import com.novelagent.memory.application.ContextBudgetPlanner;
 import com.novelagent.memory.application.NovelMemoryService;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.api.dto.ReviseQualityRequest.Scope;
 import com.novelagent.writing.domain.ManuscriptContent;

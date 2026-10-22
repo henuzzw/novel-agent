@@ -1,10 +1,10 @@
 package com.novelagent.writing.infrastructure;
 
-import com.novelagent.platform.support.Json;
 import static com.novelagent.platform.support.Text.hasText;
 
+import com.novelagent.platform.support.Json;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.planning.application.ModelProviderException;
+import com.novelagent.modelaccess.application.ModelProviderException;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.writing.application.GeneratedManuscript;
 import com.novelagent.writing.domain.ChapterReviewContent;

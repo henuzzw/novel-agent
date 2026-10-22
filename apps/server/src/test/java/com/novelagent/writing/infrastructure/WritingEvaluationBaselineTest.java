@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.planning.application.ModelProviderException;
-import com.novelagent.planning.infrastructure.CodexSessionPolicy;
+import com.novelagent.modelaccess.application.ModelProviderException;
+import com.novelagent.modelaccess.domain.CodexSessionPolicy;
 import com.novelagent.writing.domain.ManuscriptContent;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;

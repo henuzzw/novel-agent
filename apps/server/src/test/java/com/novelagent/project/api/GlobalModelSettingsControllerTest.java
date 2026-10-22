@@ -8,9 +8,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.platform.api.ApiExceptionHandler;
-import com.novelagent.project.application.GlobalModelCatalogService;
+import com.novelagent.modelaccess.application.GlobalModelCatalogService;
 import com.novelagent.project.application.GlobalModelSettingsService;
 import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.GlobalModelSettings;

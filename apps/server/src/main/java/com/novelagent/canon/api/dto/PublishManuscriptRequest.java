@@ -1,6 +1,6 @@
 package com.novelagent.canon.api.dto;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import java.util.UUID;
 
 /** Explicit author publication; a replacement must name the current commit. */

@@ -3,7 +3,7 @@ package com.novelagent.ingest.application;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.ingest.infrastructure.ImportedPlanningModelGateway;
 import com.novelagent.planning.application.GeneratedOutline;
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.planning.application.ScenePlanningGuide;
 import com.novelagent.planning.application.SnowflakePlanningService;
 import com.novelagent.planning.domain.ChapterPlan;

@@ -1,7 +1,8 @@
 package com.novelagent.agent.application;
 
 import static org.assertj.core.api.Assertions.*;
-import com.novelagent.planning.application.ModelProvider;
+
+import com.novelagent.modelaccess.domain.ModelProvider;
 import com.novelagent.writing.domain.*;
 import java.util.List;
 import java.util.UUID;

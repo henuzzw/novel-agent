@@ -3,7 +3,7 @@ package com.novelagent.agent.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.modelaccess.domain.ModelProvider;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
