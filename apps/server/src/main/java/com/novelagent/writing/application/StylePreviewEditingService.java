@@ -3,10 +3,10 @@ package com.novelagent.writing.application;
 import static com.novelagent.platform.support.Text.trimToNull;
 
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.writing.api.CheckStylePreviewRequest;
-import com.novelagent.writing.api.ReviseStylePreviewRequest;
-import com.novelagent.writing.api.StylePreviewReviewResponse;
-import com.novelagent.writing.api.WritingStylePreviewResponse;
+import com.novelagent.writing.api.dto.CheckStylePreviewRequest;
+import com.novelagent.writing.api.dto.ReviseStylePreviewRequest;
+import com.novelagent.writing.api.dto.StylePreviewReviewResponse;
+import com.novelagent.writing.api.dto.WritingStylePreviewResponse;
 import com.novelagent.writing.domain.StylePreviewSource;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
 import java.util.HashSet;

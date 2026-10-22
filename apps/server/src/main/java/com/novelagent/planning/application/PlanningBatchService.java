@@ -4,7 +4,7 @@ import static com.novelagent.project.application.ResourceVersionConflictExceptio
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
-import com.novelagent.planning.api.OutlineResponse;
+import com.novelagent.planning.api.dto.OutlineResponse;
 import com.novelagent.planning.domain.ChapterPlanStatus;
 import com.novelagent.planning.domain.CreativeIntentSnapshot;
 import com.novelagent.planning.domain.OutlineContent;

@@ -2,9 +2,9 @@ package com.novelagent.canon.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.canon.api.CanonCommitResponse;
-import com.novelagent.canon.api.CommitCanonRequest;
-import com.novelagent.canon.api.ReplaceCanonRequest;
+import com.novelagent.canon.api.dto.CanonCommitResponse;
+import com.novelagent.canon.api.dto.CommitCanonRequest;
+import com.novelagent.canon.api.dto.ReplaceCanonRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.domain.OutboxEvent;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;

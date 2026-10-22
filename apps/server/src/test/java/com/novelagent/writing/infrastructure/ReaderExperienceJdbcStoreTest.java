@@ -7,7 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.canon.api.UpdateCharacterProfileRequest;
+import com.novelagent.canon.api.dto.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.canon.application.CharacterProfileService;
 import com.novelagent.canon.infrastructure.JdbcCharacterProfileStore;

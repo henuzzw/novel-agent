@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import com.novelagent.platform.api.ApiExceptionHandler;
+import com.novelagent.writing.api.dto.ManuscriptLocalEditResponse;
 import com.novelagent.writing.application.ManuscriptLocalEditConflictException;
 import com.novelagent.writing.application.ManuscriptLocalEditService;
 import java.util.UUID;

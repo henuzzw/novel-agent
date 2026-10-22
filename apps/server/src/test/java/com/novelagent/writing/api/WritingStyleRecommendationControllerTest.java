@@ -14,6 +14,8 @@ import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.platform.api.ApiExceptionHandler;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
+import com.novelagent.writing.api.dto.RecommendWritingStyleRequest;
+import com.novelagent.writing.api.dto.WritingStyleRecommendationResponse;
 import com.novelagent.writing.application.WritingStyleAnalysisService;
 import com.novelagent.writing.application.WritingStylePreviewService;
 import com.novelagent.writing.application.WritingStyleRecommendationService;

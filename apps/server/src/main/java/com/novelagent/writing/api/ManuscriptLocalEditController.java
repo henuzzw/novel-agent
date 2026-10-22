@@ -1,5 +1,7 @@
 package com.novelagent.writing.api;
 
+import com.novelagent.writing.api.dto.ManuscriptLocalEditRequest;
+import com.novelagent.writing.api.dto.ManuscriptLocalEditResponse;
 import com.novelagent.writing.application.ManuscriptLocalEditConflictException;
 import com.novelagent.writing.application.ManuscriptLocalEditService;
 import jakarta.validation.Valid;

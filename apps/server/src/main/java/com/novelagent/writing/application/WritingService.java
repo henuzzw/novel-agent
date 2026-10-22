@@ -1,13 +1,13 @@
 package com.novelagent.writing.application;
 
-import com.novelagent.writing.api.ChapterContractResponse;
-import com.novelagent.writing.api.ChapterContractReviewResponse;
-import com.novelagent.writing.api.ChapterContractVersionSummaryResponse;
-import com.novelagent.writing.api.ChapterReviewResponse;
-import com.novelagent.writing.api.GenerateWritingRequest;
-import com.novelagent.writing.api.ManuscriptResponse;
-import com.novelagent.writing.api.ManuscriptVersionSummaryResponse;
-import com.novelagent.writing.api.ReturnReviewRequest;
+import com.novelagent.writing.api.dto.ChapterContractResponse;
+import com.novelagent.writing.api.dto.ChapterContractReviewResponse;
+import com.novelagent.writing.api.dto.ChapterContractVersionSummaryResponse;
+import com.novelagent.writing.api.dto.ChapterReviewResponse;
+import com.novelagent.writing.api.dto.GenerateWritingRequest;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
+import com.novelagent.writing.api.dto.ManuscriptVersionSummaryResponse;
+import com.novelagent.writing.api.dto.ReturnReviewRequest;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;
 import java.util.List;

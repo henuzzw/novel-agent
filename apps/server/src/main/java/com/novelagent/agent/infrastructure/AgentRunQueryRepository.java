@@ -2,12 +2,12 @@ package com.novelagent.agent.infrastructure;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.agent.api.AgentRunOutputResponse;
-import com.novelagent.agent.api.AgentRunPromptResponse;
-import com.novelagent.agent.api.AgentRunResponse.RequestSnapshotResponse;
-import com.novelagent.agent.api.AgentRunResponse;
-import com.novelagent.agent.api.AgentRunSummary;
-import com.novelagent.agent.api.AgentTokenUsage;
+import com.novelagent.agent.api.dto.AgentRunOutputResponse;
+import com.novelagent.agent.api.dto.AgentRunPromptResponse;
+import com.novelagent.agent.api.dto.AgentRunResponse.RequestSnapshotResponse;
+import com.novelagent.agent.api.dto.AgentRunResponse;
+import com.novelagent.agent.api.dto.AgentRunSummary;
+import com.novelagent.agent.api.dto.AgentTokenUsage;
 import com.novelagent.platform.support.Json;
 import java.sql.ResultSet;
 import java.sql.SQLException;

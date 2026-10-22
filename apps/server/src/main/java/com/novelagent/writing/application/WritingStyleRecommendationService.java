@@ -3,11 +3,11 @@ package com.novelagent.writing.application;
 import static com.novelagent.platform.support.Text.trimToNull;
 import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
 
-import com.novelagent.planning.api.StoryBibleResponse;
+import com.novelagent.planning.api.dto.StoryBibleResponse;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.writing.api.RecommendWritingStyleRequest;
-import com.novelagent.writing.api.WritingStyleRecommendationResponse;
+import com.novelagent.writing.api.dto.RecommendWritingStyleRequest;
+import com.novelagent.writing.api.dto.WritingStyleRecommendationResponse;
 import com.novelagent.writing.domain.WritingStyleProfile;
 import com.novelagent.writing.domain.WritingStyleRecommendationContent;
 import java.util.List;

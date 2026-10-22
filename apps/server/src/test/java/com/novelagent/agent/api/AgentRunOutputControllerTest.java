@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.novelagent.agent.api.dto.AgentRunOutputResponse;
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.application.AgentRunStreamService;
 import java.nio.charset.StandardCharsets;

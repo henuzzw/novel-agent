@@ -1,5 +1,7 @@
 package com.novelagent.planning.api;
 
+import com.novelagent.planning.api.dto.OutlineResponse;
+import com.novelagent.planning.api.dto.VersionRequest;
 import com.novelagent.planning.application.PlanningBatchRunner;
 import com.novelagent.planning.application.PlanningBatchService;
 import jakarta.validation.Valid;

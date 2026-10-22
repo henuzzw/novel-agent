@@ -3,8 +3,8 @@ package com.novelagent.canon.infrastructure;
 import static com.novelagent.platform.support.Text.hasText;
 import static com.novelagent.platform.support.Text.trimToNull;
 
-import com.novelagent.canon.api.CharacterProfileResponse;
-import com.novelagent.canon.api.UpdateCharacterProfileRequest;
+import com.novelagent.canon.api.dto.CharacterProfileResponse;
+import com.novelagent.canon.api.dto.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterProfileStore;
 import java.sql.Array;
 import java.sql.ResultSet;

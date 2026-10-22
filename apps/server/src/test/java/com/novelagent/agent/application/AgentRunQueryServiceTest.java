@@ -7,7 +7,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.novelagent.agent.api.AgentRunSummary;
+import com.novelagent.agent.api.dto.AgentRunSummary;
 import com.novelagent.agent.infrastructure.AgentRunQueryRepository;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;

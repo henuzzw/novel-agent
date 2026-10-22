@@ -1,9 +1,9 @@
 package com.novelagent.writing.application;
 
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.writing.api.ManuscriptLocalEditRequest;
-import com.novelagent.writing.api.ManuscriptLocalEditResponse;
-import com.novelagent.writing.api.ManuscriptResponse;
+import com.novelagent.writing.api.dto.ManuscriptLocalEditRequest;
+import com.novelagent.writing.api.dto.ManuscriptLocalEditResponse;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.domain.ManuscriptLocalEditSelection;
 import com.novelagent.writing.infrastructure.ManuscriptLocalEditModel;
 import java.util.UUID;

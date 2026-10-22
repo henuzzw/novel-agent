@@ -16,11 +16,11 @@ import com.novelagent.planning.domain.OutlineVersion;
 import com.novelagent.planning.domain.StoryBibleVersion;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.writing.api.GenerateStylePreviewRequest;
+import com.novelagent.writing.api.dto.GenerateStylePreviewRequest;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import java.util.UUID;
 
 class WritingStylePreviewServiceTest {
     private final UUID projectId = UUID.randomUUID();

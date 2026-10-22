@@ -4,8 +4,8 @@ import static com.novelagent.platform.support.Text.trimToNull;
 import static com.novelagent.project.application.ResourceVersionConflictException.checkVersion;
 
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.writing.api.GenerateStylePreviewRequest;
-import com.novelagent.writing.api.WritingStylePreviewResponse;
+import com.novelagent.writing.api.dto.GenerateStylePreviewRequest;
+import com.novelagent.writing.api.dto.WritingStylePreviewResponse;
 import com.novelagent.writing.domain.WritingStylePreviewContent;
 import java.util.UUID;
 import org.springframework.stereotype.Service;

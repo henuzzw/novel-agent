@@ -1,15 +1,24 @@
 package com.novelagent.canon.api;
 
+import com.novelagent.canon.api.dto.CharacterKnowledgeResponse;
+import com.novelagent.canon.api.dto.CreateEntityAliasRequest;
+import com.novelagent.canon.api.dto.EntityAliasResponse;
+import com.novelagent.canon.api.dto.EntityMentionResponse;
+import com.novelagent.canon.api.dto.EntityStateResponse;
+import com.novelagent.canon.api.dto.ForeshadowResponse;
+import com.novelagent.canon.api.dto.StoryEntityResponse;
+import com.novelagent.canon.api.dto.StoryEventResponse;
+import com.novelagent.canon.api.dto.StoryRelationshipResponse;
 import com.novelagent.canon.application.TypedCanonQueryService;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**

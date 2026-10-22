@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.agent.api.dto.AutomationRunResponse;
+import com.novelagent.agent.api.dto.CreateAutomationRunRequest;
 import com.novelagent.agent.application.AutomationService;
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.planning.application.ModelProvider;

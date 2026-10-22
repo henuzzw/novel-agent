@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.writing.api.ManuscriptLocalEditRequest;
+import com.novelagent.writing.api.dto.ManuscriptLocalEditRequest;
 import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.infrastructure.ManuscriptLocalEditModel;
 import java.util.List;

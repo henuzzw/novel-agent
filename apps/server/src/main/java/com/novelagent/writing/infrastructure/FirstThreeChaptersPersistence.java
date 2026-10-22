@@ -15,7 +15,7 @@ import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
-import com.novelagent.writing.api.QualityReviewResponse;
+import com.novelagent.writing.api.dto.QualityReviewResponse;
 import com.novelagent.writing.application.ChapterWritingBasisService;
 import com.novelagent.writing.application.FirstThreeChaptersStore;
 import com.novelagent.writing.application.QualityReviewStore;

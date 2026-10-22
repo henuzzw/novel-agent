@@ -1,5 +1,6 @@
 package com.novelagent.ingest.api;
 
+import com.novelagent.ingest.api.dto.WorkImportResponse;
 import com.novelagent.ingest.application.WorkImportService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;

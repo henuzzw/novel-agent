@@ -1,5 +1,7 @@
 package com.novelagent.canon.api;
 
+import com.novelagent.canon.api.dto.CanonCommitResponse;
+import com.novelagent.canon.api.dto.PublishManuscriptRequest;
 import com.novelagent.canon.application.CanonPublicationService;
 import com.novelagent.canon.application.PublishedMemoryService;
 import java.util.List;

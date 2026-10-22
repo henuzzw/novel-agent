@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 import com.novelagent.agent.domain.*;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
 import com.novelagent.planning.application.ModelProvider;
-import com.novelagent.writing.api.ManuscriptResponse;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.application.*;
 import com.novelagent.writing.domain.*;
 import java.time.Instant;

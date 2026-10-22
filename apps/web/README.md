@@ -21,7 +21,7 @@ System instructions and optional stage guidance are persisted through `/api/v1/s
 Import adaptation and continuation have separate templates. Project inputs and output schemas are not editable here.
 Saving affects future model requests only; reset records a new version. Historical versions can be loaded as an unsaved draft.
 Run `npx playwright test --config playwright.ux.config.ts prompt-settings.spec.ts` for mocked browser regression tests.
-Backend restart/Flyway V049 is required. See `../../NOVEL_AGENT_PROMPT_MANAGEMENT.md`.
+Backend restart/Flyway V049 is required. See `../../docs/features/NOVEL_AGENT_PROMPT_MANAGEMENT.md`.
 
 ## Workspace Interaction
 

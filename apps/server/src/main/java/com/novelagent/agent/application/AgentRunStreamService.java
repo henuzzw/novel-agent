@@ -1,6 +1,6 @@
 package com.novelagent.agent.application;
 
-import com.novelagent.agent.api.AgentRunOutputResponse;
+import com.novelagent.agent.api.dto.AgentRunOutputResponse;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;

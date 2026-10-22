@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.agent.application.GenerationStoppedException;
 import com.novelagent.agent.application.ModelFailureDetails;
-import com.novelagent.ingest.api.ImportedChapterResponse;
+import com.novelagent.ingest.api.dto.ImportedChapterResponse;
 import com.novelagent.ingest.domain.ImportAnalysis;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.ingest.infrastructure.ImportAnalysisOutputParser;

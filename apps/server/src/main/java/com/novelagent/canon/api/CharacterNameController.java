@@ -1,7 +1,9 @@
 package com.novelagent.canon.api;
 
-import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.canon.api.dto.CharacterNameResponse;
+import com.novelagent.canon.api.dto.UpdateCharacterNameRequest;
 import com.novelagent.canon.application.CharacterNameService;
+import com.novelagent.platform.api.ApiResponses;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;

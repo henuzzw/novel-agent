@@ -7,8 +7,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.novelagent.agent.api.AgentRunResponse;
-import com.novelagent.agent.api.AgentRunSummary;
+import com.novelagent.agent.api.dto.AgentRunResponse;
+import com.novelagent.agent.api.dto.AgentRunSummary;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.util.List;

@@ -41,20 +41,20 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 1. 当前代码和 Flyway 迁移：代表实际运行状态。
 2. 本文件：代表当前开发上下文和近期路线。
-3. `docs/README.md`：代表整个项目的能力概览。
+3. `../../docs/README.md`：代表整个项目的能力概览。
 4. `docs/` 各设计文档：代表完整目标和长期方案。
 
 关键设计文档：
 
-- `../../docs/NOVEL_AGENT_SYSTEM_DESIGN.md`
-- `../../docs/NOVEL_AGENT_LONG_FORM_MEMORY_IMPLEMENTATION.md`
-- `../../docs/NOVEL_AGENT_DOMAIN_MODEL.md`
-- `../../docs/NOVEL_AGENT_WORKFLOW_DESIGN.md`
-- `../../docs/NOVEL_AGENT_AI_SPEC.md`
-- `../../docs/NOVEL_AGENT_STAGES_AND_PROMPTS.md`
-- `../../docs/NOVEL_AGENT_AGENT_TOPOLOGY.md`：历史 23 种模型工作流图，当前简化图见 `../../docs/NOVEL_AGENT_SIMPLIFIED_WORKFLOW.md`。
-- `../../docs/NOVEL_AGENT_API_DESIGN.md`
-- `../../docs/NOVEL_AGENT_TEST_PLAN.md`
+- `../../docs/design/NOVEL_AGENT_SYSTEM_DESIGN.md`
+- `../../docs/design/NOVEL_AGENT_LONG_FORM_MEMORY_IMPLEMENTATION.md`
+- `../../docs/design/NOVEL_AGENT_DOMAIN_MODEL.md`
+- `../../docs/design/NOVEL_AGENT_WORKFLOW_DESIGN.md`
+- `../../docs/design/NOVEL_AGENT_AI_SPEC.md`
+- `../../docs/design/NOVEL_AGENT_STAGES_AND_PROMPTS.md`
+- `../../docs/design/NOVEL_AGENT_AGENT_TOPOLOGY.md`：历史 23 种模型工作流图，当前简化图见 `../../docs/design/NOVEL_AGENT_SIMPLIFIED_WORKFLOW.md`。
+- `../../docs/design/NOVEL_AGENT_API_DESIGN.md`
+- `../../docs/design/NOVEL_AGENT_TEST_PLAN.md`
 
 设计文档中的接口和表不一定已经实现。开发前必须通过 Controller、Repository 和迁移文件确认现状。
 
@@ -64,27 +64,27 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 ### 4.1 已完成
 
-- V064 记忆修订实测修复（2026-10-14）：实体出现记录按来源／编号／角色更新；story_fact唯一键改为保留历史版本且仅一条当前有效记录，避免整批重物化重复键。状态写入使用clock_timestamp区分同事务内的连续变化，记忆指令强调章末返回／归还。Neo4j投影将Numeric置信度转换为double。新增真实PostgreSQL版本唯一性与出现记录重物化验证；定向测试通过，21:21已重启加载V064。项目9f843969专项补救：22章记忆成功、234条引文可核对、发布正文哈希未变、22章完整导出；正文第3／15／19章仅另存未发布修订候选，逐章正文对前文记忆复核见 ../../docs/PROJECT_9f843969_MEMORY_RECOVERY.md。
+- V064 记忆修订实测修复（2026-10-14）：实体出现记录按来源／编号／角色更新；story_fact唯一键改为保留历史版本且仅一条当前有效记录，避免整批重物化重复键。状态写入使用clock_timestamp区分同事务内的连续变化，记忆指令强调章末返回／归还。Neo4j投影将Numeric置信度转换为double。新增真实PostgreSQL版本唯一性与出现记录重物化验证；定向测试通过，21:21已重启加载V064。项目9f843969专项补救：22章记忆成功、234条引文可核对、发布正文哈希未变、22章完整导出；正文第3／15／19章仅另存未发布修订候选，逐章正文对前文记忆复核见 ../../docs/samples/PROJECT_9f843969_MEMORY_RECOVERY.md。
 
-- V063 自动记忆与作者管理（2026-10-14）：CHAPTER_REVIEW只从已发布本章提取，附原写作计划的视角定位及实体ID目录，不将计划当事实。证据与引用校验后整批ACCEPTED/落库，不再以部分NEEDS_CONFIRMATION结束；失败整批回滚、FAILED保留有效候选供编辑，未知代词和跨项目ID不能强绑。物品/地点可描述命名，不要求名称逐字在引文中。作者PUT memory可编辑/新增/移除，保留行版本守卫与原文证据，V063历史表记录旧快照；更新退役旧事实/派生记录、提升索引水位并重建投影，不改正文。自动推进开启记忆时只在前文SUCCEEDED后继续，前文失败/待处理/缺失阻塞；新A请求前再次守卫，已有正文检查和表达修订仍可执行。旧章记忆修改后阻止默认沿用受影响旧后文继续生成。相关事实走PostgreSQL权威版本与章节过滤，不依赖Kafka/Neo4j延迟，历史请求不读新版accepted_facts快照。向量正文保留原发布版本，内容未变保留已有嵌入；存量不自动回填或重跑。17:47（UTC+8）已重启并应用V063，健康检查及新历史接口正常，后端49项及前端5项定向测试通过；详见 ../../docs/NOVEL_AGENT_PUBLISHED_MEMORY.md。
+- V063 自动记忆与作者管理（2026-10-14）：CHAPTER_REVIEW只从已发布本章提取，附原写作计划的视角定位及实体ID目录，不将计划当事实。证据与引用校验后整批ACCEPTED/落库，不再以部分NEEDS_CONFIRMATION结束；失败整批回滚、FAILED保留有效候选供编辑，未知代词和跨项目ID不能强绑。物品/地点可描述命名，不要求名称逐字在引文中。作者PUT memory可编辑/新增/移除，保留行版本守卫与原文证据，V063历史表记录旧快照；更新退役旧事实/派生记录、提升索引水位并重建投影，不改正文。自动推进开启记忆时只在前文SUCCEEDED后继续，前文失败/待处理/缺失阻塞；新A请求前再次守卫，已有正文检查和表达修订仍可执行。旧章记忆修改后阻止默认沿用受影响旧后文继续生成。相关事实走PostgreSQL权威版本与章节过滤，不依赖Kafka/Neo4j延迟，历史请求不读新版accepted_facts快照。向量正文保留原发布版本，内容未变保留已有嵌入；存量不自动回填或重跑。17:47（UTC+8）已重启并应用V063，健康检查及新历史接口正常，后端49项及前端5项定向测试通过；详见 ../../docs/features/NOVEL_AGENT_PUBLISHED_MEMORY.md。
 
-- 本机小说 Fast 已关闭（2026-10-13）：两个独立 Codex runtime/home/config.toml 移除 service_tier=fast，并设置 features.fast_mode=false；原生配置读取及独立测试线程的新建/恢复均为无priority，0生成轮次。20:08（Asia/Singapore）确认第7至13章范围成功结束、全部任务/记忆/租约空闲后重启8081，健康UP、5173及模型配置代理200。当前保存模型gpt-6.1-sol/high、版本6，本次未改模型设置，桌面 Codex 不受影响；未停止或重跑任务、未改小说数据。详见 ../../docs/NOVEL_AGENT_MODEL_EXECUTION.md，下方10月12日启用记录为历史状态。
+- 本机小说 Fast 已关闭（2026-10-13）：两个独立 Codex runtime/home/config.toml 移除 service_tier=fast，并设置 features.fast_mode=false；原生配置读取及独立测试线程的新建/恢复均为无priority，0生成轮次。20:08（Asia/Singapore）确认第7至13章范围成功结束、全部任务/记忆/租约空闲后重启8081，健康UP、5173及模型配置代理200。当前保存模型gpt-6.1-sol/high、版本6，本次未改模型设置，桌面 Codex 不受影响；未停止或重跑任务、未改小说数据。详见 ../../docs/design/NOVEL_AGENT_MODEL_EXECUTION.md，下方10月12日启用记录为历史状态。
 
-- 项目Token统计（2026-10-13）：新增GET agent-runs/usage，先校验项目归属，以UTC截止时刻和只读REPEATABLE_READ快照复用现有汇总；返回全项目和按started_at滚动最近5小时的两期统计，不受最近100条限制。实际/估算分开累计，缺失实际用量显示覆盖缺口，失败/停止已记录用量计入；不代表账号额度。任务页每15秒刷新、支持手动刷新及错误状态。11项后端定向测试（含PostgreSQL临时表）、4项前端测试、类型与相关ESLint通过，无迁移/依赖/模型调用，需重启；详见 ../../docs/NOVEL_AGENT_TOKEN_USAGE.md。
+- 项目Token统计（2026-10-13）：新增GET agent-runs/usage，先校验项目归属，以UTC截止时刻和只读REPEATABLE_READ快照复用现有汇总；返回全项目和按started_at滚动最近5小时的两期统计，不受最近100条限制。实际/估算分开累计，缺失实际用量显示覆盖缺口，失败/停止已记录用量计入；不代表账号额度。任务页每15秒刷新、支持手动刷新及错误状态。11项后端定向测试（含PostgreSQL临时表）、4项前端测试、类型与相关ESLint通过，无迁移/依赖/模型调用，需重启；详见 ../../docs/features/NOVEL_AGENT_TOKEN_USAGE.md。
 
 部署记录（2026-10-13 19:12，Asia/Singapore）：作者授权后核实全部任务和会话租约空闲并重启8081，项目Token统计已加载；健康UP、5173代理usage接口200且no-store。单尺寸实际页面核对累计/近5小时的实际及估算、未知调用数正常，无脚本错误；未调用模型、重跑任务或改写正文。
 
 部署记录（2026-10-13 13:46）：作者授权后，核实模型、章节推进、编辑循环、创作对话、记忆、雪花及HTTP/Codex租约全部空闲并重启8081，加载下述B/C结构化输出及失败节点续跑改动。健康UP、5173页面与API代理200；章节推进读取包含failureDetail字段，原失败任务保持FAILED。未调用真实模型、重跑任务或修改正文。
 
-- 自动编辑 B/C 原生结构化输出（2026-10-13）：公共ModelOutputProtocol由调用方显式选择，只有DraftLoopModel的B/C走JSON Schema，A、雪花、大纲、手动质量检查及三章通读仍走原纯文本协议。旧/新Codex传outputSchema；DeepSeek Responses传text.format.json_schema（不附未文档化strict），直接ChatGPT HTTP传同字段及strict=true。预算包含Schema，任务快照记录结构名和哈希；返回拒绝重复键、多余文本、缺失字段、错误类型/枚举/数量，再校验原文证据及C编号覆盖，不静默降级或自动付费修复。章节推进失败返回具体章/阶段/安全原因；显式重试在来源与草稿行版本不变时复用失败子任务，保留B报告、C阶段、轮数和父任务额度。86项后端定向测试、12项前端测试、类型及相关ESLint通过，无依赖/迁移，需重启后端加载。未调用真实供应商或重跑旧任务；详见 ../../docs/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
+- 自动编辑 B/C 原生结构化输出（2026-10-13）：公共ModelOutputProtocol由调用方显式选择，只有DraftLoopModel的B/C走JSON Schema，A、雪花、大纲、手动质量检查及三章通读仍走原纯文本协议。旧/新Codex传outputSchema；DeepSeek Responses传text.format.json_schema（不附未文档化strict），直接ChatGPT HTTP传同字段及strict=true。预算包含Schema，任务快照记录结构名和哈希；返回拒绝重复键、多余文本、缺失字段、错误类型/枚举/数量，再校验原文证据及C编号覆盖，不静默降级或自动付费修复。章节推进失败返回具体章/阶段/安全原因；显式重试在来源与草稿行版本不变时复用失败子任务，保留B报告、C阶段、轮数和父任务额度。86项后端定向测试、12项前端测试、类型及相关ESLint通过，无依赖/迁移，需重启后端加载。未调用真实供应商或重跑旧任务；详见 ../../docs/features/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
 
 - 已完成正文一键导出（2026-10-13）：新增 `GET /api/v1/projects/{projectId}/canon-commits/export`，写作工作台顶部下载Markdown，含书名、卷名、章号、正文标题和完整正文。只读取active发布提交绑定的AUTHOR_ACCEPTED稿，且对应canon_memory_job为SUCCEEDED；草稿、新版未发布稿、失效提交、未整理/待确认/失败/跳过记忆均排除，不要求另一次手动质量检查。REPEATABLE_READ只读快照，项目归属先校验，来源大纲按正文writing_basis查卷名并缓存，当前人物姓名统一渲染；无合格章明确报错，不下空书，不写正文/正史或调用模型。6项后端测试（含真实PostgreSQL临时表筛选）、3项前端测试和类型检查通过，无迁移，需重启加载。
   已启用：核实后端原已停止且全部任务/租约空闲后，12:32启动新版8081与前端5173。健康UP、导出及代理200；单尺寸实际浏览器下载成功，真实项目导出第1至3章共8191字符、1个卷标题，页面无脚本错误。相关ESLint通过，未重跑生成、调用模型或改写正文。
 
-- 自动 B 多段证据修复（2026-10-12）：DraftCheck 每项 evidence 改为1至6段独立 quote，实际纯文本协议生成 `@issues/*/evidence/*/quote`，请求明确禁止将不相邻引文、标签或解释拼接。网关保存回调逐段核对当前正文，任一不匹配使整个报告失败，错误定位问题编号和证据索引，归类 OUTPUT_VALIDATION，不进入 C。C 接收同一证据列表，前端分别展示；历史单段保存格式仍可读取。手动质量报告、纯文本模型传输、数据库和小说正文不变，不拆分恢复旧失败响应。34项后端与8项前端定向测试、类型检查和相关ESLint通过；需重启加载。详见 ../../docs/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
+- 自动 B 多段证据修复（2026-10-12）：DraftCheck 每项 evidence 改为1至6段独立 quote，实际纯文本协议生成 `@issues/*/evidence/*/quote`，请求明确禁止将不相邻引文、标签或解释拼接。网关保存回调逐段核对当前正文，任一不匹配使整个报告失败，错误定位问题编号和证据索引，归类 OUTPUT_VALIDATION，不进入 C。C 接收同一证据列表，前端分别展示；历史单段保存格式仍可读取。手动质量报告、纯文本模型传输、数据库和小说正文不变，不拆分恢复旧失败响应。34项后端与8项前端定向测试、类型检查和相关ESLint通过；需重启加载。详见 ../../docs/features/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
   已启用：23:00核实模型、范围、单章循环、创作对话、记忆、雪花及HTTP/Codex租约全部空闲后重启，23:01健康UP，5173页面、API代理及单章循环读取200。未调用真实模型、重跑旧任务或改写正文。
 
-- V062 章节推进（2026-10-12）：范围任务逐章同步复用DraftLoopService A/B/C，删除重复规划器与有限返工执行路径；父子绑定、attempt、取消、额度及来源门禁保护保存。AFTER_COMMIT通知及30秒对账原子认领下一章，回滚/重复通知不重复执行。独立autoPublish默认false、autoMemory默认true、检查1至10轮默认3；自动发布仅B_CLEAR或C全部REJECT，复用CanonPublicationService，不发布DEFER/未复检/异常稿。关闭记忆保存SKIPPED且可手动启动；开启时等有效发布的记忆队列处理结束再冻结下一章。迁移不自动授权旧任务、不重跑生成。详见 ../../docs/NOVEL_AGENT_CHAPTER_ADVANCE.md。
+- V062 章节推进（2026-10-12）：范围任务逐章同步复用DraftLoopService A/B/C，删除重复规划器与有限返工执行路径；父子绑定、attempt、取消、额度及来源门禁保护保存。AFTER_COMMIT通知及30秒对账原子认领下一章，回滚/重复通知不重复执行。独立autoPublish默认false、autoMemory默认true、检查1至10轮默认3；自动发布仅B_CLEAR或C全部REJECT，复用CanonPublicationService，不发布DEFER/未复检/异常稿。关闭记忆保存SKIPPED且可手动启动；开启时等有效发布的记忆队列处理结束再冻结下一章。迁移不自动授权旧任务、不重跑生成。详见 ../../docs/features/NOVEL_AGENT_CHAPTER_ADVANCE.md。
   验证与启用：40项后端定向单元、2条隔离数据库发布链路、13项前端定向测试、类型检查、相关ESLint及单尺寸浏览器核验通过；模型/向量/图谱用替身，不改已有小说。21:24确认模型/范围/循环/对话/记忆/雪花及HTTP/Codex租约全空闲后重启，21:25 V062加载、健康UP、5173与章节推进读取200。未重跑旧任务或替已有项目开启自动发布。
 
 - 三章报告协议修复（2026-10-12）：旧 Schema 的 evidence/dimension 使用本地 $ref，但纯文本转换器未展开，错误生成单个 evidence 文字标题，DTO却要求证据数组。PlainTextOutputProtocol统一展开本地引用（拒绝外部/循环/失效引用）并检查数组上限，指令与解码共用展开后的协议；八维各一条明确写入请求。FirstThreeChaptersModelAdapter在网关记录回调内校验DTO和正文证据，失败不再记模型任务成功；只显示安全字段路径，分类OUTPUT_VALIDATION。不改纯文本传输、不恢复旧报告、不调用真实模型；需重启加载。
@@ -93,19 +93,19 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 - 前三章输入减重（2026-10-12）：FirstThreeChaptersPersistence 复用 WritingMaterialSelection 的开篇投影，不发送 developmentNotes 九步原始底稿及第四章以后的详细大纲，保留完整三章、开篇计划、全书目标/承诺、人物设定、硬约束、档案和风格。来源指纹仍绑定完整规划，不降低预算阈值或截断正文；模型输入明确未覆盖范围和未来规划边界。32 项定向测试通过，不发起真实检查、不改正文或数据库规划；需后端重启加载。
   已启用：20:13 核实全部任务和租约空闲后重启，健康与5173代理正常；实际三章来源的保守预算从149638降到60417 Token，fits=true，三个正文哈希均未变化。仅核对预算，未调用模型或宣称文学检查通过。
 
-- 本机小说 Fast 已启用（2026-10-12）：独立 Codex runtime/home 配置 service_tier=fast 与 features.fast_mode=true；19:59 全部任务及租约空闲后重启，健康和前端代理通过。原生新建/复用线程均返回 priority，模型仍为 gpt-6.1-sol/xhigh，验证零生成轮次。配置在 Git 忽略的 tmp 下，清空后须重设；不影响 DeepSeek/直接 HTTP，不是项目级数据库开关，不承诺供应商实际提速。详见 ../../docs/NOVEL_AGENT_MODEL_EXECUTION.md。
+- 本机小说 Fast 已启用（2026-10-12）：独立 Codex runtime/home 配置 service_tier=fast 与 features.fast_mode=true；19:59 全部任务及租约空闲后重启，健康和前端代理通过。原生新建/复用线程均返回 priority，模型仍为 gpt-6.1-sol/xhigh，验证零生成轮次。配置在 Git 忽略的 tmp 下，清空后须重设；不影响 DeepSeek/直接 HTTP，不是项目级数据库开关，不承诺供应商实际提速。详见 ../../docs/design/NOVEL_AGENT_MODEL_EXECUTION.md。
 
 - 自动编辑 C 纯文本协议修复（2026-10-12）：DraftLoopModel 将可空正文定义统一为共享标题协议支持的 object/null，避免 anyOf 被当作单个字符串而只生成 @content；REVISED 明确要求 title/body/summary/continuityNotes，NO_CHANGE/NEEDS_CONTEXT 使用 null。DTO 映射失败显示字段路径及安全的领域原因，不泄露 Jackson 消息中的正文，归类 OUTPUT_VALIDATION。32项定向测试通过，覆盖实际 C Schema→纯文本标题→DTO→编号覆盖及原有循环/保存门禁；无迁移、不改现有草稿、不恢复失败响应或自动重跑。需重启后端加载。
 
-- 发布后记忆整理默认接受（2026-10-12）：任务/状态/写作标签将章节审稿统一改名，不改内部CHAPTER_REVIEW标识。PublishedMemoryPolicy不再使用0.95置信度、中文关键词和主谓宾/摘要逐字包含门槛；六类有效条目默认ACCEPTED。按既有实体解析顺序检查源/当前目录，具名新实体可创建，代词/多重匹配/无效ID/类型或身份变化仍PENDING。共享代词判断加入第一/第二人称。原文证据、锁、有效发布检查及物化门禁保留，不新增模型请求/迁移或回填旧任务。页面已接受项只读、歧义项预选接受并一次保存，初始预选不触发脏稿提醒。10项后端与21项前端定向测试、类型检查通过，后台需重启加载；详见 ../../docs/NOVEL_AGENT_PUBLISHED_MEMORY.md。
+- 发布后记忆整理默认接受（2026-10-12）：任务/状态/写作标签将章节审稿统一改名，不改内部CHAPTER_REVIEW标识。PublishedMemoryPolicy不再使用0.95置信度、中文关键词和主谓宾/摘要逐字包含门槛；六类有效条目默认ACCEPTED。按既有实体解析顺序检查源/当前目录，具名新实体可创建，代词/多重匹配/无效ID/类型或身份变化仍PENDING。共享代词判断加入第一/第二人称。原文证据、锁、有效发布检查及物化门禁保留，不新增模型请求/迁移或回填旧任务。页面已接受项只读、歧义项预选接受并一次保存，初始预选不触发脏稿提醒。10项后端与21项前端定向测试、类型检查通过，后台需重启加载；详见 ../../docs/features/NOVEL_AGENT_PUBLISHED_MEMORY.md。
   已启用：18:39按作者授权核实模型/自动写作/编辑循环/创作对话/记忆队列及HTTP/Codex租约全部空闲后重启8081，18:40健康UP、5173与API代理200。未重跑任务、回填历史记忆或改写正文。
 
-- 正文草稿版本对比（2026-10-12）：前端章节写作新增history视图，复用现有manuscripts摘要及按ID读取接口；支持任意两版、实际基准、左右/合并、字词高亮、差异导航、折叠及路由恢复。读取后核对项目/章节/ID，不写正文或正史、不调用模型、不新增接口/表，无需后端重启。普通保存仍更新当前草稿，不承诺每次保存产生不可变历史。详见 ../../docs/NOVEL_AGENT_MANUSCRIPT_COMPARE.md。
+- 正文草稿版本对比（2026-10-12）：前端章节写作新增history视图，复用现有manuscripts摘要及按ID读取接口；支持任意两版、实际基准、左右/合并、字词高亮、差异导航、折叠及路由恢复。读取后核对项目/章节/ID，不写正文或正史、不调用模型、不新增接口/表，无需后端重启。普通保存仍更新当前草稿，不承诺每次保存产生不可变历史。详见 ../../docs/features/NOVEL_AGENT_MANUSCRIPT_COMPARE.md。
 
 - 正文局部编辑保存误报修复（2026-10-12）：局部编辑原来将WritingContext.Context.toString中的OutlineVersion/StoryBibleVersion对象身份混入模型资料和指纹，跨事务重新加载相同实体也会409。改为稳定的卷章文字、来源ID/行版本、相邻章与创作边界；仍检查源稿行版本、写作依据、正史、人物、风格、规划及姓名转换，只创建新草稿。新增真实实体独立读取的回归测试，旧代码可复现失败；修复陈旧测试中的空arc。前端409显示服务端具体原因，成功重新读取后即使正文未变也能解锁，读取失败不解锁。无迁移或原文修改，需重启生效。
   已验证启用：19项后端、10项前端定向测试、类型检查及相关ESLint通过；17:18检查无运行任务/有效租约（含创作对话）后重启8081，健康UP、5173与正文读取200。真实项目原第1版AUTHOR_ACCEPTED保留，不重跑失败请求、调用真实模型或改写已发布正文。
 
-- V061 项目创作对话（2026-10-12）：新增chat模块、PROJECT_CHAT独立会话和配对提示词，活动目录19工作流20模板。应用层纯文本READ/SEARCH/PROPOSE/REPLY循环复用模型网关与记忆检索；完整读取、项目授权与来源版本守卫后只保存修改候选，作者确认才应用。人物多字段与大纲多章节同组原子应用/撤销；雪花单步骤新版本清除依赖后缀，第7步投影只读。正文/正史/确认资料只读，不自动发布。新增project_chat_turn和project_chat_change，页面持久状态、停止、引用、前后差异、确认/拒绝/撤销及section=chat。详见 ../../docs/NOVEL_AGENT_PROJECT_CHAT.md。
+- V061 项目创作对话（2026-10-12）：新增chat模块、PROJECT_CHAT独立会话和配对提示词，活动目录19工作流20模板。应用层纯文本READ/SEARCH/PROPOSE/REPLY循环复用模型网关与记忆检索；完整读取、项目授权与来源版本守卫后只保存修改候选，作者确认才应用。人物多字段与大纲多章节同组原子应用/撤销；雪花单步骤新版本清除依赖后缀，第7步投影只读。正文/正史/确认资料只读，不自动发布。新增project_chat_turn和project_chat_change，页面持久状态、停止、引用、前后差异、确认/拒绝/撤销及section=chat。详见 ../../docs/features/NOVEL_AGENT_PROJECT_CHAT.md。
   验证与启用：本轮19项后端定向测试通过，包含3项隔离数据库链路；前端8项与单浏览器流程、类型检查及相关ESLint通过。16:59按既有授权核实无运行任务和有效租约后重启8081，V061已加载、健康UP、5173与项目对话只读接口200。未调用真实模型、重跑生成或改写已有正文。
 
 - 质量检查误判正文依据过期修复（2026-10-12）：正文生成的Context包含CreativeBoundaryGuide，QualityReviewStore原来却把同一上下文的preparationContext置空，导致未改动项目也无法通过ManuscriptBasis比较。检查入口改为复用WritingContextService.prepared，使用与正文一致的项目边界，不删除版本门禁、不回填或覆盖正文依据。过期提示改为当前“规划资料/大纲/创作策略/创作边界”，不再提已退休圣经/创作准备。32项定向测试通过，覆盖生成后直接检查、作者确认/正史发布后检查、真实策略/边界/规划版本变动拦截及质量/正文/自动循环；未跑全量或真实模型。无迁移或项目数据修改，需重启后端生效。
@@ -115,35 +115,35 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 - 作品书名输入补齐（2026-10-11）：ModelPromptAssembler 在公共请求层读取当前用户项目的已保存书名，作为明确标注的故事数据直接放入实际请求；雪花各步、人物、大纲、正文及检查等入口统一生效，两条Codex资料去重仍保留短书名内联。BOOK_TITLE本身不传旧书名，automaticTitle.pending为true时不把占位名称当作品名；每轮重新读取，不依赖历史会话记忆。书名仅辅助定位与读者期待，不覆盖事实/授权/风格，不默认成为章节标题。纯文本输出、数据库提示词配置与旧规划不变，无迁移或额外模型调用；需后端重启加载。
   验证与启用：19项定向测试通过，覆盖书名读取、特殊字符、两条Codex去重、入口及Spring注入；未跑全量或真实模型。忙碌检查发现运行任务后先不重启，作者随后明确要求直接重启；23:00重启8081，健康UP、5173和接口代理200。未自动重跑生成，不修改旧底稿或已确认正文。
 
-- Codex 完整资料工具与无效底稿恢复（2026-10-11）：两条 Codex 入口共用 `CodexMaterialReadTool` 的 `novel_read_material(material_id, offset)` 分页协议；旧入口仅在确认线程具有该工具时使用文件引用，限定本轮授权标识、项目目录、内容指纹及只读范围。新线程注册动态工具；恢复线程核对原生会话元数据中的持久工具定义，不向不支持的 resume 协议追加字段。没有工具的既有线程直接发送完整资料，保留原线程，不静默换账号或会话。显式资料读取失败返回 INPUT_UNAVAILABLE，HTTP 502，保留原始响应且不记为有效步骤。只读 invalidSteps 标记旧失败说明及依赖它的后续步骤；作者点击继续后以 CAS 保留有效前缀、清除无效后缀并重做，不自动修复或重跑，不改已确认规划。纯文本输出不变，无新增迁移或文学 Agent；向量/Neo4j 召回仍走已有服务端流程，本轮未新增自主检索工具。86项后端定向测试（含3项隔离数据库链路）、18项前端测试、类型检查和相关ESLint通过；实际安装 Codex 验证工具持久化及进程重启后同线程恢复，模型生成轮次为0。详见 ../../docs/NOVEL_AGENT_MODEL_EXECUTION.md。
+- Codex 完整资料工具与无效底稿恢复（2026-10-11）：两条 Codex 入口共用 `CodexMaterialReadTool` 的 `novel_read_material(material_id, offset)` 分页协议；旧入口仅在确认线程具有该工具时使用文件引用，限定本轮授权标识、项目目录、内容指纹及只读范围。新线程注册动态工具；恢复线程核对原生会话元数据中的持久工具定义，不向不支持的 resume 协议追加字段。没有工具的既有线程直接发送完整资料，保留原线程，不静默换账号或会话。显式资料读取失败返回 INPUT_UNAVAILABLE，HTTP 502，保留原始响应且不记为有效步骤。只读 invalidSteps 标记旧失败说明及依赖它的后续步骤；作者点击继续后以 CAS 保留有效前缀、清除无效后缀并重做，不自动修复或重跑，不改已确认规划。纯文本输出不变，无新增迁移或文学 Agent；向量/Neo4j 召回仍走已有服务端流程，本轮未新增自主检索工具。86项后端定向测试（含3项隔离数据库链路）、18项前端测试、类型检查和相关ESLint通过；实际安装 Codex 验证工具持久化及进程重启后同线程恢复，模型生成轮次为0。详见 ../../docs/design/NOVEL_AGENT_MODEL_EXECUTION.md。
   启用：22:40按作者授权检查无当前运行任务及有效租约后重启8081，健康UP、5173和API代理200；3个现有项目保留，未自动生成、重跑、清空或更换会话与模型入口。
 
 - 原文证据排版匹配（2026-10-11）：先严格逐字定位；失败时仅支持整行成对斜体/加粗标记省略与CRLF/LF差异，将唯一连续匹配映射回原始字符范围，保存真实原文及章内出现序号。代码围栏、未配对标记、改字/漏句/拼接、范围外证据和多处排版匹配仍拒绝；普通解析项与worldAssessment共用同一定位逻辑。动态引文复制规则覆盖自定义模板，要求短单句、保留内部Markdown、不同依据分列。纯文本协议、作者确认及失败报告门禁不变，不增加模型请求、不回填旧失败任务。后端33项定向测试通过；本次失败响应30项只读验证通过，仅items[15].evidence[2]恢复原始标记，未保存报告或调用模型。
   启用：21:16检查两个项目无当前运行任务及有效租约后重启8081，健康UP、5173代理200。任务响应界面对OUTPUT_VALIDATION单独标“输出校验失败”，不再误标未完成响应；前端6项定向测试与相关ESLint通过，失败记录保持FAILED、原始响应保留。
 
-- V060 直接确认雪花（2026-10-11）：导入生成/继续以prepare-snowflake、resume-snowflake返回SnowflakePlan，成功只标PLAN_READY；删除方向Controller/Service/Graph/供应商生成器/Parser/Schema/默认模板，活动目录18工作流19模板。POST snowflake-plans/{planId}/actions/confirm核对最新完整运行、冻结来源、边界与策略，项目行锁加source_snowflake_id唯一索引防止重复快照；重复确认当前版本不覆盖作者档案。Store.create也在短事务内锁项目，不跨模型请求持锁。大纲直接读取确切雪花和导入来源，不依赖方向表。资料读取/确认响应均带sourceSnowflakeId。前端移除方向菜单，导入结果显示待确认/已确认、确认后进入大纲；创作意图编辑移到项目设置，风格与A/B/C不变。纯文本返回及正史门禁不变，本轮不清空项目、不覆盖全局提示词或登录。详见 ../../docs/NOVEL_AGENT_CONFIRMED_SNOWFLAKE.md。
+- V060 直接确认雪花（2026-10-11）：导入生成/继续以prepare-snowflake、resume-snowflake返回SnowflakePlan，成功只标PLAN_READY；删除方向Controller/Service/Graph/供应商生成器/Parser/Schema/默认模板，活动目录18工作流19模板。POST snowflake-plans/{planId}/actions/confirm核对最新完整运行、冻结来源、边界与策略，项目行锁加source_snowflake_id唯一索引防止重复快照；重复确认当前版本不覆盖作者档案。Store.create也在短事务内锁项目，不跨模型请求持锁。大纲直接读取确切雪花和导入来源，不依赖方向表。资料读取/确认响应均带sourceSnowflakeId。前端移除方向菜单，导入结果显示待确认/已确认、确认后进入大纲；创作意图编辑移到项目设置，风格与A/B/C不变。纯文本返回及正史门禁不变，本轮不清空项目、不覆盖全局提示词或登录。详见 ../../docs/features/NOVEL_AGENT_CONFIRMED_SNOWFLAKE.md。
   验证：后端29项、隔离数据库接口链2项、前端41项与浏览器4项通过，类型检查及相关ESLint通过，未跑全量或真实模型。20:12核实无当前运行任务/租约后重启8081并加载V060，健康UP、5173及代理200、活动提示词19份且无方向模板；本轮未删除项目或重跑任务。
 
-- V059 已确认雪花规划（2026-10-11）：移除独立圣经页面、HTTP控制器及活动提示词入口；第7步在原人物请求中整理前置设计并保存prepared_materials，仍为纯文本保存标题协议、不新增模型调用。确认方向核对最新完整运行、必选步骤、边界/策略及导入原文/解析快照，事务内保存确切雪花/方向/候选绑定的内部资料快照并同步人物、规划关系和台账。GET planning-snapshot为只读来源，内部暂复用StoryBible类型和表，不代表保留独立创作阶段。大纲绑定确切来源，正文继续按章检索；用户授权显式清空旧项目，维护工具不在迁移/启动时自动执行，保留全局配置和账号凭据。旧Kafka消息对已删项目跳过。旧服务类尚未全量删除，其独立HTTP入口已移除。详见 ../../docs/NOVEL_AGENT_CONFIRMED_SNOWFLAKE.md。
+- V059 已确认雪花规划（2026-10-11）：移除独立圣经页面、HTTP控制器及活动提示词入口；第7步在原人物请求中整理前置设计并保存prepared_materials，仍为纯文本保存标题协议、不新增模型调用。确认方向核对最新完整运行、必选步骤、边界/策略及导入原文/解析快照，事务内保存确切雪花/方向/候选绑定的内部资料快照并同步人物、规划关系和台账。GET planning-snapshot为只读来源，内部暂复用StoryBible类型和表，不代表保留独立创作阶段。大纲绑定确切来源，正文继续按章检索；用户授权显式清空旧项目，维护工具不在迁移/启动时自动执行，保留全局配置和账号凭据。旧Kafka消息对已删项目跳过。旧服务类尚未全量删除，其独立HTTP入口已移除。详见 ../../docs/features/NOVEL_AGENT_CONFIRMED_SNOWFLAKE.md。
 
-- V058 章节相关资料召回（2026-10-11）：新增可重建 semantic_document_chunk，600字符上限、优先换行/句尾切分，保留原文及UTF-16字符范围；正史投影在短事务内同步分块，Embedding后台每批8块，不在提交/写作时批量嵌入。索引已发布大纲关联的当前圣经 developmentNotes，未确认雪花运行不入池；当前版本与索引全文不一致、正在重建、撤回提交、未来章节、其他项目及不匹配Embedding模型均不参加对应召回。SEARCH_STORY_MEMORY组合精确关键词和向量排名，嵌入失败仍可关键词检索，不把融合排名当可信度或相似度百分比；以片段ID去重，保留同章多个命中。正文/试写/审稿及A/B/C输入不默认携带完整developmentNotes或整卷章节列表，硬约束/规则直接保留，人物名单明确且全部解析成功时才缩减蓝图；不明确仍保守回退。A/B/C复用同一冻结记忆，原文片段预算不足则省略并记录。记忆页同步显示规划/正文来源。无新增Agent、模型生成请求或输出协议变化；本轮尚未撤掉独立圣经工作流，后续改确认源时需调整版本关联与发布门禁。详见 ../../docs/NOVEL_AGENT_CHAPTER_RETRIEVAL.md。
+- V058 章节相关资料召回（2026-10-11）：新增可重建 semantic_document_chunk，600字符上限、优先换行/句尾切分，保留原文及UTF-16字符范围；正史投影在短事务内同步分块，Embedding后台每批8块，不在提交/写作时批量嵌入。索引已发布大纲关联的当前圣经 developmentNotes，未确认雪花运行不入池；当前版本与索引全文不一致、正在重建、撤回提交、未来章节、其他项目及不匹配Embedding模型均不参加对应召回。SEARCH_STORY_MEMORY组合精确关键词和向量排名，嵌入失败仍可关键词检索，不把融合排名当可信度或相似度百分比；以片段ID去重，保留同章多个命中。正文/试写/审稿及A/B/C输入不默认携带完整developmentNotes或整卷章节列表，硬约束/规则直接保留，人物名单明确且全部解析成功时才缩减蓝图；不明确仍保守回退。A/B/C复用同一冻结记忆，原文片段预算不足则省略并记录。记忆页同步显示规划/正文来源。无新增Agent、模型生成请求或输出协议变化；本轮尚未撤掉独立圣经工作流，后续改确认源时需调整版本关联与发布门禁。详见 ../../docs/features/NOVEL_AGENT_CHAPTER_RETRIEVAL.md。
 
-- 模型执行器拆分（2026-10-10）：StructuredModelGateway 只读取一次入口并路由，ModelPromptAssembler 共用阶段/系统/事实边界拼接；AbstractModelExecutor 统一冻结模型参数、实际发送预算与记录、请求、纯文本解析、业务保存、成功确认和资源释放。LegacyCodexExecutor、ProjectCodexExecutor、DeepSeekExecutor 三个主要实现，另保留 ChatGptHttpExecutor，均构造器注入、无旧路由回退。新 Codex 项目会话的租约、资料工具与原生压缩不变；DeepSeek 仍完整发送本轮资料。旧 App Server 新增精确长资料去重及项目私有文件补读，不重建旧线程或变更认证；失败不确认发送，进程重启保守重送，未识别区块仍直接发送。删除不再使用的直接会话生成路径。无新迁移、Agent 或提示词版本覆盖；详见 ../../docs/NOVEL_AGENT_MODEL_EXECUTION.md。
+- 模型执行器拆分（2026-10-10）：StructuredModelGateway 只读取一次入口并路由，ModelPromptAssembler 共用阶段/系统/事实边界拼接；AbstractModelExecutor 统一冻结模型参数、实际发送预算与记录、请求、纯文本解析、业务保存、成功确认和资源释放。LegacyCodexExecutor、ProjectCodexExecutor、DeepSeekExecutor 三个主要实现，另保留 ChatGptHttpExecutor，均构造器注入、无旧路由回退。新 Codex 项目会话的租约、资料工具与原生压缩不变；DeepSeek 仍完整发送本轮资料。旧 App Server 新增精确长资料去重及项目私有文件补读，不重建旧线程或变更认证；失败不确认发送，进程重启保守重送，未识别区块仍直接发送。删除不再使用的直接会话生成路径。无新迁移、Agent 或提示词版本覆盖；详见 ../../docs/design/NOVEL_AGENT_MODEL_EXECUTION.md。
 
-- V057 Codex 项目会话（2026-10-10）：新增显式 SIWC_CODEX 入口，保留 SIWC 登录与纯文本输出，专用 OAuth App Server 负责持久线程/恢复/原生压缩；规划与正文 A 共用 NOVEL_MAIN，B/C 等检查隔离。阶段指令每轮通过 thread/resume 更新，已挂载线程不提前返回；模板版本不清空主线程。精确内容块存 model_codex_material，重复/过长块引用、只读工具按本轮标识与分页读回，不做模型摘要；model_codex_conversation 跨阶段短租约和每分钟续期，失败轮次解绑、预检失败只释放。入口与账号切换护栏、任务实际引用输入记录、单轮预算不变；仅模拟底层通信与定向/隔离数据库验证，真实模型压缩效果待验证，尚不自动切换现有入口。详见 ../../docs/NOVEL_AGENT_CODEX_PROJECT_SESSION.md。
+- V057 Codex 项目会话（2026-10-10）：新增显式 SIWC_CODEX 入口，保留 SIWC 登录与纯文本输出，专用 OAuth App Server 负责持久线程/恢复/原生压缩；规划与正文 A 共用 NOVEL_MAIN，B/C 等检查隔离。阶段指令每轮通过 thread/resume 更新，已挂载线程不提前返回；模板版本不清空主线程。精确内容块存 model_codex_material，重复/过长块引用、只读工具按本轮标识与分页读回，不做模型摘要；model_codex_conversation 跨阶段短租约和每分钟续期，失败轮次解绑、预检失败只释放。入口与账号切换护栏、任务实际引用输入记录、单轮预算不变；仅模拟底层通信与定向/隔离数据库验证，真实模型压缩效果待验证，尚不自动切换现有入口。详见 ../../docs/features/NOVEL_AGENT_CODEX_PROJECT_SESSION.md。
 
 - 规划请求去重（2026-10-10）：导入圣经将作者要求、九步底稿与修订基准分开传递，不再把底稿先塞入要求再重复发送。StoryBibleContent.withoutRepeatedDevelopmentNotes 只创建请求副本；普通圣经修订和导入大纲也去除与单独底稿逐字相同的 developmentNotes，作者修改后的不同文本仍保留。存库与原始版本不变，不裁剪来源、增大容量或新增调用。超容量错误返回输入估算、输出预留、安全余量和窗口数值，纯文本协议不变。
 
-- 导入雪花手动继续（2026-10-10）：新增 imports/{importId}/actions/resume-directions，指定确切 planId；校验作者、最新运行、导入归属、已确认解析版本与原文快照。FAILED/CANCELLED 原子认领，复用同一运行已成功的连续步骤，重试第一个未完成步骤及后续，半截响应不入底稿；完整雪花但方向失败时只重试方向。冻结来源、作者要求、目标字数、可选第9步、创作边界；新运行另存策略快照，模型/提示词使用执行时全局配置。前端导入页匹配 sourceImportId 显示继续按钮，跟踪请求/错误/停止并刷新方向。不新增表/Agent，不自动发布，不自动恢复进程遗留RUNNING。详见 ../../docs/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
+- 导入雪花手动继续（2026-10-10）：新增 imports/{importId}/actions/resume-directions，指定确切 planId；校验作者、最新运行、导入归属、已确认解析版本与原文快照。FAILED/CANCELLED 原子认领，复用同一运行已成功的连续步骤，重试第一个未完成步骤及后续，半截响应不入底稿；完整雪花但方向失败时只重试方向。冻结来源、作者要求、目标字数、可选第9步、创作边界；新运行另存策略快照，模型/提示词使用执行时全局配置。前端导入页匹配 sourceImportId 显示继续按钮，跟踪请求/错误/停止并刷新方向。不新增表/Agent，不自动发布，不自动恢复进程遗留RUNNING。详见 ../../docs/features/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
 
-- 世界设定与改编幅度（2026-10-10）：新建/导入/设置提供独立 AUTO 单选；原文解析同次输出带证据 worldAssessment，全部分段校验后写入 novel_project.settings.creativeBoundaries，保存原因与来源指纹。自动改编幅度始终 PRESERVE_CORE，RESTRUCTURE 只由作者选择授权；人工世界选择优先。网关注入公共边界并记录实际 Prompt；雪花九步含第7步冻结到输入，A/B/C 复用冻结上下文，边界进入写作来源指纹。纯文本协议不变，无新表、独立 Agent 或模型请求，不改历史资料，不实现外部现实事实核查。新增 GET/PUT settings/creative-boundaries，行版本冲突409；清除判断只影响下次完整原文解析。详见 ../../docs/NOVEL_AGENT_CREATIVE_BOUNDARIES.md。
+- 世界设定与改编幅度（2026-10-10）：新建/导入/设置提供独立 AUTO 单选；原文解析同次输出带证据 worldAssessment，全部分段校验后写入 novel_project.settings.creativeBoundaries，保存原因与来源指纹。自动改编幅度始终 PRESERVE_CORE，RESTRUCTURE 只由作者选择授权；人工世界选择优先。网关注入公共边界并记录实际 Prompt；雪花九步含第7步冻结到输入，A/B/C 复用冻结上下文，边界进入写作来源指纹。纯文本协议不变，无新表、独立 Agent 或模型请求，不改历史资料，不实现外部现实事实核查。新增 GET/PUT settings/creative-boundaries，行版本冲突409；清除判断只影响下次完整原文解析。详见 ../../docs/features/NOVEL_AGENT_CREATIVE_BOUNDARIES.md。
 
 - 章节规划文字块（2026-10-09）：大纲章节只交付/保存 `number/title/content/status`，`contentNeedsUpdate` 是服务端依据变化元数据。视角、目标、因果、情绪回报、人物、道具、时空、伏笔、字数与场景展开放在同一自由文本，不逐项解析或文学打分。普通、改编、续写、分块大纲统一使用该协议，纯文本返回不变；新版本 `outline/2`、`planning-checkpoint/3`。已有JSONB读取时无损合并旧文字，不批量重写规划或正文。正文、试写、人物召回与冻结B/C均读取完整章节文字块；依据过期则要求先更新规划，不把过期场景拆出继续执行。分块总预算改用阶段数值参考，不解析章节文字中的字数。ChatGPT非SSE错误新增安全状态码、媒体类型、错误码、请求标识和响应种类，读取有上限且受空闲超时/停止控制，不输出原始响应正文，不将JSON完成响应冒充SSE完成。验证与部署见阶段文档。
 
-- V056 ChatGPT OAuth 直连：新增 `modelaccess` 模块，按官方 SIWC 应用注册、PKCE/state/nonce、JWKS 身份签名及账号绑定登录；凭据保存在仓库外仅文件所有者可读的私有目录，跨进程文件锁串行刷新轮换令牌。全局设置可显式选择 App Server 或 SIWC HTTP，无自动账户/供应商/计费回退，默认仍是旧入口。直连每轮向公开 Responses API 发送当前 `instructions`、完整本地历史、`store=false` 和流式请求，不发送输出 Schema；规划共享历史、B/C 独立，只有 completed 且现有解析/保存成功后追加历史。V056 保存用户入口与项目会话租约，不保存凭据。账号管理接口需 `CHATGPT_CONNECTION_ADMIN_KEY`，前端仅内存保存；固定开发用户仍不是正式认证，禁止无保护公网部署。真实账户授权/模型可用性待验证，旧 App Server 的已挂载会话指令更新缺口未在本轮修复。详见 `../../docs/NOVEL_AGENT_CHATGPT_DIRECT_ACCESS.md`。
+- V056 ChatGPT OAuth 直连：新增 `modelaccess` 模块，按官方 SIWC 应用注册、PKCE/state/nonce、JWKS 身份签名及账号绑定登录；凭据保存在仓库外仅文件所有者可读的私有目录，跨进程文件锁串行刷新轮换令牌。全局设置可显式选择 App Server 或 SIWC HTTP，无自动账户/供应商/计费回退，默认仍是旧入口。直连每轮向公开 Responses API 发送当前 `instructions`、完整本地历史、`store=false` 和流式请求，不发送输出 Schema；规划共享历史、B/C 独立，只有 completed 且现有解析/保存成功后追加历史。V056 保存用户入口与项目会话租约，不保存凭据。账号管理接口需 `CHATGPT_CONNECTION_ADMIN_KEY`，前端仅内存保存；固定开发用户仍不是正式认证，禁止无保护公网部署。真实账户授权/模型可用性待验证，旧 App Server 的已挂载会话指令更新缺口未在本轮修复。详见 `../../docs/features/NOVEL_AGENT_CHATGPT_DIRECT_ACCESS.md`。
   验证：相关后端24项（含隔离数据库3项）、前端6项、单尺寸浏览器1项及类型/ESLint通过，未跑全量。作者授权后配置仓库忽略的私有管理口令并重启8081，V056已加载，健康UP，5173代理连接查询与本机登录发起/取消可用，无口令403；未授权或请求真实模型，旧模型设置版本5与入口保持。忙碌检查区分本次实例运行任务和跨实例有效直连租约，旧遗留RUNNING不更改、不永久阻塞账号操作。
 
-- V055 配对提示词编辑（2026-10-09）：每个 Agent 的真实系统角色 `sessionSystemPrompt` 与用户阶段指令 `systemPrompt` 在同一提示词页独立编辑、共同保存/恢复/历史版本；原字段保留阶段语义，新字段在配置与历史表可空表示资源默认。网关对 Codex/DeepSeek 统一发送真实系统角色及固定业务边界、用户阶段规范及动态资料，记录实际两份文本，模型输出继续纯文本、供应商不发送 JSON Schema。共享规划会话版本聚合全部规划模板版本，阶段切换复用、保存/恢复后轮转，独立 B/C 会话策略不变。HTTP 日志对新字段只记录字符数。需重启后端加载迁移；不改已生成资料、不自动调用真实模型。详见 `../../docs/NOVEL_AGENT_PROMPT_MANAGEMENT.md`。
+- V055 配对提示词编辑（2026-10-09）：每个 Agent 的真实系统角色 `sessionSystemPrompt` 与用户阶段指令 `systemPrompt` 在同一提示词页独立编辑、共同保存/恢复/历史版本；原字段保留阶段语义，新字段在配置与历史表可空表示资源默认。网关对 Codex/DeepSeek 统一发送真实系统角色及固定业务边界、用户阶段规范及动态资料，记录实际两份文本，模型输出继续纯文本、供应商不发送 JSON Schema。共享规划会话版本聚合全部规划模板版本，阶段切换复用、保存/恢复后轮转，独立 B/C 会话策略不变。HTTP 日志对新字段只记录字符数。需重启后端加载迁移；不改已生成资料、不自动调用真实模型。详见 `../../docs/features/NOVEL_AGENT_PROMPT_MANAGEMENT.md`。
   部署验证：作者授权后核实 19 个项目无进行中模型/自动任务，已重启后端 8081 并加载 V055；健康 UP、前端 5173 代理接口 200，新配对字段齐全，23 份原阶段文本/规则指纹与配置版本均保持。相关后端与隔离数据库测试、前端 8 项单元/2 项单尺寸交互、类型/ESLint 通过；未跑全量或调用真实模型。
 
 - Codex 流式等待改为空闲超时（2026-10-09）：CODEX_TURN_TIMEOUT_SECONDS默认1200秒改为连续无新生成进展的上限，不再限制总生成时长；当前thread/turn的非空公开输出、非空推理增量和增长的生成用量自动续期，旧轮次、其他会话、空增量、重复用量与状态心跳不能续期。推理仍不进入公开预览；只有turn/completed成功后才解析保存，手动停止、真实空闲超时的精确中断与停止前禁止复用保持有效。协议请求仍用CODEX_CLI_TIMEOUT_SECONDS固定上限，无自动模型重试或失败任务回填。全量681项测试：628通过、53环境门禁跳过、零失败；覆盖持续生成越过旧期限、停滞超时、消息隔离、推理隐私与手动停止。作者明确授权重启后，核实本项目后端身份与17项目无进行中任务，已重新启动8081并确认health=UP、设置接口正常及四份爽文提示词版本1保留；本次修复已加载，未调用真实模型或恢复失败任务。
@@ -154,28 +154,28 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 - key修复验证：新增4项回归覆盖点分key、故事字段与引文不变、归一化冲突、非法格式、76字符加b39_不溢出及Schema／Prompt一致；全量669项（616通过、53环境门禁跳过、0失败）。真实失败响应31项经新Parser只读验证通过，未保存或改报告状态。确认17项目无进行中模型／自动任务后重载后端。
 
-- 全部爽文提示词审核稿上线（2026-10-08）：24份活动默认模板迁入 `src/main/resources/prompts/*.txt`，AgentPromptDefaults UTF-8加载缓存，设置页与生成入口共享；DraftEditorialPrompts不再重复维护A/B/C指令。保留所有现行JSON Schema、解析、保存/同步、模型预算、请求次数与人工正史门禁，正文字符串不混报告；developmentNotes由服务端保留雪花全文而非新增输出字段。07整理跨章关系/知识/时间线/台账，08独立复核，不重复人设和场景；试写修订启用独立STYLE_PREVIEW_REVISION。公共风格执行指南保留既定行动/压力/回报，12个数据库风格不改写。默认发布号commercial-2026-10-08纳入Codex复用会话版本，数据库自定义系统指令不覆盖、无配置行写入或历史内容修改。无新Agent、依赖、迁移、文学字段校验及付费模型调用。详见 ../../docs/NOVEL_AGENT_ALL_PROMPTS.md 及阶段文档。
+- 全部爽文提示词审核稿上线（2026-10-08）：24份活动默认模板迁入 `src/main/resources/prompts/*.txt`，AgentPromptDefaults UTF-8加载缓存，设置页与生成入口共享；DraftEditorialPrompts不再重复维护A/B/C指令。保留所有现行JSON Schema、解析、保存/同步、模型预算、请求次数与人工正史门禁，正文字符串不混报告；developmentNotes由服务端保留雪花全文而非新增输出字段。07整理跨章关系/知识/时间线/台账，08独立复核，不重复人设和场景；试写修订启用独立STYLE_PREVIEW_REVISION。公共风格执行指南保留既定行动/压力/回报，12个数据库风格不改写。默认发布号commercial-2026-10-08纳入Codex复用会话版本，数据库自定义系统指令不覆盖、无配置行写入或历史内容修改。无新Agent、依赖、迁移、文学字段校验及付费模型调用。详见 ../../docs/design/NOVEL_AGENT_ALL_PROMPTS.md 及阶段文档。
 
 - 本轮验证：全量665项（612通过、53环境门禁跳过、0失败），另4项隔离数据库提示词集成测试通过，覆盖设置接口默认值、覆盖/恢复、记录器、雪花与圣经持久化及A/B/C循环；隔离schema已清理，不改现有项目或全局配置。确认16项目无进行中模型/自动任务后重载后端8081，24份运行时默认与资源一致，前端5173正常。真实文学效果待生成评测。
 
-- V052 单章自动编辑闭环（2026-10-08）：DraftLoopService/Store/Context/Model 从大纲执行 A（MANUSCRIPT）→B（QUALITY_REVIEW）→C（DRAFT_JUDGE_REVISION）→B，或直接检查当前有效草稿；冻结共同创作依据，B/C 独立新会话，不要求作者本轮输入、选择问题或轮间确认。B 无评分，逐字证据、已有依据与候选补丁分开；C 逐项接受/拒绝/暂缓，仅修复计划内且不改核心事实的问题，更新全文及摘要。默认最多10轮、可选1至10；空问题、无需改、资料不足、无进展、震荡、来源变化、取消、失败均结束，上限后最后稿明确未复检。draft_loop_run 保存来源、轮次、裁决、前后稿关联与实例身份，正文只新建 DRAFT，不接受或写正史；与运行中范围任务互斥。前端正文/质量页提供入口、轮次/阶段/停止、历史、裁决与实际差异，刷新可恢复；同实例重启标 INTERRUPTED 不自动重试。公共任务记录保存 Prompt/响应/用量，自定义 C 保留权限边界；活动目录22工作流/24模板，未覆盖现有自定义 A/B。无新增依赖或真实付费调用，需重启后端加载迁移；详情见 ../../docs/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
+- V052 单章自动编辑闭环（2026-10-08）：DraftLoopService/Store/Context/Model 从大纲执行 A（MANUSCRIPT）→B（QUALITY_REVIEW）→C（DRAFT_JUDGE_REVISION）→B，或直接检查当前有效草稿；冻结共同创作依据，B/C 独立新会话，不要求作者本轮输入、选择问题或轮间确认。B 无评分，逐字证据、已有依据与候选补丁分开；C 逐项接受/拒绝/暂缓，仅修复计划内且不改核心事实的问题，更新全文及摘要。默认最多10轮、可选1至10；空问题、无需改、资料不足、无进展、震荡、来源变化、取消、失败均结束，上限后最后稿明确未复检。draft_loop_run 保存来源、轮次、裁决、前后稿关联与实例身份，正文只新建 DRAFT，不接受或写正史；与运行中范围任务互斥。前端正文/质量页提供入口、轮次/阶段/停止、历史、裁决与实际差异，刷新可恢复；同实例重启标 INTERRUPTED 不自动重试。公共任务记录保存 Prompt/响应/用量，自定义 C 保留权限边界；活动目录22工作流/24模板，未覆盖现有自定义 A/B。无新增依赖或真实付费调用，需重启后端加载迁移；详情见 ../../docs/features/NOVEL_AGENT_DRAFT_EDITORIAL_LOOP.md。
 
 - 导入大纲缺创作意图修复与首章目标强化（2026-10-08）：OutlineService 不再仅为取得篇幅而强制独立 CreativeIntent 记录；已保存意图优先，否则沿用指定基准大纲/最新大纲的 wordBudget，不创建猜测的作者意图或额外调用。两者皆无时明确提示到故事方向保存目标字数。OUTLINE 与两种导入反推大纲、PLANNING_CHECKPOINT 的默认系统指令共享第一章吸引力要求，落实即时目标/行动压力、有铺垫的反转、题材回报及后果钩子；STANDARD 也执行第一章目标，FANQIE_GRIPPING 仍另管完整前三章短弧。作者慢热/指定开场、事实边界与有限修改优先，OCCURRED 不重写；不增加结构校验、输出字段或请求。不自动覆盖数据库自定义提示词与旧稿，需重启加载。
 
-- 场景级大纲（2026-10-08）：OUTLINE/IMPORT_REVERSE_OUTLINE/PLANNING_CHECKPOINT 在原有请求中按章输出 sceneOutline 自由文本，合并场景清单与关键场景展开，不新增当前章展开请求、不改模型强度/令牌上限。ChapterPlan 随大纲 JSONB 保存文本及服务端 sceneOutlineNeedsUpdate；章节、幕、全书或来源圣经变更而文本未更新时保留旧稿并提示待核对。正文/试写直接读取，有效文本进入 writing_basis，失效文本不列作必写节拍。前端每章可查看/编辑，已发布版本只读。没有新 Agent/合同审批/文学结构校验/迁移/依赖；不改已有项目和自定义提示词，后端须重启。详见 ../../docs/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
+- 场景级大纲（2026-10-08）：OUTLINE/IMPORT_REVERSE_OUTLINE/PLANNING_CHECKPOINT 在原有请求中按章输出 sceneOutline 自由文本，合并场景清单与关键场景展开，不新增当前章展开请求、不改模型强度/令牌上限。ChapterPlan 随大纲 JSONB 保存文本及服务端 sceneOutlineNeedsUpdate；章节、幕、全书或来源圣经变更而文本未更新时保留旧稿并提示待核对。正文/试写直接读取，有效文本进入 writing_basis，失效文本不列作必写节拍。前端每章可查看/编辑，已发布版本只读。没有新 Agent/合同审批/文学结构校验/迁移/依赖；不改已有项目和自定义提示词，后端须重启。详见 ../../docs/features/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
 
-- 人物设计权限修正（2026-10-08）：CharacterBlueprintGuide 统一区分原创/授权改编的新设定与续写原文提炼，核心人物补具体姓名（保留已有姓名和作者匿名要求），展开经历→应对方式→需求矛盾→选择→关系后果。CHARACTER_DESIGN 不再叠加通用未知留空指令；雪花/普通圣经/导入圣经显式传递模式，圣经取消一两句压缩，developmentNotes 全文与大纲背景因果沿用。补全、准备、有限修订、审阅和正文事实边界不放宽；不增加Agent/调用/依赖/迁移，不改已有项目或作者自定义提示词。相关50项通过，全量613项（561通过、52环境门禁跳过、0失败）。需重启加载新默认规则，真实文学效果仍需实际生成评估。详见 ../../docs/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
+- 人物设计权限修正（2026-10-08）：CharacterBlueprintGuide 统一区分原创/授权改编的新设定与续写原文提炼，核心人物补具体姓名（保留已有姓名和作者匿名要求），展开经历→应对方式→需求矛盾→选择→关系后果。CHARACTER_DESIGN 不再叠加通用未知留空指令；雪花/普通圣经/导入圣经显式传递模式，圣经取消一两句压缩，developmentNotes 全文与大纲背景因果沿用。补全、准备、有限修订、审阅和正文事实边界不放宽；不增加Agent/调用/依赖/迁移，不改已有项目或作者自定义提示词。相关50项通过，全量613项（561通过、52环境门禁跳过、0失败）。需重启加载新默认规则，真实文学效果仍需实际生成评估。详见 ../../docs/features/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
 
-- V051 雪花渐进规划（2026-10-07）：SnowflakePlanningService 将新故事/已确认导入按核心与一段梗概→统一人物设计自由文本→世界构建→三幕情节串行扩展，再整合圣经；有限修订不重跑四步。CORE/WORLD/PLOT 共用 SNOWFLAKE_PLANNING，人物仍 CHARACTER_DESIGN，目录为21工作流/23模板。FreeTextPlanningRequest 用单text传输原始自由文本，仅检查可读非空，不增加弧光、三幕或世界维度结构校验。snowflake_planning_run 保存来源快照、四步全文及 RUNNING/SUCCEEDED/FAILED/CANCELLED，失败保留前置结果但不自动恢复或复用。圣经 developmentNotes 保留完整底稿，大纲读取；作者修订后的明确字段优先于旧底稿。GET /projects/{projectId}/snowflake-plans/latest 限项目作者；圣经/导入页展示阶段状态与全文，底稿可随圣经编辑。公共网关模型配置、预算、任务响应与停止复用，私有文本日志脱敏。前文召回、状态/向量投影、作者确认及正史边界不变，没有新增依赖或真实付费调用，不改已有项目数据；重启后端加载V051。验证：服务端607项（555通过、52环境跳过），另隔离PostgreSQL/Spring三项通过；前端218单元/11交互测试通过，类型、构建、改动文件ESLint通过。详细方法、接口与验证见 ../../docs/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
+- V051 雪花渐进规划（2026-10-07）：SnowflakePlanningService 将新故事/已确认导入按核心与一段梗概→统一人物设计自由文本→世界构建→三幕情节串行扩展，再整合圣经；有限修订不重跑四步。CORE/WORLD/PLOT 共用 SNOWFLAKE_PLANNING，人物仍 CHARACTER_DESIGN，目录为21工作流/23模板。FreeTextPlanningRequest 用单text传输原始自由文本，仅检查可读非空，不增加弧光、三幕或世界维度结构校验。snowflake_planning_run 保存来源快照、四步全文及 RUNNING/SUCCEEDED/FAILED/CANCELLED，失败保留前置结果但不自动恢复或复用。圣经 developmentNotes 保留完整底稿，大纲读取；作者修订后的明确字段优先于旧底稿。GET /projects/{projectId}/snowflake-plans/latest 限项目作者；圣经/导入页展示阶段状态与全文，底稿可随圣经编辑。公共网关模型配置、预算、任务响应与停止复用，私有文本日志脱敏。前文召回、状态/向量投影、作者确认及正史边界不变，没有新增依赖或真实付费调用，不改已有项目数据；重启后端加载V051。验证：服务端607项（555通过、52环境跳过），另隔离PostgreSQL/Spring三项通过；前端218单元/11交互测试通过，类型、构建、改动文件ESLint通过。详细方法、接口与验证见 ../../docs/features/NOVEL_AGENT_SNOWFLAKE_PLANNING.md。
 
-- V050 流程简化：当前活动目录 20 种模型工作流、22 份提示词模板。合同与合同审阅退出前端、自动创作与正文门禁，旧写入入口返回 410。正文从当前已发布圣经/大纲直接生成，持久化 writing_basis（大纲 ID、完整上下文指纹、本章计划快照）；质量、局部编辑和审稿读取同一依据，作者确认与正史提交仍显式执行。统一 CharacterDesignService 承接新故事人物设计、导入原文确认后的设计、圣经人物补全、创作准备人物世界设计，统一 CHARACTER_DESIGN 记录和可编辑提示词；驱动力三角、五阶段弧光、关系冲突、事实与未来计划边界共用。导入按人物→反推圣经→反推大纲串行，前一步失败不继续。旧数据不作为本轮兼容验收目标，生产清理范围须经作者明确。验证：全量 596 项中 546 通过、50 环境门禁跳过；另隔离 PostgreSQL/完整 Spring 装配 49 项通过，前端 213 单元与 10 浏览器交互通过，类型/构建/改动文件 ESLint 通过。无真实付费模型调用或生产资料修改；现有后端尚未重启。详细主线及可选支路见 ../../docs/NOVEL_AGENT_SIMPLIFIED_WORKFLOW.md。下列旧日期条目是能力演进记录，涉及合同的历史描述已被本条替代。
+- V050 流程简化：当前活动目录 20 种模型工作流、22 份提示词模板。合同与合同审阅退出前端、自动创作与正文门禁，旧写入入口返回 410。正文从当前已发布圣经/大纲直接生成，持久化 writing_basis（大纲 ID、完整上下文指纹、本章计划快照）；质量、局部编辑和审稿读取同一依据，作者确认与正史提交仍显式执行。统一 CharacterDesignService 承接新故事人物设计、导入原文确认后的设计、圣经人物补全、创作准备人物世界设计，统一 CHARACTER_DESIGN 记录和可编辑提示词；驱动力三角、五阶段弧光、关系冲突、事实与未来计划边界共用。导入按人物→反推圣经→反推大纲串行，前一步失败不继续。旧数据不作为本轮兼容验收目标，生产清理范围须经作者明确。验证：全量 596 项中 546 通过、50 环境门禁跳过；另隔离 PostgreSQL/完整 Spring 装配 49 项通过，前端 213 单元与 10 浏览器交互通过，类型/构建/改动文件 ESLint 通过。无真实付费模型调用或生产资料修改；现有后端尚未重启。详细主线及可选支路见 ../../docs/design/NOVEL_AGENT_SIMPLIFIED_WORKFLOW.md。下列旧日期条目是能力演进记录，涉及合同的历史描述已被本条替代。
 
-- 公共能力重构（2026-10-07）：13 个业务服务的重复项目归属校验统一调用 ProjectAccessService；保留原服务写事务、锁、来源版本及作者确认门禁，锁后实体可用 requireOwnedProject(NovelProject) 重新检查权限而不额外查询。StructuredModelGateway 拆出包内 CodexSessionManager（会话策略/版本轮转/缺失恢复/完成回写）和 StructuredRequestBudget（最终上下文容量校验），入口及默认 Prompt/Schema/输出上限/解析回调保持不变，不新增 Spring Bean。platform.support.Sha256 统一 12 个类的 13 处指纹算法，文本 UTF-8、原始字节、小写 hex、序列化内容及调用方 null 规则不变，不需要数据回填。ArchitectureTest 新增权限/指纹/网关委托三条字节码约束；新增并发哈希、预算边界、失败 turn 不回写、progress 透传和锁后归属复核测试。完整测试 598 项：默认 548 通过、50 环境门禁跳过；另外 49 项隔离数据库/完整 Spring 装配测试全部通过，合计 597 通过、1 项真实模型评测未启用、无失败。本轮无新依赖、接口变化或迁移，不操作现有项目或调用付费模型；后端尚未重启加载本轮改动。详细当前结构见 ../../docs/NOVEL_AGENT_JAVA_ARCHITECTURE.md。
+- 公共能力重构（2026-10-07）：13 个业务服务的重复项目归属校验统一调用 ProjectAccessService；保留原服务写事务、锁、来源版本及作者确认门禁，锁后实体可用 requireOwnedProject(NovelProject) 重新检查权限而不额外查询。StructuredModelGateway 拆出包内 CodexSessionManager（会话策略/版本轮转/缺失恢复/完成回写）和 StructuredRequestBudget（最终上下文容量校验），入口及默认 Prompt/Schema/输出上限/解析回调保持不变，不新增 Spring Bean。platform.support.Sha256 统一 12 个类的 13 处指纹算法，文本 UTF-8、原始字节、小写 hex、序列化内容及调用方 null 规则不变，不需要数据回填。ArchitectureTest 新增权限/指纹/网关委托三条字节码约束；新增并发哈希、预算边界、失败 turn 不回写、progress 透传和锁后归属复核测试。完整测试 598 项：默认 548 通过、50 环境门禁跳过；另外 49 项隔离数据库/完整 Spring 装配测试全部通过，合计 597 通过、1 项真实模型评测未启用、无失败。本轮无新依赖、接口变化或迁移，不操作现有项目或调用付费模型；后端尚未重启加载本轮改动。详细当前结构见 ../../docs/design/NOVEL_AGENT_JAVA_ARCHITECTURE.md。
 
-- V049 全局提示词管理：新增 prompt 模块，AgentPromptDefaults 与原生成器共用默认系统指令；AgentPromptCatalog 覆盖 23 个工作流、25 份模板（导入反推圣经/大纲各分改编和续写）。当前用户配置与不可变历史保存在 user_agent_prompt/user_agent_prompt_revision，GET/PUT /settings/prompts、POST /{key}/reset、GET /{key}/history；两个文本各限 40000 字符，更新带 version，过期 409，读取不写入。StructuredModelGateway 在预算/记录/供应商请求前读取并冻结配置，支持系统指令替换和阶段规则；未编辑请求文本不变，动态项目资料、作者要求、Schema/令牌预留/解析/门禁不改。自定义文本追加固定事实/知识/作者优先级/候选输出边界，任务保存实际文本与配置版本，不改历史结果。codex_agent_session.prompt_revision 变化（包括 RESET）时换新会话，同版沿用旧策略；DeepSeek 无状态。前端 /settings/prompts 支持搜索、URL阶段恢复、保存、默认/边界查看、最近50版载入、并发冲突与未保存保护；不是修改风格预设目录或运行第三方 skill。无新增依赖、无真实模型调用；需要重启后端加载，详细范围与验证见 ../../docs/NOVEL_AGENT_PROMPT_MANAGEMENT.md。
+- V049 全局提示词管理：新增 prompt 模块，AgentPromptDefaults 与原生成器共用默认系统指令；AgentPromptCatalog 覆盖 23 个工作流、25 份模板（导入反推圣经/大纲各分改编和续写）。当前用户配置与不可变历史保存在 user_agent_prompt/user_agent_prompt_revision，GET/PUT /settings/prompts、POST /{key}/reset、GET /{key}/history；两个文本各限 40000 字符，更新带 version，过期 409，读取不写入。StructuredModelGateway 在预算/记录/供应商请求前读取并冻结配置，支持系统指令替换和阶段规则；未编辑请求文本不变，动态项目资料、作者要求、Schema/令牌预留/解析/门禁不改。自定义文本追加固定事实/知识/作者优先级/候选输出边界，任务保存实际文本与配置版本，不改历史结果。codex_agent_session.prompt_revision 变化（包括 RESET）时换新会话，同版沿用旧策略；DeepSeek 无状态。前端 /settings/prompts 支持搜索、URL阶段恢复、保存、默认/边界查看、最近50版载入、并发冲突与未保存保护；不是修改风格预设目录或运行第三方 skill。无新增依赖、无真实模型调用；需要重启后端加载，详细范围与验证见 ../../docs/features/NOVEL_AGENT_PROMPT_MANAGEMENT.md。
   验证：全量 584 项（534 通过、50 环境门禁跳过），另外隔离 PostgreSQL/完整 Spring 装配 4 项通过，实际 API 保存后的文本由网关发送到模型替身并记录，RESET 不回填历史或写正史；前端 211 单元/23 相关浏览器测试通过，构建/类型/ESLint/格式检查通过。新提示词字段在 HTTP 日志仅记录字符数与版本。自动重启被环境限制拦截，当前旧后端未停止，现有项目 schema 尚未加载 V049，需手动重启；不将隔离测试迁移当成生产部署成功。
 
-- 作者要求与策略分离：大纲生成不再将系统策略拼入作者 instruction，OutlineService、Graph 和三种生成器分别传递作者原文与 CreativeStrategyPolicy；Codex/DeepSeek 共用 Prompt 工厂，作者要求前置，策略独立标注系统来源。有效上游约束、OCCURRED 和已确认事实仍不可越过；在边界内作者明确开场、回忆框架与节奏优先于通用策略，空要求不授权整体重写，不能从作者原文猜测项目策略。调整冲突在既有 changeSummary 说明，上游变更仍需作者操作；共享策略指南补充相同边界，不新增模型步骤、Schema、接口或迁移，不追溯修改任务 Prompt 和旧稿。全量 562 项：516 通过、46 环境门禁跳过、无失败；覆盖作者开头保留、空要求、策略独立传递及两个供应商入口，均用模型测试替身，未对真实文学质量作保证。后端需重启加载。实际模型工作流仍为 23 种，记忆预算的 AgentStage 六项不是完整清单，详见 ../../docs/NOVEL_AGENT_STAGES_AND_PROMPTS.md。
+- 作者要求与策略分离：大纲生成不再将系统策略拼入作者 instruction，OutlineService、Graph 和三种生成器分别传递作者原文与 CreativeStrategyPolicy；Codex/DeepSeek 共用 Prompt 工厂，作者要求前置，策略独立标注系统来源。有效上游约束、OCCURRED 和已确认事实仍不可越过；在边界内作者明确开场、回忆框架与节奏优先于通用策略，空要求不授权整体重写，不能从作者原文猜测项目策略。调整冲突在既有 changeSummary 说明，上游变更仍需作者操作；共享策略指南补充相同边界，不新增模型步骤、Schema、接口或迁移，不追溯修改任务 Prompt 和旧稿。全量 562 项：516 通过、46 环境门禁跳过、无失败；覆盖作者开头保留、空要求、策略独立传递及两个供应商入口，均用模型测试替身，未对真实文学质量作保证。后端需重启加载。实际模型工作流仍为 23 种，记忆预算的 AgentStage 六项不是完整清单，详见 ../../docs/design/NOVEL_AGENT_STAGES_AND_PROMPTS.md。
 
 - 业务分层注释：128 个服务、控制器、Repository/JDBC 存储和响应转换文件补充中文职责说明，557 个方法补充操作边界及参数说明；关键处注明项目归属、行版本与生成序号、短事务与模型等待、规划与正史、作者确认与发布、幂等及迟到结果隔离。当前无独立 MyBatis Mapper，映射注释位于实际 JDBC 行转换、JSON 恢复和响应转换方法，不新增空层。新增说明之外仅有行尾格式变化，未修改业务代码、SQL、Prompt、接口或依赖。验证：逐文件移除本轮新增注释后与修改前来源一致（忽略换行风格及文件末尾空行）；后端全量 556 项，510 通过、46 环境门禁跳过、无失败。后续修改行为时应同步维护相邻注释，不能将注释视为替代代码与测试的业务保证。
 
@@ -184,16 +184,16 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 
 - V048 新增数据库预设“校园关系：清爽叙事”（campus-relationships/v1），按主体朴素行动、日常人情声口、情感落差观察、少量第一人称自嘲组合具体技法；保存六维字段、八维技法与两组原创正反例，保持事实／知识边界和既定视角，强开篇仍服从项目策略，不为风格强造暗恋或转学等情节。现有数据库列表、应用、试写、推荐和共享检查／润色指南直接复用，不改默认风格或任何项目已选配置，不新增作家身份模式；旧 11 个预设版本不变。
 
-- 通用模型停止：生成状态面板对运行中的请求／模型任务提供停止按钮；POST generation-requests/{requestId}/actions/stop 与 agent-runs/{runId}/actions/stop 先校验项目归属，再中断本进程的准确模型调用。HTTP 通过 X-Generation-Request-Id 关联 Recorder；停止和输出处理入口互斥，已停止的迟到响应不进入解析／产物保存，已经进入保存阶段则返回 409，不承诺撤销完成结果。AgentRun 持久化 CANCELLED、已有响应／可得用量，SSE／前端识别已停止；原文解析和创作准备任务同时标记 CANCELLED。Codex 发送 turn/interrupt，未确认结束前阻止会话复用；DeepSeek 改用可中断 JDK HTTP 等待，不保证供应商停止计费。无依赖／迁移；不是单纯中断浏览器 fetch。运行注册表仅限当前进程，升级前任务、尚未进入模型和保存中请求不能停止；自动创作外层任务仍按原恢复规则处理，详见 ../../docs/NOVEL_AGENT_GENERATION_STOP.md。
+- 通用模型停止：生成状态面板对运行中的请求／模型任务提供停止按钮；POST generation-requests/{requestId}/actions/stop 与 agent-runs/{runId}/actions/stop 先校验项目归属，再中断本进程的准确模型调用。HTTP 通过 X-Generation-Request-Id 关联 Recorder；停止和输出处理入口互斥，已停止的迟到响应不进入解析／产物保存，已经进入保存阶段则返回 409，不承诺撤销完成结果。AgentRun 持久化 CANCELLED、已有响应／可得用量，SSE／前端识别已停止；原文解析和创作准备任务同时标记 CANCELLED。Codex 发送 turn/interrupt，未确认结束前阻止会话复用；DeepSeek 改用可中断 JDK HTTP 等待，不保证供应商停止计费。无依赖／迁移；不是单纯中断浏览器 fetch。运行注册表仅限当前进程，升级前任务、尚未进入模型和保存中请求不能停止；自动创作外层任务仍按原恢复规则处理，详见 ../../docs/features/NOVEL_AGENT_GENERATION_STOP.md。
 
-- 人物档案整合：CharacterBlueprint 增加可空 gender（40）与 ageDescription（100），旧 JSONB 缺失归一为空，保留旧 Java 构造入口；StoryBibleOutputSchema/人物补全/创作准备共用结构，发布及准备确认同步独立档案的性别年龄，仅填空白，不覆盖作者已有值。指南禁止从姓名、外貌、年级猜测确切年龄，无新迁移/依赖。前端人物命名、人物实体事实、规划和正史关系共享一个人物档案入口；非人物实体单独保留。关系读取仍使用原规划/正史来源，不写新事实边；补全只创建待发布圣经 DRAFT。未保存编辑保留原行版本，刷新不悄悄升级乐观锁。后端需重启加载，真实旧项目未调用模型或改资料，详见 ../../docs/NOVEL_AGENT_CHARACTER_DOSSIER.md。
+- 人物档案整合：CharacterBlueprint 增加可空 gender（40）与 ageDescription（100），旧 JSONB 缺失归一为空，保留旧 Java 构造入口；StoryBibleOutputSchema/人物补全/创作准备共用结构，发布及准备确认同步独立档案的性别年龄，仅填空白，不覆盖作者已有值。指南禁止从姓名、外貌、年级猜测确切年龄，无新迁移/依赖。前端人物命名、人物实体事实、规划和正史关系共享一个人物档案入口；非人物实体单独保留。关系读取仍使用原规划/正史来源，不写新事实边；补全只创建待发布圣经 DRAFT。未保存编辑保留原行版本，刷新不悄悄升级乐观锁。后端需重启加载，真实旧项目未调用模型或改资料，详见 ../../docs/features/NOVEL_AGENT_CHARACTER_DOSSIER.md。
 
-- HTTP 请求日志：platform.web 下 Filter + HandlerInterceptor + BodyAdvice 关联 /api/** 的 HTTP_START / PARAMETERS / INPUT / END，包含服务端生成的 X-Request-Id、路径所属 projectId、参数／JSON 摘要、响应状态、耗时；MDC 将同请求线程的模型日志关联，退出恢复原值，异步线程不自动继承。无所属项目用“-”，创建项目成功后 END 补新项目 ID。输入仅读转换器已读取的 JSON，不重复读取原始流；无效 JSON／MVC 前拒绝时只记状态和未读标记。文件仅元数据、二进制仅字节数，SSE 仅连接与完成信息，不缓存或逐条记录流。凭据字段递归脱敏，已知手稿／Prompt／响应文本字段隐藏；摘要最多 4000 字符、20 数组项及深度／节点限制。HTTP_LOG_LEVEL 默认 INFO，可设 OFF，沿用滚动日志；不新增依赖／迁移，不改变导入业务流程。详见 ../../docs/NOVEL_AGENT_HTTP_LOGGING.md。
+- HTTP 请求日志：platform.web 下 Filter + HandlerInterceptor + BodyAdvice 关联 /api/** 的 HTTP_START / PARAMETERS / INPUT / END，包含服务端生成的 X-Request-Id、路径所属 projectId、参数／JSON 摘要、响应状态、耗时；MDC 将同请求线程的模型日志关联，退出恢复原值，异步线程不自动继承。无所属项目用“-”，创建项目成功后 END 补新项目 ID。输入仅读转换器已读取的 JSON，不重复读取原始流；无效 JSON／MVC 前拒绝时只记状态和未读标记。文件仅元数据、二进制仅字节数，SSE 仅连接与完成信息，不缓存或逐条记录流。凭据字段递归脱敏，已知手稿／Prompt／响应文本字段隐藏；摘要最多 4000 字符、20 数组项及深度／节点限制。HTTP_LOG_LEVEL 默认 INFO，可设 OFF，沿用滚动日志；不新增依赖／迁移，不改变导入业务流程。详见 ../../docs/ops/NOVEL_AGENT_HTTP_LOGGING.md。
 
 - 原文解析输出修复：ImportAnalysisOutputParser 在模型边界检查字段与类型，错误保留 items / evidence 索引及安全的领域原因。非线索项的有效 progress 归一 NOT_APPLICABLE，UNKNOWN 分类仍拒绝；唯一逐字引文确定性纠正序号，重复引文／假引文继续拒绝。IMPORT_SOURCE_ANALYSIS 使用公共网关可选处理回调，解析及短事务保存完成后才记成功，失败保留响应、可得 usage 与 OUTPUT_VALIDATION 分类；其他旧调用边界不变。不新增迁移，不回填失败报告或自动付费重试。后端 522 项（477 通过、45 环境门禁跳过），本次未运行真实模型或数据库重放；需重启后端加载。
 
-- V047 原文统一解析：ingest 下 ImportAnalysisStore/Runner 与领域校验分离；按所选完整章节分段保存人物/世界/关系/事件/线索/伏笔，FACT/INFERENCE/UNKNOWN 和逐字证据分开。每次一个模型新会话，完成全部段后作者逐项决定并确认模式；改编支持带要求的重构，续写禁止重构原文，不采用结论不等于改写过去。reverse-plan 必须携带当前已确认 analysisId/version，两个生成请求读报告，草稿事务内重检；不发布或写正史。移除旧 80000 字符截取，超预算拒绝，不伪造完整检查。报告、恢复/取消、来源及幂等策略见 ../../docs/NOVEL_AGENT_IMPORT_ANALYSIS.md。
-- V046 创作准备：CreationPreparationStore/Runner/ApprovalService/ContextService 分离来源快照、串行模型调用、确认事务和写作上下文。PREPARE 三步设计人物/实体/初始状态、剧情单元/关系/知识/时间线/明确台账、一致性报告；REVIEW 仅检查，作者选择未来章才创建大纲 DRAFT。范围按章节和剧情单元，不固定 15 万字；模型事务外，保存复核来源/行版本，显式失败恢复与取消迟到隔离。确认后档案只补空白、规划实体不写事实，当前准备指针按版本替换；合同/正文/审稿/质量/试写读取适用规划。单元节点只读，复核后正文事实与计划关联需另外确认登记台账，不自动审批或发布。隔离 PostgreSQL 34 项通过，无付费模型或生产资料变更；部署及限制见 ../../docs/NOVEL_AGENT_CREATION_PREPARATION.md。
+- V047 原文统一解析：ingest 下 ImportAnalysisStore/Runner 与领域校验分离；按所选完整章节分段保存人物/世界/关系/事件/线索/伏笔，FACT/INFERENCE/UNKNOWN 和逐字证据分开。每次一个模型新会话，完成全部段后作者逐项决定并确认模式；改编支持带要求的重构，续写禁止重构原文，不采用结论不等于改写过去。reverse-plan 必须携带当前已确认 analysisId/version，两个生成请求读报告，草稿事务内重检；不发布或写正史。移除旧 80000 字符截取，超预算拒绝，不伪造完整检查。报告、恢复/取消、来源及幂等策略见 ../../docs/features/NOVEL_AGENT_IMPORT_ANALYSIS.md。
+- V046 创作准备：CreationPreparationStore/Runner/ApprovalService/ContextService 分离来源快照、串行模型调用、确认事务和写作上下文。PREPARE 三步设计人物/实体/初始状态、剧情单元/关系/知识/时间线/明确台账、一致性报告；REVIEW 仅检查，作者选择未来章才创建大纲 DRAFT。范围按章节和剧情单元，不固定 15 万字；模型事务外，保存复核来源/行版本，显式失败恢复与取消迟到隔离。确认后档案只补空白、规划实体不写事实，当前准备指针按版本替换；合同/正文/审稿/质量/试写读取适用规划。单元节点只读，复核后正文事实与计划关联需另外确认登记台账，不自动审批或发布。隔离 PostgreSQL 34 项通过，无付费模型或生产资料变更；部署及限制见 ../../docs/features/NOVEL_AGENT_CREATION_PREPARATION.md。
 - V045 规划资料衔接：圣经发布事务内自动建立稳定人物身份、填充独立档案的空白字段，完整蓝图保存 planning_character_snapshot；作者已有非空字段、改名和台账修改/软删除保留，不猜测覆盖。initialRelationships/relationshipDynamics 以规划叙述写 planning_relationship，前端与正文正史关系分区，不解析成未经确认的事实边。圣经/大纲增加兼容旧 JSONB 的 readerExperiencePlans 明确字段，同次模型输出、可编辑，发布时幂等导入 reader_experience_plan；来源按版本保存，替换来源标旧，不静默合并跨版本进展。正史提交同步将有效 foreshadow 接入共享台账，保留独立正文正史状态，不伪造作者事件。故事资料伏笔与伏笔承诺共用 ReaderExperiencePanel；旧项目通过 planning-materials/actions/sync 显式补同步，读取不触发模型或规划同步。旧版没有明确台账字段时为空，不猜测 openQuestions/物品/钩子；分块大纲尚不单独抽取台账。V045 本身仅确定性同步；V046 已独立实现大纲后创作准备与单元复核，详见前项。
 - V044 数据库风格技法：writing_style_preset 按 preset_id/preset_version 保存完整 JSONB 档案、启用和排序，迁移初始化 11 种风格。生产无 Java 预设或 JSON 文件回退，WritingStylePresetCatalog 查询数据库；WritingStyleProfile 增加基础标识/版本及 craft 八项技法、两组原创同情境对照。项目应用保存完整快照到 settings.writingStyle，改名/编辑保留技法，当前字段和明确调整优先于基础示例；数据库更新不自动改已保存快照。完整匹配的旧档案可只读解析为初始版，同名自定义不猜测继承；只有标识但缺技法时可解析停用历史版。新增/停用/版本维护目前通过数据库，无管理 API/页面，不修改已部署迁移文件。
 - 样本风格深析：STYLE_ANALYSIS 仍一次新会话，writing_style_v2 输出六项概述与 craft 八项技法；基础标识/版本必须 null、示例为空、1 至 6 条连续原文证据，解析器校验引文存在。证据仅在项目档案/页面保留，写作指南只使用规律说明，不注入样本引文本身；分析输出参考上限由 3000 调至 6000，调用次数不增但成本/耗时可能增加。推荐使用数据库当前预设快照构造 Prompt/枚举/解析，省略示例和样本引文，返回前检查目录未变。文学贴合度和真实模型评测未完成。
@@ -207,8 +207,8 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 - V039 读者承诺/伏笔台账：计划与带 AUTHOR_ACCEPTED 正文证据的作者确认事件分开；逐字证据、姓名渲染、来源指纹、状态转换、requestId 幂等与行版本校验；正史替换等变化使旧来源失效。已有有效正史摘要按当前大纲分卷展示，不是新的模型压缩摘要。按需人物 promptContext 已接入主 Prompt，稳定引用和完整名字精确匹配，自由文本/歧义来源回退全量，不以 substring 猜测人物；档案秘密不等于视角已知。
 - V041/V042 规划恢复：批次持久化从第一章开始的范围、预算、来源及片段链；先前成功计划、尝试与结果指纹进入下一块。PlanningBatchRunner 在短事务认领后调用模型，每次一个块；显式失败恢复、取消和迟到拒绝，完成后事务内原子拼装 OutlineVersion 草稿，作者沿用原编辑/发布页。已有正史/OCCURRED 项目拒绝此全书重规划，走原增量调整。请求校验已发布圣经 ID/行版本；current 圣经查询不替换成 latest 草稿。checkpoint/2 增加姓名渲染和依赖，旧 /1 结果需重建。完整前缀超预算拒绝；不是跨块语义正确性证明、任务级模型冻结或后台连续付费。V040 空号无需补空迁移。
 - 局部改写：显式源正文 ID/行版本、逐字选区、occurrence 或 UTF-16 offset、授权与要求；只替换选区、保持其余正文，保存新 DRAFT 并显示差异。无改动不伪造新版本，本地模板不进行语义改写。全书巡检仅 RULES_SUMMARY_ONLY 的来源覆盖、正史摘要和台账规则，不读全书正文、不证明文学问题或遗漏兑现。
-- 本轮范围和验证见 ../../docs/NOVEL_AGENT_REFERENCE_INTEGRATION_DELIVERY.md。按用户最新要求串行开发；正文每次任务生成一份草稿，优先完善单篇生成、检查、受控修订和复检，不增加批量正文供挑选的流程。novel.writing.craft-rules-enabled=false 只关闭新增写作技法块，不回退全部策略/大纲/既有风格规则。真实文学评测、已有正史的增量分块调整及 20 章连续创作回归仍未完成。
-- 写作评测离线基础：测试资源 `evaluation/writing-corpus-v1.json` 固定四类故事资料、26 个场景正反例及三组完整微型三章；`WritingEvaluationBaselineTest` 从真实 WritingGenerationGateway / WritingModelRouter 截取 44 份请求，外部网关和输出解析器使用测试替身，不启动数据库或模型。显式传 `novel.evaluation.output` 可导出不可覆盖的输入 / Prompt / Schema 哈希和未运行结果模板，说明见根目录 `evaluation/README.md`。仅验证结构、来源、标签隔离与可重复性；初始标签待人工复核，真实模型、常规长度三章及读者效果未评测。未改变生产 Prompt、接口、依赖或调用数量。
+- 本轮范围和验证见 ../../docs/roadmap/NOVEL_AGENT_REFERENCE_INTEGRATION_DELIVERY.md。按用户最新要求串行开发；正文每次任务生成一份草稿，优先完善单篇生成、检查、受控修订和复检，不增加批量正文供挑选的流程。novel.writing.craft-rules-enabled=false 只关闭新增写作技法块，不回退全部策略/大纲/既有风格规则。真实文学评测、已有正史的增量分块调整及 20 章连续创作回归仍未完成。
+- 写作评测离线基础：测试资源 `evaluation/writing-corpus-v1.json` 固定四类故事资料、26 个场景正反例及三组完整微型三章；`WritingEvaluationBaselineTest` 从真实 WritingGenerationGateway / WritingModelRouter 截取 44 份请求，外部网关和输出解析器使用测试替身，不启动数据库或模型。显式传 `novel.evaluation.output` 可导出不可覆盖的输入 / Prompt / Schema 哈希和未运行结果模板，说明见根目录 `../../docs/README.md`。仅验证结构、来源、标签隔离与可重复性；初始标签待人工复核，真实模型、常规长度三章及读者效果未评测。未改变生产 Prompt、接口、依赖或调用数量。
 - 章节自动编排第一版：V031 持久化范围任务，后台串联正文和审稿，在作者确认及正史门禁等待；支持创建幂等、取消、显式重试和超时恢复。
 - V033 自动任务可选正文质量检查：创建请求与响应包含 qualityReviewEnabled，API 未提供时为 false，前端新建默认勾选；旧任务迁移为 false。草稿阶段生成/复用当前同模型质量报告；已确认正文进入原有审稿，不重复文学检查。策略不可中途变更，纳入创建幂等校验；不以质量分数代替作者门禁。
 - V034 有限自动语句润色与生成额度：maxAutoRevisionRounds 默认 0，显式选择每章 1～3 轮；maxGenerationSteps 默认 100，范围 1～500。仅全部 INFO / FLUENCY 的报告可自动修订，真实模型生成新 DRAFT 并复检，其余交作者。已开始步骤计数包括失败/中断，轮数按章计数且包括失败；继续不重置额度，润色前至少剩余两次额度。上限约束任务生成阶段，不是供应商调用数或真实金额上限。
@@ -242,7 +242,7 @@ Maven Wrapper 位于本目录。不要假设机器安装了全局 Maven。
 - Spring AI Alibaba Graph 编排八个标准创作模型阶段（含独立质量检查）的输入校验、模型生成和输出校验；样本风格分析独立调用。
 - 已确认作品导入可通过两个专用模型阶段反推故事圣经和大纲草稿，并区分已发生章节与未来规划。
 - 写作生成已拆分为 Prompt、Schema、解析、本地模板、模型路由和稳定网关门面。
-- Java 用例职责拆分：WritingService 仅委托 ChapterContractService、ManuscriptService、ChapterReviewService；WritingContextService 统一写作上下文，QualityReviewService 直接使用 ManuscriptService。运行查询、投影状态和记忆预览 Controller 不再持有 Repository/JDBC；查询服务通过 ProjectAccessService 验证权限，SQL 留在独立查询仓库。详细职责见 `../../docs/NOVEL_AGENT_JAVA_ARCHITECTURE.md`。
+- Java 用例职责拆分：WritingService 仅委托 ChapterContractService、ManuscriptService、ChapterReviewService；WritingContextService 统一写作上下文，QualityReviewService 直接使用 ManuscriptService。运行查询、投影状态和记忆预览 Controller 不再持有 Repository/JDBC；查询服务通过 ProjectAccessService 验证权限，SQL 留在独立查询仓库。详细职责见 `../../docs/design/NOVEL_AGENT_JAVA_ARCHITECTURE.md`。
 - 正史提交、Outbox、pgvector 投影和 Neo4j 投影具备第一批单元测试护栏。
 - 人物命名可从故事圣经初始化，并通过稳定实体 UUID 支持正式姓名、昵称和称谓配置。
 - 正文内部保存稳定人物引用，故事圣经、大纲、Prompt、正文预览、导出及新向量投影按当前配置渲染姓名。
@@ -570,7 +570,7 @@ src/main/resources/db/migration
 - 捕获异常后必须让 Kafka 感知失败，不能记录成功 checkpoint。
 - 投影状态按 `PGVECTOR` 和 `NEO4J` 分别展示。
 
-后续失败重放和全量重建设计见 `../../docs/NOVEL_AGENT_LONG_FORM_MEMORY_IMPLEMENTATION.md`。
+后续失败重放和全量重建设计见 `../../docs/design/NOVEL_AGENT_LONG_FORM_MEMORY_IMPLEMENTATION.md`。
 
 ## 10. API 现状
 
@@ -676,7 +676,7 @@ app.memory.*
 .\mvnw.cmd -Pfull-tests test
 ```
 
-前端 `npm run test:unit` 一次运行 7 个关键测试文件，单 worker，不监听文件；`npm run test:unit:full` 为手动全量入口。浏览器测试不随单元测试启动，默认浏览器命令只验证新建/导入/雪花流程，完整浏览器验证用 `npm run test:e2e:full`，仍串行。详见 `../../docs/NOVEL_AGENT_TEST_PLAN.md`。
+前端 `npm run test:unit` 一次运行 7 个关键测试文件，单 worker，不监听文件；`npm run test:unit:full` 为手动全量入口。浏览器测试不随单元测试启动，默认浏览器命令只验证新建/导入/雪花流程，完整浏览器验证用 `npm run test:e2e:full`，仍串行。详见 `../../docs/design/NOVEL_AGENT_TEST_PLAN.md`。
 
 按改动风险选择定向验证，只有发布前或跨模块修改需要完整回归。不得把默认轻量通过描述为全量通过，也不要因旧测试失败而删除仍有效的保护边界。已移除退役合同、创作准备、脚手架、旧审稿 UI 测试；第二轮再精简重复适配器、简单转发、本地模板固定结果与旧 IDEA 创建/合同等待用例。原文证据、权限、正文复制与保存、版本冲突和自动循环仍保留；公共协议在公共层验证，避免每个业务适配器重复断言。具体删除范围和残余覆盖见测试计划。
 
@@ -781,7 +781,7 @@ AI 完成开发时，必须检查是否需要更新本文件：
 - 新增表或迁移：更新“数据库与迁移”。
 - 新增 Controller 或关键接口：更新“API 现状”。
 - 修改核心链路：更新“核心领域链路”。
-- 修改 Agent 阶段、Prompt、输入信息或输出 Schema：更新 `../../docs/NOVEL_AGENT_STAGES_AND_PROMPTS.md`。
+- 修改 Agent 阶段、Prompt、输入信息或输出 Schema：更新 `../../docs/design/NOVEL_AGENT_STAGES_AND_PROMPTS.md`。
 - 引入新的配置或基础设施：更新“技术基线”和“配置”。
 - 技术债解决或新增：更新“已知技术债”。
 - 路线优先级改变：更新“近期开发路线”。

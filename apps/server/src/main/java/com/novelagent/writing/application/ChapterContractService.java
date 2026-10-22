@@ -1,9 +1,9 @@
 package com.novelagent.writing.application;
 
 import com.novelagent.canon.application.CharacterNameService;
-import com.novelagent.writing.api.ChapterContractResponse;
-import com.novelagent.writing.api.ChapterContractReviewResponse;
-import com.novelagent.writing.api.ChapterContractVersionSummaryResponse;
+import com.novelagent.writing.api.dto.ChapterContractResponse;
+import com.novelagent.writing.api.dto.ChapterContractReviewResponse;
+import com.novelagent.writing.api.dto.ChapterContractVersionSummaryResponse;
 import com.novelagent.writing.infrastructure.ChapterContractReviewVersionRepository;
 import com.novelagent.writing.infrastructure.ChapterContractVersionRepository;
 import java.util.List;
@@ -11,8 +11,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 章节合同。

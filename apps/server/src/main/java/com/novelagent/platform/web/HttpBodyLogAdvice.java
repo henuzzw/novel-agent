@@ -1,6 +1,8 @@
 package com.novelagent.platform.web;
 
+import com.novelagent.project.api.dto.ProjectResponse;
 import java.lang.reflect.Type;
+import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.MediaType;
@@ -13,8 +15,6 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdviceAdapter;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
-import com.novelagent.project.api.ProjectResponse;
-import org.slf4j.MDC;
 
 @ControllerAdvice
 public class HttpBodyLogAdvice extends RequestBodyAdviceAdapter implements ResponseBodyAdvice<Object> {

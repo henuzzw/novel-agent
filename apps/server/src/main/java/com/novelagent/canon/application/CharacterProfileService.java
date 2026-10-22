@@ -3,8 +3,8 @@ package com.novelagent.canon.application;
 import com.novelagent.platform.support.Text;
 import static com.novelagent.platform.support.Text.hasText;
 
-import com.novelagent.canon.api.CharacterProfileResponse;
-import com.novelagent.canon.api.UpdateCharacterProfileRequest;
+import com.novelagent.canon.api.dto.CharacterProfileResponse;
+import com.novelagent.canon.api.dto.UpdateCharacterProfileRequest;
 import com.novelagent.canon.application.CharacterProfileStore.CharacterReference;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ResourceVersionConflictException;

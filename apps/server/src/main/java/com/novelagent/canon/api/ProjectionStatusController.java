@@ -1,5 +1,6 @@
 package com.novelagent.canon.api;
 
+import com.novelagent.canon.api.dto.ProjectionStatus;
 import com.novelagent.canon.application.ProjectionStatusService;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;

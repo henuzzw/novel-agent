@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.novelagent.agent.api.dto.AgentRunPromptResponse;
+import com.novelagent.agent.api.dto.AgentRunResponse;
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.infrastructure.AgentRunQueryRepository;
 import com.novelagent.project.application.CurrentActorProvider;

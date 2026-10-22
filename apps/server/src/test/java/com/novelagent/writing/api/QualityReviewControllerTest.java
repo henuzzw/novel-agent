@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.platform.api.ApiExceptionHandler;
+import com.novelagent.writing.api.dto.ReviseQualityRequest.Scope;
 import com.novelagent.writing.application.QualityReviewService;
-import com.novelagent.writing.api.ReviseQualityRequest.Scope;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

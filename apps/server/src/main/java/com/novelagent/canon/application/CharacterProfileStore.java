@@ -1,7 +1,7 @@
 package com.novelagent.canon.application;
 
-import com.novelagent.canon.api.CharacterProfileResponse;
-import com.novelagent.canon.api.UpdateCharacterProfileRequest;
+import com.novelagent.canon.api.dto.CharacterProfileResponse;
+import com.novelagent.canon.api.dto.UpdateCharacterProfileRequest;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;

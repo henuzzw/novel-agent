@@ -2,7 +2,7 @@ package com.novelagent.agent.application;
 
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.infrastructure.AutomationRunRepository;
-import com.novelagent.canon.api.PublishManuscriptRequest;
+import com.novelagent.canon.api.dto.PublishManuscriptRequest;
 import com.novelagent.canon.application.CanonPublicationService;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.writing.application.DraftLoopContext;

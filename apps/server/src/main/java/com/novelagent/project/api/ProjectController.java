@@ -1,6 +1,9 @@
 package com.novelagent.project.api;
 
 import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.project.api.dto.CreateProjectRequest;
+import com.novelagent.project.api.dto.CreativeIntentRequest;
+import com.novelagent.project.api.dto.ProjectResponse;
 import com.novelagent.project.application.ProjectService;
 import jakarta.validation.Valid;
 import java.util.List;

@@ -1,7 +1,10 @@
 package com.novelagent.writing.api;
 
-import com.novelagent.platform.api.ApiResponses;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
+import com.novelagent.writing.api.dto.QualityReviewResponse;
+import com.novelagent.writing.api.dto.ReviseQualityRequest;
 import com.novelagent.writing.application.QualityReviewService;
 import jakarta.validation.Valid;
 import java.util.UUID;

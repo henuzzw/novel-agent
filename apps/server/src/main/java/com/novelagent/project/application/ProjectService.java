@@ -2,9 +2,9 @@ package com.novelagent.project.application;
 
 import static com.novelagent.platform.support.Text.isBlank;
 
-import com.novelagent.project.api.CreateProjectRequest;
-import com.novelagent.project.api.CreativeIntentRequest;
-import com.novelagent.project.api.ProjectResponse;
+import com.novelagent.project.api.dto.CreateProjectRequest;
+import com.novelagent.project.api.dto.CreativeIntentRequest;
+import com.novelagent.project.api.dto.ProjectResponse;
 import com.novelagent.project.domain.CreativeBoundaries;
 import com.novelagent.project.domain.CreativeIntent;
 import com.novelagent.project.domain.CreativeStrategyPolicy;

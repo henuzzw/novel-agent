@@ -5,9 +5,9 @@ import static com.novelagent.project.application.ResourceVersionConflictExceptio
 
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.ingest.application.ImportedOutlineGenerator;
-import com.novelagent.planning.api.GenerateOutlineRequest;
-import com.novelagent.planning.api.OutlineResponse;
-import com.novelagent.planning.api.OutlineVersionSummaryResponse;
+import com.novelagent.planning.api.dto.GenerateOutlineRequest;
+import com.novelagent.planning.api.dto.OutlineResponse;
+import com.novelagent.planning.api.dto.OutlineVersionSummaryResponse;
 import com.novelagent.planning.domain.OutlineContent;
 import com.novelagent.planning.domain.OutlineStatus;
 import com.novelagent.planning.domain.OutlineVersion;

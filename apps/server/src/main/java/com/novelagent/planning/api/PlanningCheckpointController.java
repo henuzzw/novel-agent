@@ -1,5 +1,6 @@
 package com.novelagent.planning.api;
 
+import com.novelagent.planning.api.dto.VersionRequest;
 import com.novelagent.planning.application.PlanningCheckpointRunner;
 import com.novelagent.planning.application.PlanningCheckpointService;
 import com.novelagent.planning.domain.PlanningCheckpoint;

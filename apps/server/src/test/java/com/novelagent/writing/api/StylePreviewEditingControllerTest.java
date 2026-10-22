@@ -9,6 +9,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.planning.application.ModelProvider;
 import com.novelagent.platform.api.ApiExceptionHandler;
+import com.novelagent.writing.api.dto.CheckStylePreviewRequest;
+import com.novelagent.writing.api.dto.GenerateStylePreviewRequest;
+import com.novelagent.writing.api.dto.ReviseStylePreviewRequest;
+import com.novelagent.writing.api.dto.WritingStylePreviewResponse;
 import com.novelagent.writing.application.StylePreviewEditingService;
 import com.novelagent.writing.application.WritingStylePresets;
 import com.novelagent.writing.domain.WritingStylePreviewContent;

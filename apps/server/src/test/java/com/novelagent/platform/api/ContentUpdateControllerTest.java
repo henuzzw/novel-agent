@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.novelagent.planning.api.OutlineController;
-import com.novelagent.planning.api.OutlineResponse;
+import com.novelagent.planning.api.dto.OutlineResponse;
 import com.novelagent.planning.application.OutlineService;
 import com.novelagent.planning.domain.OutlineContent;
-import com.novelagent.writing.api.ChapterReviewResponse;
-import com.novelagent.writing.api.ManuscriptResponse;
 import com.novelagent.writing.api.WritingController;
+import com.novelagent.writing.api.dto.ChapterReviewResponse;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
 import com.novelagent.writing.application.WritingService;
 import com.novelagent.writing.domain.ChapterReviewContent;
 import com.novelagent.writing.domain.ManuscriptContent;

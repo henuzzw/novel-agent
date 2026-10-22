@@ -1,6 +1,6 @@
 package com.novelagent.canon.application;
 
-import com.novelagent.canon.api.ProjectionStatus;
+import com.novelagent.canon.api.dto.ProjectionStatus;
 import com.novelagent.canon.infrastructure.ProjectionStatusRepository;
 import com.novelagent.project.application.ProjectAccessService;
 import java.util.UUID;

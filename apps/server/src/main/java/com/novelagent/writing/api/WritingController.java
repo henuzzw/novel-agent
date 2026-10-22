@@ -1,16 +1,24 @@
 package com.novelagent.writing.api;
 
 import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.platform.api.dto.ContentUpdateRequest;
+import com.novelagent.writing.api.dto.ChapterContractResponse;
+import com.novelagent.writing.api.dto.ChapterContractReviewResponse;
+import com.novelagent.writing.api.dto.ChapterContractVersionSummaryResponse;
+import com.novelagent.writing.api.dto.ChapterReviewResponse;
+import com.novelagent.writing.api.dto.GenerateWritingRequest;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
+import com.novelagent.writing.api.dto.ManuscriptVersionSummaryResponse;
+import com.novelagent.writing.api.dto.ReturnReviewRequest;
 import com.novelagent.writing.application.WritingService;
-import com.novelagent.platform.api.ContentUpdateRequest;
-import com.novelagent.writing.domain.ManuscriptContent;
 import com.novelagent.writing.domain.ChapterReviewContent;
-import java.util.UUID;
+import com.novelagent.writing.domain.ManuscriptContent;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.springframework.http.ResponseEntity;
+import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import java.nio.charset.StandardCharsets;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 /**

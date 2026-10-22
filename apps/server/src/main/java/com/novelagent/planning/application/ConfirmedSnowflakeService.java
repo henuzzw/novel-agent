@@ -3,7 +3,7 @@ package com.novelagent.planning.application;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novelagent.canon.application.CharacterNameService;
 import com.novelagent.ingest.application.ImportedPlanningSources;
-import com.novelagent.planning.api.StoryBibleResponse;
+import com.novelagent.planning.api.dto.StoryBibleResponse;
 import com.novelagent.planning.domain.StoryBibleContent;
 import com.novelagent.planning.domain.StoryBibleStatus;
 import com.novelagent.planning.domain.StoryBibleVersion;

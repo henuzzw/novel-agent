@@ -26,7 +26,7 @@ import com.novelagent.project.application.ResourceVersionConflictException;
 import com.novelagent.project.domain.CreativeStrategyPolicy;
 import com.novelagent.project.domain.EntryMode;
 import com.novelagent.project.domain.NovelProject;
-import com.novelagent.writing.api.ManuscriptLocalEditRequest;
+import com.novelagent.writing.api.dto.ManuscriptLocalEditRequest;
 import com.novelagent.writing.domain.ChapterContractStatus;
 import com.novelagent.writing.domain.ChapterContractVersion;
 import com.novelagent.writing.domain.ManuscriptContent;

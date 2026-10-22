@@ -1,7 +1,11 @@
 package com.novelagent.agent.api;
 
-import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.agent.api.dto.AgentRunPromptResponse;
+import com.novelagent.agent.api.dto.AgentRunResponse;
+import com.novelagent.agent.api.dto.AgentRunSummary;
+import com.novelagent.agent.api.dto.AgentTokenUsage;
 import com.novelagent.agent.application.AgentRunQueryService;
+import com.novelagent.platform.api.ApiResponses;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.CacheControl;

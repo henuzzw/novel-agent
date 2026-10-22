@@ -1,5 +1,6 @@
 package com.novelagent.ingest.api;
 
+import com.novelagent.ingest.api.dto.PrepareImportedStoryRequest;
 import com.novelagent.ingest.application.ImportedStoryBlueprintService;
 import com.novelagent.planning.domain.SnowflakePlan;
 import jakarta.validation.Valid;

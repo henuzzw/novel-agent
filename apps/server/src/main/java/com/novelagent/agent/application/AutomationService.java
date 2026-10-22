@@ -1,7 +1,7 @@
 package com.novelagent.agent.application;
 
-import com.novelagent.agent.api.AutomationRunResponse;
-import com.novelagent.agent.api.CreateAutomationRunRequest;
+import com.novelagent.agent.api.dto.AutomationRunResponse;
+import com.novelagent.agent.api.dto.CreateAutomationRunRequest;
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;

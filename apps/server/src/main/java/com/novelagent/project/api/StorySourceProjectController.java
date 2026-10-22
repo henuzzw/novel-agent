@@ -1,5 +1,6 @@
 package com.novelagent.project.api;
 
+import com.novelagent.project.api.dto.ProjectResponse;
 import com.novelagent.project.application.StorySourceProjectService;
 import com.novelagent.project.domain.CreativeBoundaries;
 import com.novelagent.project.domain.CreativeStrategy;

@@ -5,8 +5,8 @@ import static com.novelagent.project.application.ResourceVersionConflictExceptio
 import com.novelagent.agent.domain.AutomationRun;
 import com.novelagent.agent.domain.AutomationStatus;
 import com.novelagent.agent.infrastructure.AutomationRunRepository;
-import com.novelagent.canon.api.CanonCommitResponse;
-import com.novelagent.canon.api.PublishManuscriptRequest;
+import com.novelagent.canon.api.dto.CanonCommitResponse;
+import com.novelagent.canon.api.dto.PublishManuscriptRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;
 import com.novelagent.planning.application.ModelProvider;

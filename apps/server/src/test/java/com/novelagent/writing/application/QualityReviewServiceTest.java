@@ -13,21 +13,21 @@ import static org.mockito.ArgumentMatchers.eq;
 import com.novelagent.memory.application.ContextBudgetPlanner;
 import com.novelagent.memory.application.NovelMemoryService;
 import com.novelagent.planning.application.ModelProvider;
+import com.novelagent.writing.api.dto.ManuscriptResponse;
+import com.novelagent.writing.api.dto.ReviseQualityRequest.Scope;
+import com.novelagent.writing.domain.ManuscriptContent;
+import com.novelagent.writing.domain.ManuscriptStatus;
+import com.novelagent.writing.domain.ManuscriptVersion;
 import com.novelagent.writing.domain.QualityDimension;
 import com.novelagent.writing.domain.QualityReviewContent;
 import com.novelagent.writing.domain.QualityReviewVersion;
 import com.novelagent.writing.domain.QualityScore;
 import com.novelagent.writing.domain.ReviewIssue;
-import com.novelagent.writing.api.ManuscriptResponse;
-import com.novelagent.writing.api.ReviseQualityRequest.Scope;
-import com.novelagent.writing.domain.ManuscriptVersion;
-import com.novelagent.writing.domain.ManuscriptContent;
-import com.novelagent.writing.domain.ManuscriptStatus;
-import org.mockito.ArgumentCaptor;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 class QualityReviewServiceTest {
     private QualityReviewVersion report(UUID project) {

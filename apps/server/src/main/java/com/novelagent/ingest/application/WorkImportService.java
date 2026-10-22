@@ -5,8 +5,8 @@ import static com.novelagent.platform.support.Text.isBlank;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.ingest.api.ImportedChapterResponse;
-import com.novelagent.ingest.api.WorkImportResponse;
+import com.novelagent.ingest.api.dto.ImportedChapterResponse;
+import com.novelagent.ingest.api.dto.WorkImportResponse;
 import com.novelagent.platform.support.Sha256;
 import com.novelagent.project.application.ProjectAccessService;
 import java.io.ByteArrayInputStream;

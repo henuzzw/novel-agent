@@ -2,13 +2,13 @@ package com.novelagent.ingest.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.novelagent.ingest.api.PrepareImportedStoryRequest;
+import com.novelagent.ingest.api.dto.PrepareImportedStoryRequest;
 import com.novelagent.ingest.domain.ImportPlanningMode;
 import com.novelagent.ingest.infrastructure.ImportedPlanningStore;
 import com.novelagent.planning.application.SnowflakePlanningService;
 import com.novelagent.planning.domain.SnowflakePlan;
-import com.novelagent.project.api.CreativeIntentRequest;
-import com.novelagent.project.api.ProjectResponse;
+import com.novelagent.project.api.dto.CreativeIntentRequest;
+import com.novelagent.project.api.dto.ProjectResponse;
 import com.novelagent.project.application.ProjectService;
 import java.util.List;
 import java.util.Objects;

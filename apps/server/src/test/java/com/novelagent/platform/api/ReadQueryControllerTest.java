@@ -10,13 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.novelagent.agent.api.AgentRunController;
-import com.novelagent.agent.api.AgentRunPromptResponse;
-import com.novelagent.agent.api.AgentRunSummary;
-import com.novelagent.agent.api.AgentTokenUsage;
+import com.novelagent.agent.api.dto.AgentRunPromptResponse;
+import com.novelagent.agent.api.dto.AgentRunSummary;
+import com.novelagent.agent.api.dto.AgentTokenUsage;
 import com.novelagent.agent.application.AgentRunQueryService;
 import com.novelagent.agent.application.AgentStage;
-import com.novelagent.canon.api.ProjectionStatus;
 import com.novelagent.canon.api.ProjectionStatusController;
+import com.novelagent.canon.api.dto.ProjectionStatus;
 import com.novelagent.canon.application.ProjectionStatusService;
 import com.novelagent.memory.api.MemoryController;
 import com.novelagent.memory.application.MemoryPreviewService;

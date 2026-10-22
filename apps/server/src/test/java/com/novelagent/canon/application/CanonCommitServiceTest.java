@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novelagent.canon.api.CommitCanonRequest;
-import com.novelagent.canon.api.ReplaceCanonRequest;
+import com.novelagent.canon.api.dto.CommitCanonRequest;
+import com.novelagent.canon.api.dto.ReplaceCanonRequest;
 import com.novelagent.canon.domain.CanonCommit;
 import com.novelagent.canon.domain.OutboxEvent;
 import com.novelagent.canon.infrastructure.CanonCommitRepository;

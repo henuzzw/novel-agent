@@ -1,5 +1,6 @@
 package com.novelagent.planning.api;
 
+import com.novelagent.planning.api.dto.StoryBibleResponse;
 import com.novelagent.planning.application.ConfirmedSnowflakeService;
 import java.util.UUID;
 import org.springframework.http.CacheControl;

@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.novelagent.canon.api.CharacterProfileResponse;
-import com.novelagent.canon.api.UpdateCharacterProfileRequest;
+import com.novelagent.canon.api.dto.CharacterProfileResponse;
+import com.novelagent.canon.api.dto.UpdateCharacterProfileRequest;
 import com.novelagent.project.application.ProjectAccessService;
 import com.novelagent.project.application.ProjectNotFoundException;
 import com.novelagent.project.application.ResourceVersionConflictException;

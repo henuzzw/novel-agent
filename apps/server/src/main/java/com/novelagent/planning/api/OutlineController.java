@@ -1,9 +1,12 @@
 package com.novelagent.planning.api;
 
-import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.planning.api.dto.GenerateOutlineRequest;
+import com.novelagent.planning.api.dto.OutlineResponse;
+import com.novelagent.planning.api.dto.OutlineVersionSummaryResponse;
 import com.novelagent.planning.application.OutlineService;
 import com.novelagent.planning.domain.OutlineContent;
-import com.novelagent.platform.api.ContentUpdateRequest;
+import com.novelagent.platform.api.ApiResponses;
+import com.novelagent.platform.api.dto.ContentUpdateRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
