@@ -188,7 +188,7 @@ describe('creative strategy settings', () => {
     cleanup.push(() => { wrapper.unmount(); client.clear() })
     await vi.waitFor(() => expect(wrapper.find('[aria-label="项目创作策略"] form').exists()).toBe(true))
     expect(wrapper.find('[aria-label="全局模型设置"]').exists()).toBe(true)
-    expect(wrapper.find('a[href="/settings/prompts"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/settings/prompts"]').exists()).toBe(false)
     expect(wrapper.findAll('form')).toHaveLength(1)
     await wrapper.setProps({ projectId: 'project-b' })
     await vi.waitFor(() => expect(getCreativeStrategy).toHaveBeenCalledWith('project-b'))

@@ -14,14 +14,10 @@ Server state uses Vue Query; shared local state uses Vue composables. Unused Pin
 
 From this directory, run `npm run test:unit` for the lightweight unit suite and `npm run type-check` for TypeScript validation. Use `npm run test:unit:full` for all unit tests, or select affected files with `npx vitest run --config vitest.full.config.ts src/__tests__/<name>.spec.ts`.
 
-## Prompt Settings
+## Prompts
 
-`/settings/prompts?template=MANUSCRIPT` opens the global prompt editor. The top bar and project settings link to it.
-System instructions and optional stage guidance are persisted through `/api/v1/settings/prompts` with optimistic versions.
-Import adaptation and continuation have separate templates. Project inputs and output schemas are not editable here.
-Saving affects future model requests only; reset records a new version. Historical versions can be loaded as an unsaved draft.
-Run `npx playwright test --config playwright.ux.config.ts prompt-settings.spec.ts` for mocked browser regression tests.
-Backend restart/Flyway V049 is required. See `../../docs/features/NOVEL_AGENT_PROMPT_MANAGEMENT.md`.
+The online prompt editor (`/settings/prompts`) has been removed. Prompts are plain files under
+`apps/server/src/main/resources/prompts/`; edit them and redeploy the server. See `../../docs/features/NOVEL_AGENT_PROMPT_MANAGEMENT.md`.
 
 ## Workspace Interaction
 

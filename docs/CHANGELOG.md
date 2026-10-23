@@ -2,6 +2,8 @@
 
 按功能交付时间倒序记录用户可见变化（较早的条目在下方）。项目整体介绍见 [README](../README.md)，文档导航见 [docs/README.md](README.md)。
 
+下架在线“提示词管理”：提示词只从 `apps/server/src/main/resources/prompts/*.txt` 读取，需要调整时直接编辑文件并重新部署；此前在数据库保存的自定义提示词不再生效。见[提示词文件](features/NOVEL_AGENT_PROMPT_MANAGEMENT.md)。
+
 HTTP 请求日志已统一记录项目 ID、请求 ID、参数／响应摘要、状态与耗时；文件／SSE 仅元信息，凭据脱敏、正文隐藏，不新增数据库迁移。重启后端加载，说明见 [HTTP 请求日志](ops/NOVEL_AGENT_HTTP_LOGGING.md)。
 
 

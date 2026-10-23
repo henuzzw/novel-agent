@@ -41,7 +41,7 @@ docs/           设计、功能说明、运维与路线文档（导航见 docs/R
 | `agent` | 章节推进自动化、模型运行记录与任务查询、生成停止 | `AutomationService`、`AgentRunRecorder` |
 | `ingest` | 导入已有作品、原文解析、反推规划 | `WorkImportService`、`ImportAnalysisRunner` |
 | `chat` | 项目创作对话与修改候选 | `ProjectChatService` |
-| `prompt` | 全局提示词模板、版本与默认目录 | `AgentPromptService` |
+| `prompt` | 阶段提示词目录与文件加载（只读 `resources/prompts`） | `AgentPromptService` |
 | `modelaccess` | 模型调用端口、供应商路由、输出协议、预算、模型目录、认证与会话 | `StructuredModelGateway`、`RoutedStructuredModelGateway` |
 | `platform` | 横切能力：HTTP 响应工具、异常映射、请求日志、通用工具（JSON、哈希、文本、图状态） | `ApiResponses`、`platform/support` |
 

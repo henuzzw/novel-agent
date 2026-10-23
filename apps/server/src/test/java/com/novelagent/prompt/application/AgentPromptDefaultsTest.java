@@ -15,7 +15,7 @@ class AgentPromptDefaultsTest {
             String path = "/prompts/" + definition.key().toLowerCase(Locale.ROOT) + ".txt";
             assertThat(AgentPromptDefaults.class.getResource(path)).as(definition.key()).isNotNull();
             assertThat(definition.defaultSystemPrompt()).as(definition.key()).isNotBlank();
-            assertThat(definition.defaultSystemPrompt().length()).isLessThan(AgentPromptService.MAX_LENGTH);
+            assertThat(definition.defaultSystemPrompt().length()).isLessThan(40000);
         }
     }
 

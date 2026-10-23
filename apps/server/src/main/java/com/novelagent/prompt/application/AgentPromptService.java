@@ -2,24 +2,14 @@ package com.novelagent.prompt.application;
 
 import com.novelagent.planning.application.CharacterBlueprintGuide;
 import com.novelagent.platform.support.Sha256;
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.prompt.domain.PromptConfiguration;
-import com.novelagent.prompt.domain.PromptRevision;
-import com.novelagent.prompt.infrastructure.AgentPromptRepository;
-import java.time.Instant;
 import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-/** 管理全局阶段指令，模型调用前冻结一次配置；不处理项目数据或修改历史生成结果。 */
+/** 提示词只从 resources/prompts 下的文件读取；如需调整直接编辑文件并重新部署，不再提供在线编辑。 */
 @Service
 public class AgentPromptService {
-    public static final int MAX_LENGTH = 40000;
     public static final String PROTECTED_RULES =
             """
             【不可由全局提示词覆盖的业务边界】
@@ -35,268 +25,34 @@ public class AgentPromptService {
             """
                     + CharacterBlueprintGuide.boundaries();
     private final AgentPromptCatalog catalog;
-    private final AgentPromptRepository repository;
-    private final CurrentActorProvider actors;
 
-    public AgentPromptService(
-            AgentPromptCatalog catalog,
-            AgentPromptRepository repository,
-            CurrentActorProvider actors) {
+    public AgentPromptService(AgentPromptCatalog catalog) {
         this.catalog = catalog;
-        this.repository = repository;
-        this.actors = actors;
     }
 
     /**
-     * 将活动模板目录与当前用户保存配置合并为有效视图；未自定义模板使用默认值。
-     */
-    @Transactional(readOnly = true)
-    public List<View> list() {
-        Map<String, PromptConfiguration> saved =
-                repository.findAll(actors.currentUserId()).stream()
-                        .collect(Collectors.toMap(PromptConfiguration::key, Function.identity()));
-        return catalog.all().stream()
-                .map(definition -> view(definition, saved.get(definition.key())))
-                .toList();
-    }
-
-    /**
-     * 校验活动模板键并读取当前用户有效配置，不创建配置记录。
+     * 按工作流选出提示词文件对应的会话角色和版本标识；阶段指令原样沿用调用方从文件渲染的文本。
      *
-     * @param key 活动提示词模板键，由服务端目录校验
+     * <p>版本标识取自文件内容摘要，编辑提示词文件并重新部署后，复用的模型会话会自动轮转。
      */
-    @Transactional(readOnly = true)
-    public View get(String key) {
-        var definition = catalog.require(key);
-        return view(definition, repository.find(actors.currentUserId(), key).orElse(null));
-    }
-
-    /**
-     * 校验配对系统指令、会话角色及阶段规则，按预期版本保存并追加修订；不跨越模型等待持有事务。
-     *
-     * @param key 活动提示词模板键，由服务端目录校验
-     * @param systemPrompt 阶段系统指令
-     * @param guidance 阶段补充执行规则
-     * @param version 预期行版本，用于拒绝并发覆盖
-     */
-    @Transactional
-    public View save(String key, String systemPrompt, String guidance, long version) {
-        return save(
-                key, systemPrompt, AgentPromptDefaults.sessionSystemPrompt(key), guidance, version);
-    }
-
-    /**
-     * 校验配对系统指令、会话角色及阶段规则，按预期版本保存并追加修订；不跨越模型等待持有事务。
-     *
-     * @param key 活动提示词模板键，由服务端目录校验
-     * @param systemPrompt 阶段系统指令
-     * @param sessionSystemPrompt 会话角色系统指令
-     * @param guidance 阶段补充执行规则
-     * @param version 预期行版本，用于拒绝并发覆盖
-     */
-    @Transactional
-    public View save(
-            String key,
-            String systemPrompt,
-            String sessionSystemPrompt,
-            String guidance,
-            long version) {
-        var definition = catalog.require(key);
-        if (version < 0
-                || systemPrompt == null
-                || systemPrompt.isBlank()
-                || systemPrompt.length() > MAX_LENGTH
-                || sessionSystemPrompt == null
-                || sessionSystemPrompt.isBlank()
-                || sessionSystemPrompt.length() > MAX_LENGTH
-                || guidance == null
-                || guidance.length() > MAX_LENGTH) {
-            throw new IllegalArgumentException("系统提示词和用户提示词不能为空，各项不超过 40000 字符，版本不能为负数");
-        }
-        String override =
-                systemPrompt.equals(definition.defaultSystemPrompt()) ? null : systemPrompt;
-        String sessionOverride =
-                sessionSystemPrompt.equals(AgentPromptDefaults.sessionSystemPrompt(key))
-                        ? null
-                        : sessionSystemPrompt;
-        return write(key, override, sessionOverride, guidance, version, "SAVE");
-    }
-
-    /**
-     * 按预期版本清除自定义覆盖并记录 RESET 修订，后续请求采用当前默认发布版本。
-     *
-     * @param key 活动提示词模板键，由服务端目录校验
-     * @param version 预期行版本，用于拒绝并发覆盖
-     */
-    @Transactional
-    public View reset(String key, long version) {
-        catalog.require(key);
-        if (version < 0) throw new IllegalArgumentException("版本不能为负数");
-        return write(key, null, null, "", version, "RESET");
-    }
-
-    /**
-     * 读取当前用户指定活动模板的历史修订，保留用户隔离。
-     *
-     * @param key 活动提示词模板键，由服务端目录校验
-     */
-    @Transactional(readOnly = true)
-    public List<PromptRevision> history(String key) {
-        catalog.require(key);
-        return repository.history(actors.currentUserId(), key);
-    }
-
-    /** 冻结本轮配对配置；规划共用配置版本，避免仅因阶段切换而重建会话。 */
-    @Transactional(readOnly = true)
     public Resolved resolve(String workflow, String originalSystem) {
         var definition = catalog.forRequest(workflow, originalSystem);
         if (definition.isEmpty()) return new Resolved(originalSystem, null);
         String key = definition.get().key();
-        boolean shared = AgentPromptCatalog.sharesConversation(workflow);
-        // One read freezes both the selected pair and the shared conversation's configuration
-        // revision.
-        var bank =
-                shared
-                        ? repository.findAll(actors.currentUserId())
-                        : List.<PromptConfiguration>of();
-        var config =
-                shared
-                        ? bank.stream()
-                                .filter(value -> value.key().equals(key))
-                                .findFirst()
-                                .orElse(null)
-                        : repository.find(actors.currentUserId(), key).orElse(null);
-        String sharedRevision = shared ? sharedRevision(bank) : null;
-        if (config == null)
-            return new Resolved(
-                    originalSystem,
-                    shared ? sharedRevision : defaultRevision(key),
-                    AgentPromptDefaults.sessionSystemPrompt(key));
-        String effective = config.systemPrompt() == null ? originalSystem : config.systemPrompt();
-        if (config.customized()) {
-            if (!config.guidance().isBlank()) {
-                effective += "\n\n【全局阶段执行规则：在有效约束与作者授权范围内，优先于通用创作建议】\n" + config.guidance();
-            }
-            effective +=
-                    "\n\n【当前阶段（不可更换）："
-                            + definition.get().name()
-                            + " / "
-                            + workflow
-                            + "】\n"
-                            + protectedRules(key);
-        }
-        effective +=
-                "\n\n【提示词配置："
-                        + key
-                        + " · 版本 "
-                        + config.version()
-                        + (config.customized() ? " · 自定义】" : " · 默认】");
-        String revision = key + ":v" + config.version();
-        if (!config.customized()) revision += ":" + AgentPromptDefaults.RELEASE;
-        String session =
-                config.sessionSystemPrompt() == null
-                        ? AgentPromptDefaults.sessionSystemPrompt(key)
-                        : config.sessionSystemPrompt();
-        return new Resolved(effective, shared ? sharedRevision : revision, session);
+        String revision =
+                AgentPromptCatalog.sharesConversation(workflow)
+                        ? "planning:" + digest(catalog.all().stream()
+                                .filter(value -> AgentPromptCatalog.sharesConversation(value.workflow())))
+                        : key + ":file:" + digest(Stream.of(definition.get()));
+        return new Resolved(originalSystem, revision, AgentPromptDefaults.sessionSystemPrompt(key));
     }
 
-    private String sharedRevision(List<PromptConfiguration> bank) {
-        var keys =
-                catalog.all().stream()
-                        .filter(value -> AgentPromptCatalog.sharesConversation(value.workflow()))
-                        .map(AgentPromptCatalog.Definition::key)
-                        .collect(Collectors.toSet());
-        String versions =
-                bank.stream()
-                        .filter(value -> keys.contains(value.key()))
-                        .sorted(Comparator.comparing(PromptConfiguration::key))
-                        .map(value -> value.key() + ":" + value.version())
-                        .collect(Collectors.joining("\n"));
-        return "planning:" + Sha256.ofUtf8(AgentPromptDefaults.RELEASE + "\n" + versions);
-    }
-
-    /** 默认发布版本参与会话版本标识，使复用会话按需轮转，不创建用户自定义配置记录。 */
-    private static String defaultRevision(String key) {
-        return key + ":default:" + AgentPromptDefaults.RELEASE;
-    }
-
-    private View write(
-            String key,
-            String system,
-            String sessionSystem,
-            String guidance,
-            long version,
-            String operation) {
-        var userId = actors.currentUserId();
-        if (!repository.save(userId, key, system, sessionSystem, guidance, version, operation)) {
-            throw new ResourceVersionConflictException(
-                    version,
-                    repository.find(userId, key).map(PromptConfiguration::version).orElse(0L));
-        }
-        return get(key);
-    }
-
-    private View view(AgentPromptCatalog.Definition definition, PromptConfiguration config) {
-        String baseline = definition.defaultSystemPrompt();
-        return new View(
-                definition.key(),
-                definition.workflow(),
-                definition.name(),
-                definition.group(),
-                config == null || config.systemPrompt() == null ? baseline : config.systemPrompt(),
-                config == null ? "" : config.guidance(),
-                baseline,
-                protectedRules(definition.key()),
-                config != null && config.customized(),
-                config == null ? 0 : config.version(),
-                config == null ? null : config.updatedAt(),
-                config == null || config.sessionSystemPrompt() == null
-                        ? AgentPromptDefaults.sessionSystemPrompt(definition.key())
-                        : config.sessionSystemPrompt(),
-                AgentPromptDefaults.sessionSystemPrompt(definition.key()));
-    }
-
-    public record View(
-            String key,
-            String workflow,
-            String name,
-            String group,
-            String systemPrompt,
-            String guidance,
-            String defaultSystemPrompt,
-            String protectedRules,
-            boolean customized,
-            long version,
-            Instant updatedAt,
-            String sessionSystemPrompt,
-            String defaultSessionSystemPrompt) {
-        public View(
-                String key,
-                String workflow,
-                String name,
-                String group,
-                String systemPrompt,
-                String guidance,
-                String defaultSystemPrompt,
-                String protectedRules,
-                boolean customized,
-                long version,
-                Instant updatedAt) {
-            this(
-                    key,
-                    workflow,
-                    name,
-                    group,
-                    systemPrompt,
-                    guidance,
-                    defaultSystemPrompt,
-                    protectedRules,
-                    customized,
-                    version,
-                    updatedAt,
-                    AgentPromptDefaults.sessionSystemPrompt(),
-                    AgentPromptDefaults.sessionSystemPrompt());
-        }
+    private static String digest(Stream<AgentPromptCatalog.Definition> definitions) {
+        return Sha256.ofUtf8(definitions
+                .sorted(Comparator.comparing(AgentPromptCatalog.Definition::key))
+                .map(value -> value.key() + "\n" + value.defaultSystemPrompt() + "\n"
+                        + AgentPromptDefaults.sessionSystemPrompt(value.key()))
+                .collect(Collectors.joining("\n---\n")));
     }
 
     public record Resolved(String systemPrompt, String revision, String sessionSystemPrompt) {

@@ -584,7 +584,6 @@ src/main/resources/db/migration
 | `ProjectController` | 项目创建、列表、详情、创作意图 |
 | `GlobalModelSettingsController` | 当前用户全局模型设置、乐观版本更新、ChatGPT 运行时模型与强度目录 |
 | `ChatGptConnectionController` | 管理口令保护的 ChatGPT OAuth 登录/回调/取消/断开与显式入口切换 |
-| `AgentPromptController` | 当前用户全局提示词目录、版本保存、恢复默认、最近50版历史 |
 | `AutomationController` | 章节范围任务创建、查询、继续、显式重试和取消 |
 | `WritingStyleController` | 项目风格、预设、版本守卫的应用/清除、样本分析与上传、第一章试写和圣经风格推荐 |
 | `StylePreviewEditingController` | POST writing-style/actions/check-preview 检查样例；POST writing-style/preview-reviews/{id}/actions/revise 按服务端报告选中问题修订 |

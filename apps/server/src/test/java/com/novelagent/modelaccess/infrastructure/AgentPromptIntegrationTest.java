@@ -148,28 +148,14 @@ class AgentPromptIntegrationTest {
         properties.add("spring.jpa.properties.hibernate.default_schema", () -> SCHEMA);
     }
 
-    @Test void savesThroughTheApiAppliesToARealRecordedCallAndResetsWithoutWritingCanon() throws Exception {
-        var defaultResponse = mvc.perform(get("/api/v1/settings/prompts")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(19)).andReturn();
-        for (var prompt : mapper.readTree(defaultResponse.getResponse().getContentAsByteArray())) {
-            String key = prompt.path("key").asText();
-            assertThat(prompt.path("systemPrompt").asText()).as(key)
-                    .isEqualTo(AgentPromptDefaults.system(key));
-            assertThat(prompt.path("sessionSystemPrompt").asText()).as(key)
-                    .isEqualTo(AgentPromptDefaults.sessionSystemPrompt(key));
-            assertThat(prompt.path("customized").asBoolean()).as(key).isFalse();
-        }
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM user_agent_prompt", Integer.class)).isZero();
-        String payload = "{\"systemPrompt\":\"集成验证的阶段角色\",\"sessionSystemPrompt\":\"集成验证的系统角色\",\"guidance\":\"紧扣当前矛盾\",\"version\":0}";
-        mvc.perform(put("/api/v1/settings/prompts/OUTLINE").contentType(MediaType.APPLICATION_JSON).content(payload))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(1));
-        mvc.perform(get("/api/v1/settings/prompts/OUTLINE")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.systemPrompt").value("集成验证的阶段角色"));
-        mvc.perform(put("/api/v1/settings/prompts/OUTLINE").contentType(MediaType.APPLICATION_JSON).content(payload))
-                .andExpect(status().isConflict());
+    @Test void promptsComeFromBundledFilesAndTheEditingApiIsRetired() throws Exception {
+        mvc.perform(get("/api/v1/settings/prompts")).andExpect(status().isNotFound());
+        mvc.perform(put("/api/v1/settings/prompts/OUTLINE").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"systemPrompt\":\"x\",\"sessionSystemPrompt\":\"y\",\"guidance\":\"\",\"version\":0}"))
+                .andExpect(status().is4xxClientError());
 
         var projectId = UUID.randomUUID();
-        projects.saveAndFlush(NovelProject.create(projectId, actor.currentUserId(), "提示词隔离验证", EntryMode.IDEA));
+        projects.saveAndFlush(NovelProject.create(projectId, actor.currentUserId(), "提示词文件验证", EntryMode.IDEA));
         var settings = new EffectiveSettings(ModelProvider.DEEPSEEK, "deepseek-flash", "none", 0L);
         var schema = mapper.createObjectNode().put("type", "object")
                 .set("properties", mapper.createObjectNode().set("text", mapper.createObjectNode().put("type", "string")));
@@ -180,16 +166,9 @@ class AgentPromptIntegrationTest {
                 schema, "schema", 3456, CodexSessionPolicy.NEW_THREAD)).isEqualTo("{\"text\":\"文本结果\"}");
         String actual = jdbc.queryForObject("SELECT system_prompt FROM agent_run WHERE project_id = ?", String.class, projectId);
         String actualUser = jdbc.queryForObject("SELECT user_prompt FROM agent_run WHERE project_id = ?", String.class, projectId);
-        assertThat(actual).startsWith("集成验证的系统角色");
-        assertThat(actualUser).contains("集成验证的阶段角色", "紧扣当前矛盾", "OUTLINE · 版本 1", "项目资料保持原样");
+        assertThat(actual).startsWith(AgentPromptDefaults.sessionSystemPrompt("OUTLINE"));
+        assertThat(actualUser).contains("默认系统原文", "项目资料保持原样").doesNotContain("提示词配置");
         verify(deepSeek).request("schema", actual, actualUser, NullNode.getInstance(), 3456, settings);
-        mvc.perform(post("/api/v1/settings/prompts/OUTLINE/reset").contentType(MediaType.APPLICATION_JSON).content("{\"version\":1}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.customized").value(false))
-                .andExpect(jsonPath("$.version").value(2));
-        mvc.perform(get("/api/v1/settings/prompts/OUTLINE/history")).andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].operation").value("RESET"))
-                .andExpect(jsonPath("$[1].systemPrompt").value("集成验证的阶段角色"));
-        assertThat(jdbc.queryForObject("SELECT system_prompt FROM agent_run WHERE project_id = ?", String.class, projectId)).isEqualTo(actual);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM canon_commit WHERE project_id=?", Integer.class, projectId)).isZero();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM manuscript_version WHERE project_id=?", Integer.class, projectId)).isZero();
     }

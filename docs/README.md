@@ -57,7 +57,7 @@
 - [原文统一解析与改编／续写交付说明](features/NOVEL_AGENT_IMPORT_ANALYSIS.md)
 - [正文草稿版本对比](features/NOVEL_AGENT_MANUSCRIPT_COMPARE.md)
 - [项目创作对话](features/NOVEL_AGENT_PROJECT_CHAT.md)
-- [全局提示词管理](features/NOVEL_AGENT_PROMPT_MANAGEMENT.md)
+- [提示词文件](features/NOVEL_AGENT_PROMPT_MANAGEMENT.md)
 - [已完成正文一键导出](features/NOVEL_AGENT_PUBLISHED_EXPORT.md)
 - [发布后记忆整理与默认接受](features/NOVEL_AGENT_PUBLISHED_MEMORY.md)
 - [雪花渐进规划实现](features/NOVEL_AGENT_SNOWFLAKE_PLANNING.md)

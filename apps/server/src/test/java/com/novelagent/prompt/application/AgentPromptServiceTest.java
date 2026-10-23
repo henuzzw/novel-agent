@@ -1,26 +1,16 @@
 package com.novelagent.prompt.application;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.clearInvocations;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.novelagent.project.application.CurrentActorProvider;
-import com.novelagent.project.application.ResourceVersionConflictException;
-import com.novelagent.prompt.domain.PromptConfiguration;
-import com.novelagent.prompt.infrastructure.AgentPromptRepository;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** 提示词只来自打包的文件：解析不改写阶段指令，只选择会话角色并按文件内容生成版本标识。 */
 class AgentPromptServiceTest {
-    private final UUID user = UUID.randomUUID();
     private final AgentPromptCatalog catalog = new AgentPromptCatalog();
-    private final AgentPromptRepository repository = mock(AgentPromptRepository.class);
-    private final AgentPromptService service = new AgentPromptService(catalog, repository, new CurrentActorProvider(user));
+    private final AgentPromptService service = new AgentPromptService(catalog);
 
-    @Test void readsCatalogAndDefaultsWithoutWritingOrCrossingActors() {
+    @Test void catalogListsOnlyActiveStagesBackedByFiles() {
         assertThat(catalog.all().stream().map(AgentPromptCatalog.Definition::key))
                 .doesNotHaveDuplicates()
                 .contains("OUTLINE", "SNOWFLAKE_PLANNING", "CHARACTER_DESIGN", "PROJECT_CHAT", "MANUSCRIPT")
@@ -28,133 +18,45 @@ class AgentPromptServiceTest {
                         "CHAPTER_CONTRACT", "CHAPTER_CONTRACT_REVIEW", "CHARACTER_BLUEPRINT_COMPLETION");
         catalog.all().forEach(value -> assertThat(value.defaultSystemPrompt()).isNotBlank());
         assertThatThrownBy(() -> catalog.require("NOT_AN_AGENT")).isInstanceOf(IllegalArgumentException.class);
+    }
 
-        assertThat(service.list()).allMatch(value -> value.version() == 0 && !value.customized());
+    @Test void resolveKeepsRenderedStageTextAndUsesFileBasedRevision() {
         String original = "真实系统文本含动态姓名与人物边界";
-        assertThat(service.resolve("MANUSCRIPT", original)).isEqualTo(new AgentPromptService.Resolved(original,
-                "MANUSCRIPT:default:" + AgentPromptDefaults.RELEASE));
-        verify(repository).findAll(user);
-        verify(repository).find(user, "MANUSCRIPT");
-        verifyNoMoreInteractions(repository);
-        clearInvocations(repository);
-
-        when(repository.findAll(user)).thenReturn(List.of(config("MANUSCRIPT", "作者定制", "执行规则", 3)));
-        var values = service.list();
-        var body = values.stream().filter(value -> value.key().equals("MANUSCRIPT")).findFirst().orElseThrow();
-        assertThat(body.systemPrompt()).isEqualTo("作者定制");
-        assertThat(body.guidance()).isEqualTo("执行规则");
-        assertThat(body.version()).isEqualTo(3);
-        assertThat(body.customized()).isTrue();
-        assertThat(body.defaultSystemPrompt()).isEqualTo(AgentPromptDefaults.system("MANUSCRIPT"));
-        assertThat(values.stream().filter(value -> value.key().equals("OUTLINE")).findFirst().orElseThrow().version()).isZero();
-        verify(repository, times(1)).findAll(user);
-        verifyNoMoreInteractions(repository);
+        var result = service.resolve("MANUSCRIPT", original);
+        assertThat(result.systemPrompt()).isEqualTo(original);
+        assertThat(result.revision()).startsWith("MANUSCRIPT:file:").isEqualTo(service.resolve("MANUSCRIPT", "另一段").revision());
+        assertThat(result.sessionSystemPrompt()).isEqualTo(AgentPromptDefaults.sessionSystemPrompt());
+        assertThat(service.resolve("QUALITY_REVIEW", "检查指令").revision()).isNotEqualTo(result.revision());
     }
 
-    @Test void editsKeepProtectedRulesAndOnlyRenderedGuidance() {
-        when(repository.find(user, "MANUSCRIPT")).thenReturn(Optional.of(config("MANUSCRIPT", "新写作角色", "从具体矛盾切入", 2)));
-        var result = service.resolve("MANUSCRIPT", "旧角色");
-        assertThat(result.systemPrompt()).startsWith("新写作角色").contains("从具体矛盾切入", "作者本轮明确要求优先", "不提交正史", "MANUSCRIPT · 版本 2");
-        assertThat(result.systemPrompt()).doesNotContain("旧角色");
-        assertThat(result.revision()).isEqualTo("MANUSCRIPT:v2");
-
-        when(repository.find(user, "QUALITY_REVIEW")).thenReturn(Optional.of(config("QUALITY_REVIEW", null, "核对指代", 1)));
-        assertThat(service.resolve("QUALITY_REVIEW", "已渲染的原始角色与边界").systemPrompt())
-                .startsWith("已渲染的原始角色与边界").contains("核对指代");
-    }
-
-    @Test void importModesUseIndependentSettingsAndUnknownVariantsAreNotGuessed() {
-        when(repository.findAll(user)).thenReturn(List.of(config("IMPORT_REVERSE_OUTLINE_CONTINUE", "续写专用", "", 4)));
+    @Test void importModesAreIdentifiedByTheirOwnFilesAndUnknownVariantsAreNotGuessed() {
         String adapt = AgentPromptDefaults.system("IMPORT_REVERSE_OUTLINE_ADAPT");
+        String continuation = AgentPromptDefaults.system("IMPORT_REVERSE_OUTLINE_CONTINUE");
         assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", adapt).systemPrompt()).isEqualTo(adapt);
-        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", AgentPromptDefaults.system("IMPORT_REVERSE_OUTLINE_CONTINUE")).systemPrompt()).startsWith("续写专用");
-        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", "无法确定模式")).isEqualTo(new AgentPromptService.Resolved("无法确定模式", null));
-        verify(repository, never()).find(user, "IMPORT_REVERSE_OUTLINE");
+        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", continuation).revision()).startsWith("planning:");
+        assertThat(service.resolve("IMPORT_REVERSE_OUTLINE", "无法确定模式"))
+                .isEqualTo(new AgentPromptService.Resolved("无法确定模式", null));
     }
 
-    @Test void saveResetAndRestoreUseVersionsWithoutCopyingDefaults() {
-        when(repository.save(user, "OUTLINE", "新指令", null, "规则", 0, "SAVE")).thenReturn(true);
-        when(repository.find(user, "OUTLINE")).thenReturn(Optional.of(config("OUTLINE", "新指令", "规则", 1)));
-        assertThat(service.save("OUTLINE", "新指令", "规则", 0).version()).isEqualTo(1);
-        when(repository.save(user, "OUTLINE", null, null, "", 1, "RESET")).thenReturn(true);
-        when(repository.find(user, "OUTLINE")).thenReturn(Optional.of(config("OUTLINE", null, "", 2)));
-        assertThat(service.reset("OUTLINE", 1).customized()).isFalse();
-        verify(repository).save(user, "OUTLINE", null, null, "", 1, "RESET");
-
-        String baseline = AgentPromptDefaults.system("OUTLINE");
-        when(repository.save(user, "OUTLINE", null, null, "", 0, "SAVE")).thenReturn(true);
-        service.save("OUTLINE", baseline, "", 0);
-        verify(repository).save(user, "OUTLINE", null, null, "", 0, "SAVE");
-
-        when(repository.findAll(user)).thenReturn(List.of(config("OUTLINE", null, "", 5)));
-        var result = service.resolve("OUTLINE", "原有动态系统文本");
-        assertThat(result.systemPrompt()).startsWith("原有动态系统文本").contains("版本 5 · 默认");
-        assertThat(result.systemPrompt()).doesNotContain("全局阶段执行规则");
-        assertThat(result.revision()).isEqualTo(service.resolve("SNOWFLAKE_PLANNING", "另一阶段").revision());
-        when(repository.findAll(user)).thenReturn(List.of(config("OUTLINE", null, "", 6)));
-        assertThat(service.resolve("OUTLINE", "原有动态系统文本").revision()).isNotEqualTo(result.revision());
-    }
-
-    @Test void staleOrInvalidUpdatesNeverOverwrite() {
-        when(repository.find(user, "OUTLINE")).thenReturn(Optional.of(config("OUTLINE", "已更新", "", 8)));
-        assertThatThrownBy(() -> service.save("OUTLINE", "旧页面编辑", "", 3))
-                .isInstanceOf(ResourceVersionConflictException.class);
-        clearInvocations(repository);
-
-        assertThatThrownBy(() -> service.save("UNKNOWN", "text", "", 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.save("OUTLINE", " \n", "", 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.save("OUTLINE", "x".repeat(40001), "", 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.save("OUTLINE", "valid", "x".repeat(40001), 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.save("OUTLINE", "valid", null, 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.save("OUTLINE", "valid", " ", "", 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.save("OUTLINE", "valid", "x".repeat(40001), "", 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.reset("OUTLINE", -1)).isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(repository);
-    }
-
-    @Test void savesPairedPromptsUnderOneVersionAndResolvesThemOnlyForTheirAgent() {
-        var saved = new PromptConfiguration("MANUSCRIPT", "阶段指令", "规则", 1, Instant.now(), "系统角色");
-        when(repository.save(user, "MANUSCRIPT", "阶段指令", "系统角色", "规则", 0, "SAVE")).thenReturn(true);
-        when(repository.find(user, "MANUSCRIPT")).thenReturn(Optional.of(saved));
-        var view = service.save("MANUSCRIPT", "阶段指令", "系统角色", "规则", 0);
-        assertThat(view.sessionSystemPrompt()).isEqualTo("系统角色");
-        assertThat(view.systemPrompt()).isEqualTo("阶段指令");
-        assertThat(service.resolve("MANUSCRIPT", "原指令").sessionSystemPrompt()).isEqualTo("系统角色");
-        assertThat(service.resolve("QUALITY_REVIEW", "检查指令").sessionSystemPrompt())
-                .isEqualTo(AgentPromptDefaults.sessionSystemPrompt());
-        assertThat(service.resolve("QUALITY_REVIEW", "检查指令").systemPrompt()).isEqualTo("检查指令");
-        assertThat(saved.customized()).isTrue();
-    }
-
-    @Test void unrelatedWritingChangesDoNotRotateSharedPlanningConversation() {
+    @Test void planningStagesShareOneConversationRevision() {
         String revision = service.resolve("OUTLINE", "大纲").revision();
-        when(repository.findAll(user)).thenReturn(List.of(config("MANUSCRIPT", "新正文指令", "", 4)));
+        assertThat(revision).startsWith("planning:");
         assertThat(service.resolve("SNOWFLAKE_PLANNING", "雪花规划").revision()).isEqualTo(revision);
+        assertThat(service.resolve("CHARACTER_DESIGN", "人物").revision()).isEqualTo(revision);
     }
 
-    @Test void snowflakePairUsesItsOwnDefaultWithoutChangingOtherRoles() {
-        var view = service.get("SNOWFLAKE_PLANNING");
-        var role = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
-        assertThat(view.sessionSystemPrompt()).isEqualTo(role);
-        assertThat(view.defaultSessionSystemPrompt()).isEqualTo(role);
-        assertThat(service.resolve("SNOWFLAKE_PLANNING", view.systemPrompt()).sessionSystemPrompt()).isEqualTo(role);
-        assertThat(service.resolve("STORY_BIBLE", "圣经").sessionSystemPrompt())
+    @Test void stageSpecificSessionRolesComeFromTheirFiles() {
+        assertThat(service.resolve("SNOWFLAKE_PLANNING", "阶段").sessionSystemPrompt())
+                .isEqualTo(AgentPromptDefaults.system("SNOWFLAKE_SYSTEM"));
+        assertThat(service.resolve("PROJECT_CHAT", "对话").sessionSystemPrompt())
+                .isEqualTo(AgentPromptDefaults.system("PROJECT_CHAT_SYSTEM"));
+        assertThat(service.resolve("STORY_BIBLE", "已退休阶段").sessionSystemPrompt())
                 .isEqualTo(AgentPromptDefaults.sessionSystemPrompt());
-        verify(repository, never()).save(any(), any(), any(), any(), any(), anyLong(), any());
-
-        String stage = AgentPromptDefaults.system("SNOWFLAKE_PLANNING");
-        String restoredRole = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
-        when(repository.save(user, "SNOWFLAKE_PLANNING", null, null, "", 0, "SAVE")).thenReturn(true);
-        service.save("SNOWFLAKE_PLANNING", stage, restoredRole, "", 0);
-        verify(repository).save(user, "SNOWFLAKE_PLANNING", null, null, "", 0, "SAVE");
-        when(repository.findAll(user)).thenReturn(List.of(config("SNOWFLAKE_PLANNING", null, "", 1)));
-        assertThat(service.resolve("SNOWFLAKE_PLANNING", stage).sessionSystemPrompt()).isEqualTo(restoredRole);
-        when(repository.findAll(user)).thenReturn(List.of(new PromptConfiguration(
-                "SNOWFLAKE_PLANNING", stage, "", 2, Instant.now(), "作者自定义系统角色")));
-        assertThat(service.resolve("SNOWFLAKE_PLANNING", stage).sessionSystemPrompt()).isEqualTo("作者自定义系统角色");
     }
 
-    private PromptConfiguration config(String key, String system, String guidance, long version) {
-        return new PromptConfiguration(key, system, guidance, version, Instant.now());
+    @Test void protectedRulesAddStageSpecificBoundaries() {
+        assertThat(AgentPromptService.protectedRules("MANUSCRIPT")).contains("不提交正史").doesNotContain("C 只裁决");
+        assertThat(AgentPromptService.protectedRules("DRAFT_JUDGE_REVISION")).contains("C 只裁决当前 B 意见");
+        assertThat(AgentPromptService.protectedRules("CHAPTER_REVIEW")).contains("发布后记忆整理只读取");
     }
 }

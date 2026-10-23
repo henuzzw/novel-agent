@@ -24,7 +24,6 @@ import com.novelagent.project.application.CurrentActorProvider;
 import com.novelagent.prompt.application.AgentPromptCatalog;
 import com.novelagent.prompt.application.AgentPromptDefaults;
 import com.novelagent.prompt.application.AgentPromptService;
-import com.novelagent.prompt.infrastructure.AgentPromptRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -248,9 +247,7 @@ class StructuredModelGatewayTest {
     }
 
     @Test void snowflakeDefaultPairReachesProviderAndRecorderAsPlainText() {
-        var prompts = new AgentPromptService(new AgentPromptCatalog(),
-                mock(AgentPromptRepository.class),
-                new CurrentActorProvider(UUID.randomUUID()));
+        var prompts = new AgentPromptService(new AgentPromptCatalog());
         String stage = AgentPromptDefaults.system("SNOWFLAKE_PLANNING");
         String role = AgentPromptDefaults.sessionSystemPrompt("SNOWFLAKE_PLANNING");
         String system = role + "\n\n" + AgentPromptService.protectedRules("SNOWFLAKE_PLANNING");

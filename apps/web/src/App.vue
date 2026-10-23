@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Activity, BookOpenText, Cpu, RefreshCw, FilePenLine } from 'lucide-vue-next'
+import { Activity, BookOpenText, Cpu, RefreshCw } from 'lucide-vue-next'
 import { inject, onMounted, ref } from 'vue'
 import { RouterLink, RouterView, routeLocationKey, routerKey } from 'vue-router'
 import GlobalModelSettingsPanel from '@/components/GlobalModelSettingsPanel.vue'
@@ -23,7 +23,6 @@ onMounted(load)
       </RouterLink>
       <div class="topbar-actions">
         <button class="global-model-button" type="button" title="全局模型设置" aria-label="全局模型设置" :aria-expanded="showSettings" @click="showSettings = !showSettings"><Cpu :size="18" /><span>{{ label }}</span></button>
-        <RouterLink class="icon-button" to="/settings/prompts" title="提示词管理" aria-label="提示词管理"><FilePenLine :size="18" /></RouterLink>
         <button class="icon-button" type="button" title="任务中心" aria-label="任务中心" :disabled="!route?.params.projectId" @click="openTasks">
           <Activity :size="18" aria-hidden="true" />
         </button>

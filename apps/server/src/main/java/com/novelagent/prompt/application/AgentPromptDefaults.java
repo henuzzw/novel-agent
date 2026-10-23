@@ -8,11 +8,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Settings and generators share the reviewed UTF-8 templates bundled with the application.
- * Database overrides take precedence; runtime data and schemas remain owned by each workflow.
+ * 提示词唯一来源：classpath 下 {@code prompts/<key>.txt}（源码位于 src/main/resources/prompts）。
+ * 修改提示词直接编辑这些 UTF-8 文件并重新构建部署；运行时数据与输出 Schema 仍由各工作流负责。
  */
 public final class AgentPromptDefaults {
-    public static final String RELEASE = "prompt-cleanup-2026-10-20";
     private static final Map<String, String> TEMPLATES = new ConcurrentHashMap<>();
     private AgentPromptDefaults() { }
 
