@@ -41,18 +41,31 @@ public class AgentPromptService {
         String key = definition.get().key();
         String revision =
                 AgentPromptCatalog.sharesConversation(workflow)
-                        ? "planning:" + digest(catalog.all().stream()
-                                .filter(value -> AgentPromptCatalog.sharesConversation(value.workflow())))
+                        ? "planning:"
+                                + digest(
+                                        catalog.all().stream()
+                                                .filter(
+                                                        value ->
+                                                                AgentPromptCatalog
+                                                                        .sharesConversation(
+                                                                                value.workflow())))
                         : key + ":file:" + digest(Stream.of(definition.get()));
         return new Resolved(originalSystem, revision, AgentPromptDefaults.sessionSystemPrompt(key));
     }
 
     private static String digest(Stream<AgentPromptCatalog.Definition> definitions) {
-        return Sha256.ofUtf8(definitions
-                .sorted(Comparator.comparing(AgentPromptCatalog.Definition::key))
-                .map(value -> value.key() + "\n" + value.defaultSystemPrompt() + "\n"
-                        + AgentPromptDefaults.sessionSystemPrompt(value.key()))
-                .collect(Collectors.joining("\n---\n")));
+        return Sha256.ofUtf8(
+                definitions
+                        .sorted(Comparator.comparing(AgentPromptCatalog.Definition::key))
+                        .map(
+                                value ->
+                                        value.key()
+                                                + "\n"
+                                                + value.defaultSystemPrompt()
+                                                + "\n"
+                                                + AgentPromptDefaults.sessionSystemPrompt(
+                                                        value.key()))
+                        .collect(Collectors.joining("\n---\n")));
     }
 
     public record Resolved(String systemPrompt, String revision, String sessionSystemPrompt) {
